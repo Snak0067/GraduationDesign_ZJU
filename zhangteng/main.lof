@@ -1,0 +1,38 @@
+\contentsline {figure}{\numberline {1.1}{\ignorespaces Animate anyone模型结构图\cite {hu2024animate}}}{4}{figure.caption.7}%
+\contentsline {figure}{\numberline {1.2}{\ignorespaces COCO 和 Openpose 格式参考}}{8}{figure.caption.8}%
+\contentsline {figure}{\numberline {1.3}{\ignorespaces MediaPipe~\cite {mediapipe} 格式参考}}{8}{figure.caption.9}%
+\contentsline {figure}{\numberline {1.4}{\ignorespaces 各种3DMM模型示例}}{9}{figure.caption.10}%
+\contentsline {figure}{\numberline {1.5}{\ignorespaces 身体模型示例}}{10}{figure.caption.11}%
+\contentsline {figure}{\numberline {1.6}{\ignorespaces 论文结构图}}{13}{figure.caption.12}%
+\contentsline {figure}{\numberline {2.1}{\ignorespaces 基于条件式生成对抗模型的数字人技术框架图}}{16}{figure.caption.14}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces 基准数据集构建方法及数据存储格式}}{19}{figure.caption.15}%
+\contentsline {figure}{\numberline {2.3}{\ignorespaces SAM2\cite {sam2} 结果图}}{22}{figure.caption.16}%
+\contentsline {figure}{\numberline {2.4}{\ignorespaces 检测结果可视化比较}}{24}{figure.caption.17}%
+\contentsline {figure}{\numberline {2.5}{\ignorespaces AiOS 模型\cite {sun2024aios}拟合失效案例}}{24}{figure.caption.18}%
+\contentsline {figure}{\numberline {2.6}{\ignorespaces 手部修复结果}}{26}{figure.caption.19}%
+\contentsline {figure}{\numberline {2.7}{\ignorespaces 多维度图像绘制结果}}{27}{figure.caption.21}%
+\contentsline {figure}{\numberline {2.8}{\ignorespaces 法线图坐标系示例\cite {bini}}}{28}{figure.caption.22}%
+\contentsline {figure}{\numberline {2.9}{\ignorespaces CCBR图像颜色编码定义\cite {neural_sign_reenactor}}}{30}{figure.caption.24}%
+\contentsline {figure}{\numberline {3.1}{\ignorespaces StyleUNet 的数字人生成网络架构图}}{40}{figure.caption.27}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces 时序映射网络结构图}}{41}{figure.caption.28}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces 编码器结构图}}{42}{figure.caption.29}%
+\contentsline {figure}{\numberline {3.4}{\ignorespaces 解码器结构图}}{43}{figure.caption.30}%
+\contentsline {figure}{\numberline {3.5}{\ignorespaces 局部位置增强架构图}}{45}{figure.caption.31}%
+\contentsline {figure}{\numberline {3.6}{\ignorespaces Sapiens 特征提取流程图}}{47}{figure.caption.32}%
+\contentsline {figure}{\numberline {3.7}{\ignorespaces 时序编码修正可视化效果对比}}{53}{figure.caption.37}%
+\contentsline {figure}{\numberline {3.8}{\ignorespaces 不同感知损失$\lambda _{fet}$权重下$l1$损失函数图像对比}}{54}{figure.caption.38}%
+\contentsline {figure}{\numberline {3.9}{\ignorespaces 微调训练拟合过程}}{56}{figure.caption.41}%
+\contentsline {figure}{\numberline {3.10}{\ignorespaces Ted-talk 生成结果图}}{57}{figure.caption.42}%
+\contentsline {figure}{\numberline {3.11}{\ignorespaces How2Sign 生成结果}}{58}{figure.caption.43}%
+\contentsline {figure}{\numberline {4.1}{\ignorespaces 三维分组卷积模块}}{65}{figure.caption.45}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces 多任务解码器结构图}}{67}{figure.caption.46}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces 法线融合单元结构图}}{68}{figure.caption.47}%
+\contentsline {figure}{\numberline {4.4}{\ignorespaces 法线图重建可视化效果对比}}{74}{figure.caption.54}%
+\contentsline {figure}{\numberline {4.5}{\ignorespaces 法线方案数字人图像可视化效果对比}}{75}{figure.caption.55}%
+\contentsline {figure}{\numberline {4.6}{\ignorespaces 改进模型与基准模型关键部位可视化效果对比}}{77}{figure.caption.56}%
+\contentsline {figure}{\numberline {4.7}{\ignorespaces 本文模型与realisdance\cite {zhou2024realisdance}、LIA\cite {wang2024lia} 模型结果对比图}}{82}{figure.caption.61}%
+\contentsline {figure}{\numberline {5.1}{\ignorespaces 服务型数字人交互流程}}{85}{figure.caption.63}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces 服务型数字人交互流程}}{88}{figure.caption.64}%
+\contentsline {figure}{\numberline {5.3}{\ignorespaces 实时交互数字人用户界面}}{89}{figure.caption.65}%
+\contentsline {figure}{\numberline {5.4}{\ignorespaces 节目制作数字人用户交互流程}}{91}{figure.caption.66}%
+\contentsline {figure}{\numberline {5.5}{\ignorespaces 节目制作数字人系统界面}}{92}{figure.caption.67}%

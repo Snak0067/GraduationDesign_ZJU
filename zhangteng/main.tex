@@ -1,0 +1,131 @@
+% !Mode:: "TeX:UTF-8"
+% !TEX builder = LATEXMK
+% !TEX program = xelatex
+\documentclass[master,oneside]{zjuthesis} % 如果你的论文不满80页，还是单面印刷吧
+% \usepackage{subfigure}
+\usepackage{multirow}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 开始填写前置部分使用的变量
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 样式设定在 zjuthesis.cls 下, 人类可读，爱请查阅
+% \usepackage{graphicx}
+\usepackage{makecell}
+\usepackage{enumerate}
+\usepackage{diagbox}
+\usepackage{tabularx}
+\usepackage{graphics}
+\usepackage{booktabs}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{makecell}
+
+\usepackage{listings}
+\usepackage{subcaption}
+\usepackage{algorithmic}
+\usepackage{url}
+\usepackage{notoccite}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{chngcntr}
+\usepackage[table,xcdraw]{xcolor}
+\newcolumntype{Z}{>{\centering\let\newline\\\arraybackslash\hspace{0pt}}X}
+
+% 这里写这么鬼畜是为了测试多几个字会不会造成溢出
+\title{结合强化学习的图结构大语言模型关键技术研究} % 封面和题名页使用
+\englishtitle{Key Techniques for Graph-Structured Large Language Models with Reinforcement Learning} % 封面和题名页使用
+% 如果您的标题用字过多，请自行调节 zjuthesis.cls 里的 ZJUmakecover 里的各项距离。
+
+%\author{}          % 申请人姓名 封面使用
+\author{马晓峰}           %董爱祁
+
+\classification{TP311.5}    % 封面头使用
+\serialnumber{10335}        % 封面头使用
+\secretlevel{无}            % 封面头使用
+\studentnumber{22351147}    % 封面头使用
+
+%\supervisor{御坂美琴}       % 导师 封面使用
+\supervisor{耿卫东}               % {耿卫东}
+%\spvtitle{电击使}           % 职称 封面使用
+% \spvtitle{教授}              % 职称 封面使用{教授}
+\spvtitle{教授}     
+%\cpsupervisor{桂和纱}       % 合作导师，如果没有合作导师，就在此文件第 4 行\documentclass选项栏中加上"nocpsupervisor"。
+\cpsupervisor{}
+\cspvtitle{}             % 合作导师职称
+
+% 从机械工程学院改来，保留设定变量命名
+%\major{船舶工程}            % 专业学位类别栏 填 工程硕士
+\major{电子信息}
+%\research{白学}             % 专业学位领域栏 填 软件工程
+\research{软件工程}
+\institute{软件学院}         % 所在学位栏 填 软件学院
+
+\submitdate{2026年3月30日}   % 论文提交日期 栏 0306
+
+% 题名页的评阅人及答辩席
+% 归档时候填写
+% 论文评阅人1 2 3 4 5
+\reviewerA{隐名评阅} \enreviewerA{}
+\reviewerB{隐名评阅} \enreviewerB{}
+\reviewerC{隐名评阅} \enreviewerC{}
+\reviewerD{} \enreviewerD{}
+\reviewerE{} \enreviewerE{}
+
+% 答辩委员会主席
+% \chairperson{张微$\setminus$教授级高工$\setminus$浙江大学软件学院\quad\quad\quad\quad\quad} \enchairperson{}
+\chairperson{倪超$\setminus$副教授$\setminus$浙江大学软件学院} \enchairperson{}
+
+% 答辩委员 1 2 3 4 5
+\commissionerA{曾丽敏$\setminus$副教授$\setminus$浙江大学软件学院} \encommissionerA{}
+\commissionerB{张文$\setminus$副教授$\setminus$浙江大学软件学院} \encommissionerB{}
+\commissionerC{房子荃$\setminus$助理研究员$\setminus$浙江大学软件学院} \encommissionerC{}
+\commissionerD{周鑫崴$\setminus$高级工程师$\setminus$宁波市地方金融监管局} \encommissionerD{}
+\commissionerE{} \encommissionerE{}
+
+% 答辩日期
+% \defencedate{2023年3月5日} \eendefencedate{}  % 因为endefencedate 命名被占用
+\defencedate{2026年3月1日} \eendefencedate{}  % 因为endefencedate 命名被占用
+
+% 论文前置部分变量填写完毕 开始全书排版
+\begin{document}
+% \include{m_contents/review}      % 论文修改说明
+% 封面、中文题名页、英文题名页、独创声明和版权使用书 无页码
+\maketitle
+
+% 摘要部分
+\abstractmatter
+\include{m_contents/abstract_chinese}
+\include{m_contents/abstract_english}
+
+% 目录和术语表
+\frontmatter
+\tableofcontents % 正文目录
+\listoffigures   % 图目录
+\listoftables    % 表目录
+% 术语及缩略词表(需要则开)
+%\include{contents/denotation}
+
+% 正文排版开始 建议一章一文件 （好像无法嵌套 include） 
+\mainmatter
+\include{m_contents/brief}
+% \include{m_contents/dataset} 
+% \include{m_contents/pipeline}     
+\include{m_contents/pipeline2.0} %dataset+pipeline  
+\include{m_contents/baseline}
+\include{m_contents/novelty} 
+\include{m_contents/server}      %
+\include{m_contents/summary} 
+
+
+ 
+% 结尾部分排版
+\backmatter
+% \include{contents/thanks} % 
+
+% 引用参考文献数据库
+\bibliography{m_references/test.bib}
+
+\include{m_contents/appendixA} 
+\include{m_contents/thanks_input} 
+
+% 附录部分
+
+
+\end{document}

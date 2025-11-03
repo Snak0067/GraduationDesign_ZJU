@@ -1,0 +1,73 @@
+\let \ZJU@spaceChar \relax 
+\contentsline {chapter}{摘要}{i}{section*.1}%
+\contentsline {chapter}{Abstract}{iii}{section*.2}%
+\contentsline {chapter}{图目录}{II}{section*.4}%
+\contentsline {chapter}{表目录}{III}{section*.5}%
+\contentsline {chapter}{\numberline {第1章}绪论}{1}{chapter.1}%
+\contentsline {section}{\numberline {1.1}课题背景与研究意义}{1}{section.1.1}%
+\contentsline {section}{\numberline {1.2}相关研究工作}{2}{section.1.2}%
+\contentsline {subsection}{\numberline {1.2.1}基于生成对抗模型的数字人生成技术}{2}{subsection.1.2.1}%
+\contentsline {subsection}{\numberline {1.2.2}基于扩散模型的数字人生成技术}{3}{subsection.1.2.2}%
+\contentsline {subsection}{\numberline {1.2.3}基于神经辐射场的数字人生成技术}{5}{subsection.1.2.3}%
+\contentsline {subsection}{\numberline {1.2.4}基于三维高斯的数字人生成技术}{6}{subsection.1.2.4}%
+\contentsline {subsection}{\numberline {1.2.5}其他生成式数字人技术}{6}{subsection.1.2.5}%
+\contentsline {subsection}{\numberline {1.2.6}数字人数据表示}{7}{subsection.1.2.6}%
+\contentsline {section}{\numberline {1.3}本文主要工作}{10}{section.1.3}%
+\contentsline {section}{\numberline {1.4}本文章节安排}{13}{section.1.4}%
+\contentsline {chapter}{\numberline {第2章}生成式数字人中的多维度特征融合总体方案}{15}{chapter.2}%
+\contentsline {section}{\numberline {2.1}问题描述}{15}{section.2.1}%
+\contentsline {section}{\numberline {2.2}数字人多维度特征融合总体方案}{15}{section.2.2}%
+\contentsline {section}{\numberline {2.3}面向多维度特征融合的基准数据集构建}{17}{section.2.3}%
+\contentsline {subsection}{\numberline {2.3.1}数据自动化清洗和分割工具}{18}{subsection.2.3.1}%
+\contentsline {subsection}{\numberline {2.3.2}全身关键点检测工具}{20}{subsection.2.3.2}%
+\contentsline {subsection}{\numberline {2.3.3}人物前景分割工具}{21}{subsection.2.3.3}%
+\contentsline {subsection}{\numberline {2.3.4}人体先验模型拟合工具}{22}{subsection.2.3.4}%
+\contentsline {subsection}{\numberline {2.3.5}多维度合成数据生成工具}{27}{subsection.2.3.5}%
+\contentsline {subsection}{\numberline {2.3.6}基准数据集介绍}{32}{subsection.2.3.6}%
+\contentsline {section}{\numberline {2.4}数字人模型质量评估}{33}{section.2.4}%
+\contentsline {subsection}{\numberline {2.4.1}像素质量}{34}{subsection.2.4.1}%
+\contentsline {subsection}{\numberline {2.4.2}感知质量}{35}{subsection.2.4.2}%
+\contentsline {section}{\numberline {2.5}本章小结}{36}{section.2.5}%
+\contentsline {chapter}{\numberline {第3章}全局人体特征和局部位置特征的融合增强方法}{38}{chapter.3}%
+\contentsline {section}{\numberline {3.1}概述}{39}{section.3.1}%
+\contentsline {section}{\numberline {3.2}基于对抗生成的主干网络模型}{40}{section.3.2}%
+\contentsline {subsection}{\numberline {3.2.1}时序映射网络和时序编码}{40}{subsection.3.2.1}%
+\contentsline {subsection}{\numberline {3.2.2}生成器模型结构}{41}{subsection.3.2.2}%
+\contentsline {subsection}{\numberline {3.2.3}判别器结构}{43}{subsection.3.2.3}%
+\contentsline {subsection}{\numberline {3.2.4}模型损失函数}{43}{subsection.3.2.4}%
+\contentsline {section}{\numberline {3.3}局部特征融合增强}{44}{section.3.3}%
+\contentsline {section}{\numberline {3.4}基于预训练大模型的人体全局特征融合}{46}{section.3.4}%
+\contentsline {section}{\numberline {3.5}模型测评与实验分析}{48}{section.3.5}%
+\contentsline {subsection}{\numberline {3.5.1}实验目标与配置}{48}{subsection.3.5.1}%
+\contentsline {subsection}{\numberline {3.5.2}模型结构与参数消融实验}{52}{subsection.3.5.2}%
+\contentsline {subsection}{\numberline {3.5.3}多场景模型性能测评}{55}{subsection.3.5.3}%
+\contentsline {section}{\numberline {3.6}本章小结}{59}{section.3.6}%
+\contentsline {chapter}{\numberline {第4章}帧间连续性与法线属性融合的时序一致性改进}{60}{chapter.4}%
+\contentsline {section}{\numberline {4.1}概述}{60}{section.4.1}%
+\contentsline {subsection}{\numberline {4.1.1}基于帧间连续特征的时序一致改进}{61}{subsection.4.1.1}%
+\contentsline {subsection}{\numberline {4.1.2}嵌入法线特征的多维度融合}{62}{subsection.4.1.2}%
+\contentsline {section}{\numberline {4.2}基于三维分组卷积的帧间连续特征融合方法}{64}{section.4.2}%
+\contentsline {section}{\numberline {4.3}基于多任务学习的法线特征融合方法}{65}{section.4.3}%
+\contentsline {section}{\numberline {4.4}模型测评与实验分析}{69}{section.4.4}%
+\contentsline {subsection}{\numberline {4.4.1}实验目标与配置}{69}{subsection.4.4.1}%
+\contentsline {subsection}{\numberline {4.4.2}模型结构消融实验}{71}{subsection.4.4.2}%
+\contentsline {subsection}{\numberline {4.4.3}基于闭环检测的模型时序一致性测评}{77}{subsection.4.4.3}%
+\contentsline {subsection}{\numberline {4.4.4}模型性能测评}{79}{subsection.4.4.4}%
+\contentsline {section}{\numberline {4.5}本章小结}{83}{section.4.5}%
+\contentsline {chapter}{\numberline {第5章}生成式数字人应用案例}{84}{chapter.5}%
+\contentsline {section}{\numberline {5.1}多维度特征融合的生成式数字人推理流程}{84}{section.5.1}%
+\contentsline {section}{\numberline {5.2}客服数字人}{86}{section.5.2}%
+\contentsline {subsection}{\numberline {5.2.1}技术架构}{86}{subsection.5.2.1}%
+\contentsline {subsection}{\numberline {5.2.2}交互流程}{88}{subsection.5.2.2}%
+\contentsline {section}{\numberline {5.3}节目制作数字人}{90}{section.5.3}%
+\contentsline {subsection}{\numberline {5.3.1}技术架构}{90}{subsection.5.3.1}%
+\contentsline {subsection}{\numberline {5.3.2}交互流程}{91}{subsection.5.3.2}%
+\contentsline {section}{\numberline {5.4}应用测试与优化}{92}{section.5.4}%
+\contentsline {subsection}{\numberline {5.4.1}测试软硬件环境}{93}{subsection.5.4.1}%
+\contentsline {subsection}{\numberline {5.4.2}性能测试与优化}{93}{subsection.5.4.2}%
+\contentsline {section}{\numberline {5.5}本章小结}{95}{section.5.5}%
+\contentsline {chapter}{\numberline {第6章}总结与展望}{97}{chapter.6}%
+\contentsline {section}{\numberline {6.1}技术总结}{97}{section.6.1}%
+\contentsline {section}{\numberline {6.2}未来工作展望}{98}{section.6.2}%
+\contentsline {chapter}{作者简历}{101}{section*.72}%
+\contentsline {chapter}{致谢}{102}{section*.73}%

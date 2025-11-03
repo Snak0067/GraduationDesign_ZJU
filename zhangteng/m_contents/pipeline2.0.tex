@@ -1,0 +1,614 @@
+\chapter{生成式数字人中的多维度特征融合总体方案}
+
+本章对多维度特征融合的生成数字人建模任务进行科学严谨的问题描述，阐述数字人多维度特征融合建模的总体解决方案，并具体解释相应的方法流程框架，从数据流的角度理清流脉络。此外，本章提出一种多维度特征的数字人数据集构建策略，能够从单目视频中生成基于人物多维度特征合成图像，对本文提出的生成式数字人方法进行验证和评估。
+
+\section{问题描述}
+
+本文研究重点是多维度特征融合的生成式数字人建模，其科学问题描述如下：
+给定一系列包含目标人物面部和肢体的单目图像序列 $Y_{1:N} = \{Y_1,\dots,Y_M\}$ ，其中$N$为视频总帧数。本文模型根据该图像序列进行数字人建模，输出与该单目视频中身份、姿态、表情均保持一致的图像序列 $\widetilde{Y}_{1:N}= \{\widetilde{Y}_1,\dots,\widetilde{Y}_N\}$。
+
+在该过程中模型隐式融合原始视频数据源中的多维度特征序列 $M_{1:N}= \{M_1,\dots,M_N\}$，以更好的建模原始人物视频到生成数字人视频的分布映射。同时依赖于该多维度特征，当模型完成建模后，给定另一多维度特征驱动序列 $M_{1:T} = \{M_1,\dots,M_T\}$ 时，模型能够输出具有与建模身份一致的，且与驱动序列姿态、表情均保持一致的数字人图像序列$\widetilde{Y}_{1:T}= \{\widetilde{Y}_1,\dots,\widetilde{Y}_T\}$。
+
+针对上述研究目标，本文将生成式数字人建模拆解为如下两个子科学问题：
+\begin{enumerate}
+    \item 多维度特征提取：输入 $N$ 帧单目图像序列 $Y_{1:N}$，输出用以驱动模型进行建模的多维度特征表示序列 $M_{1:N}$。
+    \item 条件式生成模型建模: 输入 $N$ 帧多维度表示序列 $I_{1:N}$作为条件，模型输出与原始视频 $Y_{1:N}$一致的图像序列 $\widetilde{Y}_{1:N}$。
+\end{enumerate}
+
+\section{数字人多维度特征融合总体方案}
+
+针对上述科学问题，本文提出了一套基于多维度特征融合的条件对抗生成模型的数字人技术总体解决方案。其总体框架如图~\ref{fig:pipe}~所示。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=0.9\textwidth]{./m_figures/chapter2/pipe2.pdf}
+	\caption{基于条件式生成对抗模型的数字人技术框架图}
+	\label{fig:pipe}
+\end{figure}
+
+
+首先本文将上述科学问题中的多维度特征序列 $M_{1:N}$ 具体解耦为显式的人体多维度合成图像序列 $I_{1:N}$ 和隐含在视频中的时序、尺度、空间等隐式多维度特征条件 $F_{1:N}$。
+
+在第一阶段中，通过基准数据集构建方法，输入人物单目视频 $Y_{1:N}$，生成建模所需的多维度合成图像序列 $I_{1:N}$，该合成图像序列包括了局部条件图像序列合全身条件图像序列，因此能够良好的表征数字人的手部姿态，身体动作和面部表情，可以被应用到演讲、手语、节目制播等多种数字人生成任务场景当中。
+
+具体来说，针对第一阶段，本章节引入构建面向多维度特征融合的基准数据集构建方法，从单目视频中生成能够良好的表征数字人的手部姿态，身体动作和面部表情的多维度合成图像序列。并以该构建方法为基础，构建了大规模数字人数据集。
+
+在第二阶段中，通过构建条件对抗生成网络，以第一阶段得到的多维度合成图像序列 $I_{1:N}$ 和从原视频中得到的额外多维度特征条件 $F_{1:N}$，模型通过训练的方式建模到真实人物视频帧的映射 $P(Y_{1:N}|I_{1:N},F_{1:N})$。
+
+针对第二阶段，在第三章中，本文以 StyleUNet\cite{styleAvatar} 模型为基础构建了以单帧多维度合成图像 $I_t$ 为条件的数字人对抗生成模型。
+并在此基础上提出基于全局人体特征和局部位置特征的融合增强方法，
+分别基于人体大模型的损失函数和面向高保真数字人生成的局部判别器结构，融合大模型特征与局部特征，从数字人整体形象和局部细节增强数字人建模生成的质量。
+在第四章中则针对基准模型中逐帧映射时可能出现的数字人时序一致性问题，
+分别从基于帧间连续特征的时序一致和嵌入法线特征的多维度融合的两个角度针对该问题进行解决，
+并实现了基于三维分组卷积的时序特征融合方法和基于多任务学习的法线特征融合方法两个具体解决方案。
+
+\section{面向多维度特征融合的基准数据集构建}
+
+当前的生成式数字人方法缺少统一的数据处理标准，使得在构建完整的数字人解决方案时，
+往往需要根据所使用的基础模型，修改对应的数据预处理方法；并且当驱动模态发生变化时，也难以对方法进行公平比较。
+如在 Animate anyone\cite{hu2024animate} 数字人视频生成模型中，
+模型使用基于DWpose\cite{dwpose} 绘制的身体点线图作为驱动模态，在 Champ\cite{zhu2024champ} 中，
+额外使用了 SMPL\cite{smpl} 模型的法线图、语义图、深度图加以融合。在Magicanimate\cite{magicanimate}中，
+则使用Densepose\cite{guler2018densepose} 渲染图作为驱动模态。
+因此本文提出了一种细粒度高质量的以人为中心的数据预处理流程，从人物视频数据集当中提取包含全身多部位细粒度的多维度合成图像作为特征表示。
+
+% 在生成式数字人任务当中，现有开源的单目视频数据在分辨率、帧率设置，其采集质量、和背景信息中均存在很大差异。另一方面这些原始视频数据中缺乏模型能够直接使用的和经过标注和清洗的信息。因此在本文中，针对单目人物视频数据，构建了一套全流程的多维度数据集处理方法。
+
+本小节中的数据集构建流程分为如下五个步骤:
+
+\textbf{1)数据自动化清洗和分割}
+
+将原始视频数据处理成以人物为中心的 1024\(\times\)1024 分辨率的视频，调整其帧率为 25 帧每秒 。并利用MediaPipe\cite{mediapipe} 进行逐帧检测，将人物视频切分为若干人物片段。利用该方式能够去除视频当中非人物帧、存在质量问题和面部显示不完整的视频片段。
+最后利用 Arcface\cite{deng2019arcface} 将所有视频根据人物的身份特征进行聚类。此步骤旨在对数据进行初步的清洗和人物身份分类。
+    
+\textbf{2)全身关键点检测}
+
+利用 Mediapipe\cite{mediapipe}， DWpose\cite{dwpose} 等方法对步骤一中得到的预处理视频片段进行全身关键点检测，分别获取脸部、眼部、躯干的关键点（landmark），并对关键点进行时序平滑处理。此步骤旨在利用检测算法提供的关键点为后续前景分割和人体先验模型拟合提供基础。
+    
+\textbf{3)人物前景分割}
+
+利用上一步骤中关键点作为提示标记人物对象在图中的位置，指导 SAM2\cite{sam2} 进行掩码分割，将视频中的人物与其背景分离。并针对掩码过程中可能存在的噪点等问题，通过形态学算法和最大流方法进行进一步清洗。该步骤旨在利用掩码生成具有绿幕背景的人物视频。
+
+\textbf{4)人体先验模型拟合}
+    
+分别利用 Faceverse\cite{wang2022faceverse}, AiOS\cite{sun2024aios} , HaMeR\cite{hamer} 等方法提取人物视频对应帧中的 Faceverse 面部表示，
+全身 SMPLX\cite{smplx} 表示，手部 MANO\cite{mano} 表示和相机姿态。针对AiOS全身识别中手部不准确的情况，利用更准确的 HaMeR 识别结果对其校准。对于相机姿态和参数模型中的姿态表示使用平滑算法进行平滑。该步骤旨在从单目视频中获取准确的参数化人体先验模型，为最终多维度合成图像绘制提供基础。
+
+\textbf{5)多维度合成数据生成}
+
+通过将参数化模型对应的系数映射成网格顶点，并进一步回归出关节点，可分别绘制 SMPLX 语义图，法线图，深度图以及 MANO 手部图。利用 OpenGL 可将关节点和面部 Mesh 顶点绘制成神经语义图像\cite{neural_sign_reenactor}序列。将面部顶点对应的眼部关键点绘制成眼部注视图像\cite{head2head++}。该步骤旨在得到最终的多维度合成图像。
+
+经过上述步骤。单目人物视频数据被处理为高质量、细粒度标注的数字人多维度合成图像数据集。具体来说，该数据集被存储为如下若干数据项：真实图像文件，关键点标注文件，绿幕背景图像文件，二值掩码文件，
+SMPLX~\cite{smplx} 系数文件，MANO~\cite{mano} 系数文件，Faceverse~\cite{wang2022faceverse} 系数文件，CCBR 图像文件，眼睛注视图像文件，SMPLX 语义图像文件， SMPLX 法线图像文件，
+MANO 手部图像文件。其总体的流程与各模态数据格式示例如图~\ref{dataset_pipeline}~所示。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=0.9\textwidth]{./m_figures/chapter2/数据集处理绘图.pdf}
+	\caption{基准数据集构建方法及数据存储格式}
+	\label{dataset_pipeline}
+\end{figure}
+
+\subsection{数据自动化清洗和分割工具}
+
+数据清理与分割的核心目标是提升数据集质量，减少输入数据中如噪声、缺失的人物帧等不良信息对模型性能的负面影响。保证每段视频中的人物形象和动作相对稳定。
+
+对于采集的原视频，读取其视频元数据中包含的信息，并过滤掉低于预设阈值的视频，避免低分辨率数据对模型训练的影响。分辨率达标的视频使用 MediaPipe\cite{mediapipe} 工具对视频逐帧检测得到对应的全身关键点和对应点置信度。通过MeidaPipe每帧是否检测成功标记人物的完整出现区间，识别并提取具有完整人物的起始帧和结束帧。经过该处理，将每个视频被切分为若干人物片段。
+
+对提取的每段人物片段，进行裁剪操作。假设在第一帧中检测到的人物关键点集合为：\(K = \{(x_i, y_i)\}_{i=1}^N\)其中 \(N\) 为关键点总数。
+遍历得到关键点的最小坐标值\(x_{\text{min}}\), \(y_{\text{min}} \)和最大坐标值\(x_{\text{max}} , y_{\text{max}}\)。
+接着根据最小和最大坐标值，计算包围盒的初始宽度和高度，如公式（\ref{eq:center}）所示：
+\begin{equation}
+(x_c, y_c) = \left(\frac{x_{\text{min}} + x_{\text{max}}}{2}, \frac{y_{\text{min}} + y_{\text{max}}}{2}\right)
+\label{eq:center}
+\end{equation}
+
+选取包围盒的长边\(L\)作为方形裁剪区域的边长，并按照一定的比例拓展，以确保覆盖整个人物。考虑拓展比例 \(\alpha > 1\)，拓展后的裁剪区域边长如公式（\ref{eq:length}）所示。
+\begin{equation}
+L = \max(w_{\text{box}}, h_{\text{box}}), L' = \alpha L
+\label{eq:length}
+\end{equation}
+
+如果拓展后的包围盒超出视频底边，则调整包围盒中心坐标向上移动，直至其完全处于视频范围内。
+此时假设视频高度为 \(H\)，\(\text{若 } y_c + \frac{L'}{2} > H， \text{则 } y_c = H - \frac{L'}{2}\)对于除底边外其他超出视频范围的部分，使用绿幕色背景进行填充，
+其RGB值为$[0, 177, 64]$。最后，裁剪区域的范围可被定义为公式（\ref{eq:box}）所示。
+\begin{equation}
+    \begin{split}
+    (x_{\text{crop,min}}, y_{\text{crop,min}}) &= \left(x_c - \frac{L'}{2}, y_c - \frac{L'}{2}\right) \\
+    (x_{\text{crop,max}}, y_{\text{crop,max}}) &= \left(x_c + \frac{L'}{2}, y_c + \frac{L'}{2}\right)
+    \end{split}
+    \label{eq:box}
+\end{equation}
+
+最终得到的方型裁剪区域采用双线性插值方法缩放至 $1024\times1024$ 的标准分辨率，并使用 25 帧每秒的视频速率进行下采样，生成统一规格预处理视频，确保数据输入的规范性与统一性。
+
+最后使用 ArcFace 方法\cite{deng2019arcface}，从预处理视频中的第一帧人脸中提取身份特征对人物进行聚类，存入特定身份的数据目录。通过上述处理流程，实现了对原始视频数据的初步清洗过滤，并按照不同人物身份进行划分，为后续数据集构建提供了高质量的素材。
+
+\subsection{全身关键点检测工具}
+
+从视频帧中进行关键点的提取，是对视频中的人物进行建模的第一步。本文分别用 MediaPipe\cite{mediapipe} 和 Dwpose\cite{dwpose} 提取视频帧中的面部和身体关键点及其置信度。MediaPipe 能提供准确、细粒度的面部顶点标注，而 Dwpose 在身体关键点的识别上更准确。具体来说， MediaPipe 方法用以提取面部共 478 个关键点，该关键点除像素平面的 $(x,y)$ 坐标外，还具有预测的伪深度坐标 $z$。Dwpose 则分别提取身体 23 个二维关键点，以及双手共 42 个二维关键点，提取出的面部和全身关键点均具有置信度。
+
+为了减少提取关键点在时序上的抖动，本文利用一欧元滤波器 \cite{casiez20121} 对关键点进行时序平滑处理，减少各帧间因检测时噪音干扰导致的小幅度抖动。同时对于部分检测结果失败的视频帧，利用视频帧上下文的检测结果，采用线性插值的方式对可能缺失的关键点进行补全。
+处理后的全身关键点将作为标签点提示SAM2\cite{sam2} 进行人物前景分割；Faceverse\cite{wang2022faceverse} 方法中则使用 Mediapipe 面部关键点拟合得到人物各帧面部系数；手部关键点及其置信度将用以 HaMeR\cite{hamer} 方法中包围盒的确定和用以辅助手部神经语义图像绘制。
+
+\subsection{人物前景分割工具}
+
+人物前景分割通过对人物视频帧进行背景剔除，能够消除背景对生成结果的干扰，使得后续模型在建模过程中不必要去学习复杂的背景生成，从而进一步提高数字人生成任务的生成质量。
+同时预先分离的前后景能够使得生成的数字人图像序列更方便的应用到实际数字人场景中。
+在该部分，本文使用 SAM2\cite{sam2} 从视频中进行人物前景分割。
+
+SAM2 基于提示编码器、记忆注意力层和记忆编码器的架构设计能够有效处理遮挡问题，并将前序掩码在时序中进行传播，完成复杂的视频跟踪分割任务。 该模型中的提示编码器用以处理输入的提示信息。具体来说点、框等多种提示类型都可用于指导模型分割图像中的特定对象。通常 SAM2 采用的是交互式分割的方法，即模型将用户传入的标记点作为提示来选择和细化目标对象，模型会根据用户提示将分割结果传播到视频的后续帧。本文基于该种方式进行拓展，通过识别的关键点进行自动化的人体前景分割。
+
+在实际处理中，为了防止预处理视频过长，导致人物追踪失效，将预处理视频片段首先划分为25秒总500帧的子片段。
+将每个子片段中的第一帧中识别并存储的关键点中选择Dwpose中的 12 个主要躯干关键点加上 1 个面部鼻子部位关键点作为人体前景标记点。进一步，为了防止处理时物体遮挡导致的分割错误，对标记点置信度进行遍历判断，保留置信度超过阈值的点。最终，符合阈值的人体关键点将被传入给 SAM2 的提示编码器，用以标记视频中的人体对象前景。通过该方法能够很好使得SAM2分割出人体对象。
+
+但直接通过该方法得到的二值背景掩码可能会存在噪点问题，并且人物边缘可能存在背景缝隙，因此还需要进一步对掩码进行处理。
+首先通过形态学腐蚀操作断开可能与人体掩码相连的噪点，并且减少在人物边缘可能存在的背景缝隙。此时进一步将掩码当中的中最大连通分量作为人物掩码。最终可得到如图~\ref{fig:sam2_2}~所示的掩码。
+
+为了进一步对掩码边缘进行平滑，减少边缘锯齿，将二值掩码拓展为范围从 0 到 255 灰度掩码，对该灰度掩码进行高斯滤波处理。
+本文将背景处理成RGB色彩为 $[0, 177, 64]$ 的绿幕背景，将该灰度掩码融合回原图时，对于掩码边缘，使用灰度值混合绿幕背景和原始视频信息。
+当完成掩码融合后，得到最终的人物前景分割图像，如图~\ref{fig:sam2_3}~所示。此时分别将未经过灰度变换和平滑处理的掩码和人物前景分割图像进行存储。
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/sam2/origin.png}
+        \caption{原始视频图像}
+        \label{fig:sam2_1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.3\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{./m_figures/chapter2/sam2/sam2.png}
+      \caption{SAM2 掩码示例}
+      \label{fig:sam2_2}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.3\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{./m_figures/chapter2/sam2/sam_final.png}
+      \caption{SAM2 掩码叠加结果}
+      \label{fig:sam2_3}
+    \end{subfigure}
+    \caption{SAM2\cite{sam2} 结果图}
+    \label{fig:sam2}
+\end{figure}
+
+
+\subsection{人体先验模型拟合工具}
+
+人体先验模型拟合进一步利用参数化人体模型提取单目人物视频中的人体数据。
+
+\textbf{1)面部模型拟合}
+
+首先本文利用Faceverse\cite{wang2022faceverse} 将 Mediapipe\cite{mediapipe} 中 478 个关键点作为伪真值拟合人物的面部系数。针对序列中的一帧人物数据 $I \in \mathbb{R}^{W\times H\times C}$ 而言，
+面部系数包括形态系数$\beta\in \mathbb{R}^{150}$、表情系数$exp \in \mathbb{R}^{52}$、姿态系数$\theta \in \mathbb{R}^{3} $ 、相机位移系数$trans \in \mathbb{R}^{3} $等。此时全脸关键点由$ID$、$exp$、$rot$、$eye$、$trans$等系数共同决定。$base_{id}$ 是Faceverse的身份基向量，$base_{exp}$ 表情基向量，$base_{mean}$是Faceverse的平均关键点，通过Faceverse 蒙皮公式（\ref{eq:faceverse}）线性组合得到完整的人脸顶点映射表示$V_{shape}$：
+% 通过式（\ref{eq:faceverse}）线性组合得到完整的人脸顶点映射表示$V_{shape}$:
+\begin{equation}
+  \begin{split}
+    V_{shape} = base_{id} \times ID + base_{exp} \times exp + base_{mean}
+  \end{split}
+  \label{eq:faceverse}
+\end{equation}
+
+最后利用与 Mediapipe 中对应的478个关键点索引，从完整的面部网格顶点中获得稀疏表示的 Faceverse 面部顶点。
+
+\textbf{2)手部模型拟合}
+
+本文利用 HaMeR\cite{hamer}  提取人物基于 MANO 模型\cite{mano}的手部系数。具体来说针对每只手，
+其提取的系数包括全局转动系数$rot \in \mathbb{R}^{3} $、姿态系数$\theta \in \mathbb{R}^{45}$、形态系数$\beta\in \mathbb{R}^{10}$和相机位移$trans \in \mathbb{R}^{3} $。而后使用 MANO 平均关键点和对应的表面蒙皮映射函数重建得到网格顶点。
+
+在原始的 HaMeR 推理管线中，其依赖于 VitPose\cite{xu2022vitpose} 提取的手部关键点确定手部包围盒并识别左右手信息，根据得到的关键点置信度阈值判断该帧手部是否真实存在，仅重建达到阈值的手部。本文将该过程修改为直接使用步骤二中 Dwpose\cite{dwpose} 的关键点信息，更高效的利用已有的提取结果，降低处理成本。
+
+\textbf{3)全身模型拟合}
+
+本文使用 SMPLX模型\cite{SMPL-X:2019} 提取全身人体系数。
+具体来说，其包括了手部姿态系数$\theta_\text{hand} \in \mathbb{R}^{90}$，
+头部姿态系数$\theta_\text{head} \in \mathbb{R}^{9}$，身体姿态系数$\theta_\text{body} \in \mathbb{R}^{63}$，
+面部表情系数$exp \in \mathbb{R}^{10}$，形态系数$\beta\in \mathbb{R}^{10}$，相机位移$trans \in \mathbb{R}^{3} $。当得到系数后，同样使用对应的 SMPLX 蒙皮函数得到对应参数状态下的网格顶点并回归出对应的全身共144个身体关节点。
+
+为了得到相对准确的全身表示，本文选取了一段15秒总375帧的自采集人物动作片段，分别对比 
+Smpler-X\cite{cai2024smpler}， OSX\cite{lin2023one}，
+multi-HMR\cite{multi-hmr2024}，AiOS~\cite{sun2024aios} 方法中的 SMPLX 拟合结果。
+~\ref{fig:smplx_result}~展示了四种方法在同一帧中的检测表现。其结果可视化对比表明，Smpler-X 和 OSX 不能够很好拟合人物的动作，在全身尤其是手部动作上存在较大的差距。而 multi-HMR 虽然全身拟合结果很好，但从时序结果上观察存在剧烈的手部抖动。而 AiOS 可视化结果与 multi-HMR 相当，但是在时序上效果更加平滑，因此相对其余三个模型更好。图本文最终使用 AiOS 提取全身先验。
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}[b]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/smpler2.jpg}
+        \caption{Smpler-X\cite{cai2024smpler} 结果}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/osx2.jpg}
+        \caption{OSX\cite{lin2023one} 结果}
+    \end{subfigure}
+    \hfill
+    % \vspace{0.5cm}  % 增加竖直间距
+    \begin{subfigure}[b]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/hmr2.jpg}
+        \caption{multi-HMR\cite{multi-hmr2024} 结果}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.24\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/aios2.jpg}
+        \caption{AiOS\cite{sun2024aios} 结果}
+    \end{subfigure}
+    \caption{检测结果可视化比较}
+    \label{fig:smplx_result}
+\end{figure}
+
+\textbf{4)全身模型手部修正}
+
+使用 AiOS 提取的系数针对全身具有较好的拟合程度，但是在测试不同动作实例时其仍存在拟合较差的情况。如视频中人物做出如图~\ref{fig:bad_case}~所示的动作时，对应手部姿态并不能够很好拟合。基于这个基本观察结果，本文进一步通过的视频人物动作样例进行了实验验证，发现 AiOS 模型尤其在拟合侧边举手的特殊姿势时，手型会与真实图像有较大差异，手腕转角存在较大误差。而前文中所利用的 HaMeR\cite{hamer} 手部系数提取方法，拟合形成的MANO手型对该类手型能够很好的拟合。因此本文将两者结合，将 AiOS 提取的 SMPLX 手部系数修正为 HaMeR 提取的 MANO 手部系数。
+
+\begin{figure}[!htbp]
+  \centering
+  \scalebox{0.8}{
+  \begin{subfigure}[b]{0.49\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/bad_gt.jpg}
+      \caption{图像真值}
+    \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.49\textwidth}
+    \centering
+    \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/bad_case.jpg}
+    \caption{较差拟合结果}
+  \end{subfigure}
+  }
+  \caption{AiOS 模型\cite{sun2024aios}拟合失效案例}
+  \label{fig:bad_case}
+\end{figure}
+
+此时，仅考虑不包含腕部的手部的局部参数空间，SMPLX~\cite{smplx} 采用 MANO~\cite{mano} 作为其手部表示，
+因此 SMPLX 手型和 MANO 手型具有一致的默认手部均值和参数空间。
+但 MANO 中左手的姿态系数和全局转角相对 SMPLX 而言处于以y轴对称的坐标系下。
+因此对于左手的姿态系数和全局转角，将其旋转轴角表示的 $x,z$ 坐标轴取反，即转换到 SMPLX 相同的参数空间。
+而右手所处的坐标系与 SMPLX 坐标系一致，无需进行转换。利用转换完成的 MANO 姿态系数替换 AiOS~\cite{sun2024aios} 中得到的原始 SMPLX 手部姿态系数，即完成了手部姿态的转换。
+
+在局部参数空间调整完成后，还需要进一步调整全身参数空间下的手腕姿态。
+因此，结合前文中 AiOS 检测结果的可视化观察，本文假设在 AiOS~\cite{sun2024aios} 模型拟合得到的姿态参数中除手腕姿态外，对于全身其他部位已经得到了较好的姿态拟合结果，因此将问题约束为在人体前向运动学树中仅对 SMPLX 的手腕角度进行修正，而不改变链路中的其他节点。
+
+SMPLX 中的手腕在世界坐标系下的转角可被表示为前向运动学树中从根关节转角到手腕转角积累量。在该部分，使用四元数作为旋转表示，四元数表示能够很好的通过乘积表示进行组合旋转，并避免万向节死锁问题。
+
+以左手为例，此时左手腕的全局转角如（\ref{eq:sum}）表示：
+\begin{equation}
+  \begin{split}
+    R_\text{Left Wrist Global} = & R_\text{Pelvis} \times R_\text{Spine1} \times R_\text{Spine2} \times R_\text{Spine3} \times R_\text{Left Collar} \\ 
+    & \times R_\text{Left Shoulder} \times R_\text{Left Elbow} \times R_\text{Left Wrist Local}
+  \end{split}
+  \label{eq:sum}
+\end{equation}
+
+对于 MANO~\cite{mano} 模型，其左手全局转角直接由全局旋转项 $R_\text{Left Wrist MANO}$ 表示，
+利用该项对上式中的 $R_\text{Left Wrist Global}$ 进行替换，此时解得修正后的 $R_\text{Left Wrist Local}$ 如式（\ref{eq:new_axis}）所示：
+\begin{equation}
+  \begin{split}
+    R_\text{Left Wrist Local} = & R_\text{Left Wrist MANO} \times \left( R_\text{Pelvis} \times R_\text{Spine1} \times R_\text{Spine2} \times R_\text{Spine3} \right. \\
+    & \times R_\text{Left Collar} \times R_\text{Left Shoulder} \times R_\text{Left Elbow} )^{-1}
+  \end{split}
+  \label{eq:new_axis}
+\end{equation}
+
+可视化结果图~\ref{fig:aios_fixed}~表明，该方法能够有效的修正AiOS~\cite{sun2024aios}当中识别不正确的手型。
+
+\begin{figure}[!htbp]
+  \centering
+  \begin{subfigure}[b]{0.24\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/human.png}
+      \caption{原始图像}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.24\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/org.png}
+      \caption{修复前检测结果}
+  \end{subfigure}
+  \hfill
+  % \vspace{0.5cm}  % 增加竖直间距
+  \begin{subfigure}[b]{0.24\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/mano.png}
+      \caption{MANO\cite{mano} 手型表示}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}[b]{0.24\textwidth}
+      \centering
+      \includegraphics[width=\textwidth]{./m_figures/chapter2/smplx/fixed.png}
+      \caption{修复后法线图}
+  \end{subfigure}
+  \caption{手部修复结果}
+  \label{fig:aios_fixed}
+\end{figure}
+
+\textbf{5)拟合结果后处理}
+
+本节中提取的身体各部分参数表示，均先进行后处理再进行模型网格顶点映射。对于不同的参数化模型，使用一致的处理流程：
+\begin{enumerate}
+  \item 后处理中对于各参数模型均将其身份系数固定为第一帧提取的身份系数结果。
+  \item 均使用一欧元滤波方法针对相机位移系数进行平滑。
+  \item 均使用 SmoothNet \cite{zeng2022smoothnet} 以64的滑窗大小平滑全局转动系数和姿态系数。
+\end{enumerate}
+
+如表~\ref{tab:smooth}~所示，本文选取了一段20秒左右的人物基本静止站立视频，除小幅度晃动外无其他的全身运动。分别对比了原始识别结果，使用 SmoothNet 和使用 Savitzky-Golay 滤波方法平滑后的身体部分二维关键点位移，方差和最大关键点位移。实验结果表明 SmoothNet 在平滑姿态系数中具有良好的表现。
+
+\begin{table}[!htbp]
+  \centering
+  \scalebox{0.8}{
+  \begin{tabular}{cccc}
+  \toprule
+  \textbf{方法} & \makecell{\textbf{平均关键点位移}\\ 单位：像素} & \makecell{\textbf{关键点位移方差}\\ 单位：像素} & \makecell{\textbf{最大关键点位移} \\ 单位：像素} \\   
+  \midrule
+  原始检测结果 & 2.98 & 3.83 & 17.16 \\
+  Savitzky-Golay & \textbf{1.84} & 2.27 & 6.78 \\
+  SmoothNet~\cite{zeng2022smoothnet} & \textbf{1.84} & \textbf{2.25} & \textbf{6.75} \\
+  \bottomrule
+  \end{tabular}
+  }
+  \caption{平滑方法效果对比}
+\label{tab:smooth}
+\end{table}
+
+此外，上述平滑策略针对面部系数和身体系数的平滑在整个视频时序范围内进行；
+而针对使用 HaMeR\cite{hamer} 检测手部系数，人物手部在原始视频中相较其他身体部位运动范围大，运动速度快，较易出现超出视频拍摄范围的问题或者手部高速运动导致模糊的问题，导致该帧检测失败，缺少相应的 MANO\cite{mano} 手部系数。因此本文使用了分段平滑方法解决手部缺失值问题。具体来说，根据视频中每帧手部检测结果是否成功，识别左手和右手在视频中连续存在的片段，再对每个连续片段单独应用平滑过程。这种预先检测分段再进行逐段平滑处理的方法，可以避免平滑过程中未检测出手部系数的视频帧对平滑结果的干扰。
+
+本节获取了身体、手部、面部的精准的参数化表示，并进一步的通过参数化模型公式得到对应的网格顶点。除网格顶点外，将面部关键点位置定义为Faceverse\cite{wang2022faceverse} 中与 Mediapipe\cite{mediapipe} 
+对应索引的网格顶点，身体关键点定义为 SMPLX\cite{smplx} 身体模型回归出的身体关节点。在下一节中，将利用相机参数对网格点和关键点进行投影，得到对应的像素空间映射的网格顶点和关键点，用以绘制多维度人体合成数据。
+
+\subsection{多维度合成数据生成工具}
+
+本节合成的数据模态包含基于 SMPLX\cite{smplx} 的法线图、语义图；基于 MANO\cite{mano} 的手部图像；基于关键点的神经语义图像\cite{neural_sign_reenactor}、眼部注视图像\cite{head2head++}。各图像表示如~\ref{fig:dataset_res}~所示，其中为了更清晰的展示眼部图像和手部图像，在图中对其进行了放大处理，在实际处理完成的结果中，其大小与位置和原始视频帧中身体部位空间位置和大小一一对应。
+
+\begin{figure}[!htbp]
+    \centering
+    \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/result/origin.png}
+        \caption{图像真值}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/result/ccbr.png}
+        \caption{神经语义图像}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/result/senmatic.png}
+        \caption{SMPLX 语义图像}
+      \end{subfigure}
+      \vspace{0.5cm}
+      \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/result/normal.png}
+        \caption{SMPLX 法向图像}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/result/hand.jpg}
+        \caption{MANO 手部图像}
+      \end{subfigure}
+      \hfill
+      \begin{subfigure}[b]{0.3\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{./m_figures/chapter2/result/eye.jpg}
+        \caption{眼睛注视图像}
+      \end{subfigure}
+    
+    \caption{多维度图像绘制结果}
+    \label{fig:dataset_res}
+\end{figure}
+
+对于 SMPLX\cite{smplx} 的法线图和语义图，本文使用 MMHuman3D~\cite{mmhuman3d} 进行渲染。其能够方便地定义渲染 shader 并与提供了与 SMPLX 模型进行交互的接口，生成高质量的渲染结果。在具体的 SMPLX 光栅化渲染过程中，不使用额外的光照模型，直接将 SMPLX 网格模型作为渲染对象，使用对应提取的相机参数对网格体进行透视投影。在法线图中，使用 SMPLX 三角面片法线进行渲染，在语义图中网格使用各身体区域定义颜色进行渲染。
+
+具体来说，在法线图渲染中将表面法线定义为垂直于 SMPLX 三角面片的法向量，在渲染时通过插值的方式得到表面任意像素区域的法向量。法向量所在坐标系被定义在 SMPLX 模型所在的相机坐标系中，
+本文参照标准的法线图绘制方法，与 BiNI\cite{bini} 等论文中所使用的类似，如图~\ref{fig:normal}所示，该坐标系为右手系，其中 $x$ 轴向右， $y$ 轴向上， $z$ 轴向屏幕外，法向量分量在$xyz$坐标轴下的颜色表示空间分别对应为8位的红，绿，蓝颜色表示，取值范围为$[0,255]$。在绘制时，法线首先被归一化为空间中的单位向量。该向量在各坐标轴下的分量取值范围为$[-1,1]$。在绘制时，将其变换到$[0,1]$ 空间下，再变换到对应颜色的空间范围内，此时对应的法线被表示为三种基本色彩的混合。
+% 在实际渲染法线图时，法线经过三角面片间的插值最终得到逐像素的法线信息。
+
+%法线图被认为是一种三维和二维结合的表示方法，法线图中包含了物体表面的空间朝向信息，因此在大量的三维重建、渲染方法\cite{}当中作为辅助模态使用。
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.3\textwidth]{./m_figures/chapter2/bini_normal.jpg}
+    \caption{法线图坐标系示例\cite{bini}}
+    \label{fig:normal}
+\end{figure}
+% 1.25 凌晨修改
+基于 SMPLX 的语义图像，首先将 SMPLX 身体部分划分为若干个语义区域，如头部、身体、四肢等，每个语义区域使用不同的颜色进行表示，并使用关键点索引将身体区域与范围内的模型网格顶点进行对应。语义图像能够直观地对人物表面进行划分，有助于模型在建模过程中理解人物的结构关系。本文参考 Champ \cite{zhu2024champ} 中 SMPL 模型语义图定义方法，将相邻身体区块用近似的颜色进行表示，对称区块使用相同颜色。但与之不同的是，针对模型易重叠的左右两只手，本文使用不同的颜色进行表示，辅助模型在驱动过程中区分左右手。表~\ref{tab:body_color}~展示了基于SMPLX 语义图像绘制时，各部位对应的颜色值。在渲染过程中，将 SMPLX 对应部位下的网格顶点渲染为表中对应颜色，并利用顶点颜色插值得到逐像素的 SMPLX 语义图像。
+
+\begin{table}[!htbp]
+    \centering
+    \scalebox{0.8}{
+    \begin{tabular}{lll|lll}
+    \hline
+    \textbf{部位名称} & \textbf{RGB颜色值} & \textbf{实际颜色} & \textbf{部位名称} & \textbf{RGB颜色值} & \textbf{实际颜色} \\
+    \hline
+    左脚 & [130, 130, 210] & \textcolor[rgb]{0.51,0.51,0.82}{\rule{1cm}{0.5cm}} & 左大腿 & [130, 180, 210] & \textcolor[rgb]{0.51,0.71,0.82}{\rule{1cm}{0.5cm}} \\
+    左脚趾根部 & [150, 150, 230] & \textcolor[rgb]{0.59,0.59,0.90}{\rule{1cm}{0.5cm}} & 左小腿 & [160, 190, 230] & \textcolor[rgb]{0.63,0.74,0.90}{\rule{1cm}{0.5cm}} \\
+    右脚 & [130, 130, 210] & \textcolor[rgb]{0.51,0.51,0.82}{\rule{1cm}{0.5cm}} & 右大腿 & [130, 180, 210] & \textcolor[rgb]{0.51,0.71,0.82}{\rule{1cm}{0.5cm}} \\
+    右脚趾根部 & [150, 150, 230] & \textcolor[rgb]{0.59,0.59,0.90}{\rule{1cm}{0.5cm}} & 右小腿 & [160, 190, 230] & \textcolor[rgb]{0.63,0.74,0.90}{\rule{1cm}{0.5cm}} \\ \midrule
+    脊柱关节 & [120, 200, 120] & \textcolor[rgb]{0.47,0.78,0.47}{\rule{1cm}{0.5cm}} & 臀部 & [130, 210, 170] & \textcolor[rgb]{0.51,0.82,0.67}{\rule{1cm}{0.5cm}} \\
+    脊柱关节2 & [160, 220, 160] & \textcolor[rgb]{0.63,0.86,0.63}{\rule{1cm}{0.5cm}} & 脊柱关节3 & [160, 220, 180] & \textcolor[rgb]{0.63,0.86,0.71}{\rule{1cm}{0.5cm}} \\ \midrule
+    左肩膀 & [140, 220, 140] & \textcolor[rgb]{0.55,0.86,0.55}{\rule{1cm}{0.5cm}} & 右肩膀 & [140, 220, 140] & \textcolor[rgb]{0.55,0.86,0.55}{\rule{1cm}{0.5cm}} \\
+    左臂 & [170, 210, 120] & \textcolor[rgb]{0.67,0.82,0.47}{\rule{1cm}{0.5cm}} & 左前臂 & [180, 220, 150] & \textcolor[rgb]{0.71,0.86,0.59}{\rule{1cm}{0.5cm}} \\
+    右臂 & [170, 210, 120] & \textcolor[rgb]{0.67,0.82,0.47}{\rule{1cm}{0.5cm}} & 右前臂 & [180, 220, 150] & \textcolor[rgb]{0.71,0.86,0.59}{\rule{1cm}{0.5cm}} \\ \midrule
+    左手 & [230, 180, 120] & \textcolor[rgb]{0.90,0.71,0.47}{\rule{1cm}{0.5cm}} & 左手食指 & [240, 190, 150] & \textcolor[rgb]{0.94,0.74,0.59}{\rule{1cm}{0.5cm}} \\
+    右手 & [180, 210, 220] & \textcolor[rgb]{0.71,0.82,0.86}{\rule{1cm}{0.5cm}} & 右手食指 & [190, 220, 230] & \textcolor[rgb]{0.74,0.86,0.90}{\rule{1cm}{0.5cm}} \\ \midrule
+    脖子 & [210, 120, 120] & \textcolor[rgb]{0.82,0.47,0.47}{\rule{1cm}{0.5cm}} & 头部 & [230, 130, 130] & \textcolor[rgb]{0.90,0.51,0.51}{\rule{1cm}{0.5cm}} \\
+    左眼 & [230, 130, 130] & \textcolor[rgb]{0.90,0.51,0.51}{\rule{1cm}{0.5cm}} & 右眼 & [230, 130, 130] & \textcolor[rgb]{0.90,0.51,0.51}{\rule{1cm}{0.5cm}} \\
+    \hline
+    \end{tabular}
+    }
+    \caption{语义图各身体部位的颜色和RGB值}
+    \label{tab:body_color}
+    \end{table}
+
+MANO\cite{mano} 手部图像，采用 Pyrender\cite{pyrender} 作为渲染底层。与上述 SMPLX 渲染不同，参考 Realisdance\cite{zhou2024realisdance}, 首先将基于 MANO 模型左右手的基础颜色分别定义为红色和绿色，其RGB值分别为 $[252,195,193],[193,252,193]$。并使用光照强度为0.3的环境光，利用模型预测的相机姿态进行网格模型透视投影，使用 Pyrender 默认的PBR设置进行光栅化渲染。
+
+虽然手部图、语义图和法线图表征方法，为人物动作数据提供了二维图像序列的表征方法，但他们都依附于三维的显式模型，缺少人物动作关节点的显式描述信息。因此本文参考 NSR\cite{neural_sign_reenactor} 中的密集神经渲染表示方法定义针对关键点的神经语义图表示；该表示被称为颜色编码身体表示（Color Coded Body Representation，CCBR）。具体来说，CCBR 被定义为 3 通道 8 位的 RGB 图像，该表示中通过绘制不同的结构和颜色建模对应身体姿态和面部表情的语义信息。
+
+
+\textbf{CCBR 颜色定义：} CCBR 颜色定义如图~\ref{fig:ccbr}~所示。对于身体姿态关键点，每个对应关键点给定一个预定义的颜色，其中红色和绿色颜色通道的值由归一化的UV坐标得到，蓝色通道采用预定义为 0.99 的固定值。对于面部关键点和手部关键点，颜色同样使用类似的定义模式。其中左右手分别采用不同的蓝色通道颜色定义。通过为每个身体关键点分配固定的颜色，提供了类似语义图的人体各部分的语义标签信息，CCBR 图像使得模型能够在关键点表示下区分不同的身体部位。
+
+\begin{figure}[!htbp]
+	\centering
+	\includegraphics[width=1.0\textwidth]{./m_figures/chapter2/preprocess_rule.png}
+	\caption{CCBR图像颜色编码定义\cite{neural_sign_reenactor}}
+	\label{fig:ccbr}
+\end{figure}
+
+
+\textbf{CCBR 关键点定义：} 本文针对CCBR绘制的关键点定义在 NSR 的基础上进行拓展。
+针对身体关键点，NSR 仅定义了上半身 8 个关键点，本文中，考虑到构建数据集中的全身数字人，额外增加了下半身 4 个关键点定义。这 12 个身体关键点利用从视频中获取的 SMPLX 参数回归出对应身体关节点后利用相机透视投影得到。获取关键点后，对相邻关键点中进行插值，最终得到99个身体渲染关键点。
+针对 CCBR 面部关键点，本文使用 Faceverse\cite{wang2022faceverse} 的网格模型进行透视投影后，利用 Mediapipe 顶点索引获得对应的 478 个关键点。其中嘴部对应的 20 个关键点用以绘制人物嘴型。针对手部关键点，本文同样采用 SMPLX 手部回归出的 42 个关节点透视投影结果（每只手由21 个关节点表示）。
+
+\textbf{CCBR 绘制方式定义：}NSR 中并未给出具体的 CCBR 绘制实现方案，因此本文采用 OpenGL\cite{opengl} 结合着色器管线的方式将其中的面部、嘴型、手掌绘制定义为面片绘制，身体定义为点绘制，手指定义为线绘制。其中面部网格点的组成关系，采用 Mediapipe 给出的网格组成定义。嘴部、手掌、手指的连接关系，则根据顶点的邻接关系直接构成三角面片或线段。
+
+针对眼部注视图像，本文参考了 Head2head++\cite{head2head++} 中的绘制方法，使用白色绘制眼底部分，使用红色绘制瞳孔部分。其中瞳孔部分由5个关键点进行表示，眼白部分由16个关键点进行表示，其均表示为 Faceverse 面部网格顶点子集。与CCBR图像绘制类似，同样采用 OpenGL 直接进行渲染。
+
+此外，本文参考 Mimicmotion\cite{zhang2024mimicmotion} 在CCBR绘制过程中额外加入 $\alpha$ 通道，利用额外的透明通道建模手部置信度。该方案中并不将 CCBR 图像直接扩展为 4 通道 RGBA 图像，而是在 OpenGL 渲染管线中直接利用 $\alpha$ 通道对应取值进行手部透明度的混合。该部分使用第二节中得到 Dwpose 手部置信度作为$\alpha$通道的取值。此时，在神经网络建模数字人的过程中，手部的透明度就能反映当前人物视频帧的手部质量，当透明度高时，说明该帧的手部检测结果可能因存在遮挡等问题导致结果不准。从而使得神经网络模型在建模过程中一定程度上学习到手部置信度和真实手部的关联关系，降低在手部遮挡或模糊导致识别不准确时，低置信度真实样本对于数字人模型建模产生的负面影响。
+
+在绘制阶段得到的五种合成图像，从五个不同的视角，为生成任务提供了直观、简洁的二维图像序列表征方法，在生成式模型建模过程中能发挥出不同的优势。其中基于 SMPLX 的法线图和语义图，前者通过法线表示提高模型建模几何形态的能力，后者通过不同部位的色块差异，让模型在建模过程中解耦学习身体各部位；基于 MANO 的手部图像通过单独的手部表示图像，让模型在建模过程中关注手部姿态；眼部注视图像则将眼部信息单独解耦，使得模型能够单独建模数字人眼部交互，生成更具真实感的人物形象；神经语义图像则针对面部细节进行了建模，使得模型能够拟合数字人丰富的面部细节和对应的嘴型；同时对于神经语义图像中通过插值获得的全身密集关键点表示，是对基于 SMPLX 图像的良好补充，能对身体建模起到辅助作用。
+将上述的合成图像序列表示为N帧的多维度合成图像序列$I_{1:N}=\{I_1, \ldots, I_N\}$，其中该序列包含:
+\begin{enumerate}
+    \item 手部图像序列$I^{mano}_{1:N}=\{I^{mano}_{1}, \ldots, I^{mano}_{N}\}$
+    \item 身体法线图像序列$I^{normal}_{1:N}= \{I^{normal}_{1}, \ldots, I^{normal}_{N}\}$
+    \item 身体语义图像序列$I^{semantic}_{1:N}=\{I^{semantic}_{1}, \ldots, I^{semantic}_{N}\}$
+    \item 神经语义图像序列$I^{ccbr}_{1:N}=\{I^{ccbr}_{1}, \ldots, I^{ccbr}_{N}\}$
+    \item 眼部注视图像序列$I^{eye}_{1:N}=\{I^{eye}_{1}, \ldots, I^{eye}_{N}\}$
+\end{enumerate}
+
+\subsection{基准数据集介绍}
+
+本节使用上一节中的基准数据集构建方法构建本文使用的数据集。本文数据集来源包括演讲场景\cite{ted-talk} ，手语场景\cite{how2sign,slovo}以及自采集的高清播报数据集。在该节中，本文对这些数据集进行简要介绍并给出部分处理流程。
+
+目前数字人领域常用的公开数据集有 TikTok\cite{tik-tok}，UBC-fashion\cite{dwnet} 数据集，其分别针对短视频舞蹈场景和模特走秀场景。前者视频总时长较短，且视频质量良莠不齐，存在很多人物手部、面部模糊的视频片段。UBC-fashion 数据集则场景极为固定，该数据集中具有服装和人物的多样性，但是缺少手部动作变化，同时也缺少数字人面部嘴型和表情的多样性。因此，本文未将以上数据集作为基准数据集的一部分。
+
+首先在演讲场景下，本文重新处理了 Ted-talk\cite{ted-talk} 数据集，该数据集针对全身数字人生成任务进行构建。原始的 Ted-talk 数据集仅给出了半身的裁剪镜头包围盒和视频帧索引，并使用较低分辨率的视频源。本文重新从 Youtube 中下载对应 $1920 \times 1080$ 和 $1280 \times 720$ 的高清视频，并保留原始 Ted-talk 给出的视频帧索引标注。最终在 Ted-talk 数据集中共保留 338 个角色约 3.5 小时的数字人视频数据。
+% 针对索引对应的视频帧，直接利用基准数据集构建方法的数据自动化清洗和分割，将其处理为 $1024 \times 1024$ 分辨率 25 帧每秒的
+
+本文认为手语识别领域的数据集是对数字人生成任务的有利补充，该类数据集在其他的生成式数字人工作中被利用的很少。手语数据集往往针对人物进行半身拍摄，具有清晰的手部动作、同时会配合相应的唇形动作用以描述对应的手语词汇（gloss）。
+该类数据集与演讲数据集类似，生成式模型同样可以通过该类数据集学习到丰富的手部动作和唇形表示。针对基于泛化性的数字人任务，手语数据集中丰富的手部动作能能够增强模型的手部表现能力。针对基于特定身份的数字人任务，该类模型也能建构出良好的数字人形象表示，作为针对演讲场景或手语场景的数字人。
+因此，本文将手语数据集 How2sign \cite{how2sign} 和 Slovo \cite{slovo} 纳入本文的数字人基准数据集构建当中。
+其中 How2sign 数据集质量较高，为绿幕场景下多视角采集数据集，包含有11个手语主播形象，每个手语主播具有多种不同的服装外观，
+总共包含约 90 小时分辨率为 $1280 \times 720$ 视频数据，本文仅采用其正面视角采集的人物视频图像，并将该数据集规模与其他数据集匹配，保留其中约10小时的数据。slovo 数据集中包含有 194 个手语主播形象，其采集质量则稍低，使用手机作为设备进行录制，其原始数据集中包含有 $1920 \times 1358$， $768 \times 1328$等多种分辨率。 slovo 数据集中视频开头均为手语录制人点开手机进行录制的动作行为，该部分缺乏实际意义，并往往使得人物在视频中产生较大的位移和手部模糊，因此统一将 slovo 数据集中的前 10 帧数据进行剔除，最终保留约8小时的手语数据集。
+
+本文针对数字人任务同样采集了高质量超清数据集。其主要面向新闻播报场景。其中包含有超过50个人物身份，视频总时长超过10小时。根据采集半身人物形象和全身人物形象不同，该数据集均采用 $3840 \times 2160$ 或 $2160 \times 3840$ 的 4K 分辨率以每秒 50 帧以上的速率进行采集。此外自采集数据集中还包含了不同的采集场景，主要可分为室内恒定光照，人物位置恒定的绿幕采集视频和可变光照，人物移动的室外采集视频。
+
+最终，本文将上述数据集通过数字人基准数据集构建方法进行预处理和多维度合成图像的生成，作为本文的基准数据集。
+通过此流程处理完成的数据集如表~\ref{tab:datasets_comparison}~所示，其总数据量超过30小时包含有525个人物形象的数据集。在后续的章节中，本文使用了该基准数据集的子集作为实验数据集。
+% 数据集场景 人物类型 原始分辨率 处理分辨率 总视频时长 角色数量
+\begin{table}[!htbp]
+    \centering
+    \caption{本文采集的数据集}
+    \label{tab:datasets_comparison}
+    \begin{tabular}{@{}lllll@{}}
+    \toprule
+    数据集场景          & 人物类型          & 处理分辨率            & 处理后总时长    & 角色数量 \\ \midrule
+    演讲（Ted-Talk）    & 全身              & $1024 \times 1024$ &  3.5小时     & 338     \\
+    手语（How2sign）    & 半身              & $1024 \times 1024$ & 10小时     & 11      \\
+    手语（Slovo）       & 半身              & $1024 \times 1024$ & 8小时     & 194     \\
+    新闻播报(自采集)            & 半身/全身     & $1024 \times 1024$ & 10小时     & 52     \\ \bottomrule
+    \end{tabular}
+    \end{table}
+
+
+\section{数字人模型质量评估}
+
+当模型完成建模任务后，需要利用一系列的定量指标评估方法衡量生成式数字人模型的生成质量。
+
+本文从视频和图像质量两大方面对数字人生成模型的性能进行评估，具体可以被分为像素质量评估和感知质量评估。
+% 此外，本文使用基于视频质量的平均主观评分（Mean Opinion Score，MOS）的主观测评方法\cite{huynh2010study}，将人的主观感知作为数字人生成质量评估的有力补充。在本文中不少于10人对数字人形象与真人进行5分的相似度评分，再去除一个最高分和最低分后取多人平均分作为结果。
+
+\subsection{像素质量}
+
+像素级质量评估直接利用生成数字人视频与真实人物视频之间的原始像素信息进行指标计算，用于直接评估生成视频与真实视频的误差大小。
+
+\begin{itemize}
+    \item 平均像素误差APD(Average Pixel Distance)\cite{head2head++} 直接衡量生成图像与真实图像之间像素颜色的均方误差。
+    其使用 8 位 RGB 颜色表示进行计算，对于一个大小为 $H \times W$ 的图像 $S$ 和生成图像 $T$ ，APD的计算公式如（\ref{APD}）所示。APD越小，表示生成图像和真实图像越相似。
+    \begin{equation}
+        \text{APD}(T, S) = \frac{1}{H \times W} \sum_{i=1}^{H} \sum_{j=1}^{W} \| T_{ij} - S_{ij} \|_2
+        \label{APD}
+    \end{equation}
+    在本文中，生成图像的背景在生成过程中差异过小，因此为了进一步衡量人物实际的重建效果，使用上述数据处理过程的SAM2人物前景掩码 $M$ 对APD进行加权计算，将掩码部分权重设置为0，
+    非掩码部分权重设置为1，得到人物部分的APD指标，称之为MAPD（ Masked Average Pixel Distance）平均掩码像素距离\cite{head2head++}。MAPD的计算公式如（\ref{MAPD}）所示。
+    MAPD越小，表示生成图像和真实图像越相似。
+    \begin{equation}
+        \text{MAPD}(T, S, M) = \frac{1}{H \times W} {\sum_{i=1}^{H} \sum_{j=1}^{W} M_{ij}}\| T_{ij} - S_{ij} \|_2
+        \label{MAPD}
+    \end{equation}
+
+    \item 峰值信噪比PSNR（Peak Signal-to-Noise Ratio\cite{antkowiak2000final} 是最广泛使用的衡量生成图像结果的指标方法。该指标用以衡量图像峰值信号的能量与噪声的平均能量之比。
+    通常表示时取 $log$ 用分贝为单位作为结果表示，公式（\ref{PSNR}）表示如下。其中 $MSE$ 即是平均像素误差项，$MAX_I$ 表示像素最大值，PSNR值越大，图像质量越高。
+    %一般来说，该指标计算的结果大于40可认为图像质量好，30-40则图像质量可接受； 20-30则图像质量差；低于20表示不可接受。
+    \begin{equation}
+        \text{PSNR} = 10 \cdot log_{10}(\frac{MAX_I^2}{MSE})
+        \label{PSNR}
+    \end{equation}
+
+    \item 结构相似性指数SSIM（Structural Similarity Index\cite{ssim}） 基于人类实际视觉系统的特性，即对空间频率较低的对比差异敏感度较高，对亮度对比差异的敏感度较色度高，
+    对一个区域的感知结果会受到其周围邻近区域的影响。于是结构相似性指标首先将RGB色彩空间转换到HVS空间来进行评估。并综合考虑了亮度，对比度和结构信息。其中亮度用均值来表示，
+    对比度用均值归一化的方差表示，结构则表示为相关系数即协方差与方差乘积比值。对于样本$x$和样本$y$，其计算公式如（\ref{eq:SSIM}）所示，
+    其中 $\mu_x$ 为 $x$ 的均值，$\mu_y$为y的均值，$\sigma_x^2$为$x$的方差，$\sigma_{y}^2$为 $y$ 的方差，$\sigma_{xy}$ 为 $x$ 和 $y$ 的协方差，$c_1$，$c_2$为两个常数，
+    用以避免除零。SSIM的取值范围为$(0,1]$，值越大表示两个图像越相似。
+    \begin{equation}
+        \text{SSIM (x,y)} = \frac{(2\mu_x\mu_y + c_1)(2\sigma_{xy}+c_2)}{(\mu_x^2+\mu_y^2+c_2)}
+        \label{eq:SSIM}
+    \end{equation}
+\end{itemize}
+
+\subsection{感知质量}
+感知质量评估则基于神经网络提取特征，根据特征差异评估生成视频与真实视频，模拟人类视觉感知上的接近程度。
+
+\begin{itemize}  
+ \item 弗雷歇视频距离 FVD（Fréchet Video Distance）用于衡量生成视频与真实视频在时间序列上的相似度，是基于FID\cite{heusel2017gans}扩展的视频质量评估指标，FVD值越小，表示生成视频与真实视频的特征分布越接近。
+该指标使用预训练的Inflated-3D（I3D）\cite{i3d}网络从视频片段中提取特征，然后计算两组视频的特征向量的均值和协方差矩阵，使用Fréchet距离来度量它们之间的差异，计算公式（\ref{eq:fvd}）如下所示：
+\begin{equation}
+    \text{FVD}(\mu_r, \Sigma_r, \mu_g, \Sigma_g) = \left\| \mu_r - \mu_g \right\|_2^2 + \text{Tr}\left( \Sigma_r + \Sigma_g - 2\left( \Sigma_r^{1/2} \Sigma_g \Sigma_r^{1/2} \right)^{1/2} \right)
+\label{eq:fvd}
+\end{equation}
+
+其中各项表示如下：
+\begin{enumerate}
+    \item $\mu_r$: 真实视频的特征向量的均值。
+    \item $\Sigma_r$: 真实视频的特征向量的协方差矩阵。
+    \item $\mu_g$: 生成视频的特征向量的均值。
+    \item $\Sigma_g$: 生成视频的特征向量的协方差矩阵。
+    \item $\left\| \mu_r - \mu_g \right\|_2^2$: 真实视频和生成视频的均值向量之间的平方欧几里得距离。
+    \item $\text{Tr}$: 矩阵的迹运算，计算矩阵对角元素的和。
+    \item $\Sigma_r^{1/2}$: 真实视频协方差矩阵的平方根。
+    \item $\Sigma_g^{1/2}$: 生成视频协方差矩阵的平方根。
+    \item $\left( \Sigma_r^{1/2} \Sigma_g \Sigma_r^{1/2} \right)^{1/2}$: 真实视频和生成视频的协方差矩阵的几何平均。
+\end{enumerate}
+
+\item 感知图像块相似度LPIPS(Learned Perceptual Image Patch Similarity) 是基于深度网络的线性加权距离度量，一般可使用VGG\cite{vgg}、ALEXNet\cite{alex} 等网络的多层次特征表示进行度量，
+用于评估真实图像和生成图像之间的感知相似性的指标，LPIPS越小，表示两张图像的特征分布越接近，计算公式（\ref{eq:LPIPS}）如下所示。
+\begin{equation}
+    \text{LPIPS}(x, y) = \frac{1}{L} \sum_{l=1}^{L} w_l \| f_l(x) - f_l(y) \|_2^2
+\label{eq:LPIPS}
+\end{equation}
+
+其中各项表示如下：
+\begin{enumerate}
+    \item $x$ 和 $y$ 分别表示待比较的两张图像，通常是生成图像 $y$ 和真实图像 $x$。
+    \item $L$ 是网络中的层数，表示使用的感知网络总共的层数。
+    \item $f_l(x)$ 和 $f_l(y)$ 分别表示图像 $x$ 和图像 $y$ 在第 $l$ 层的特征输出。
+    \item $\| f_l(x) - f_l(y) \|_2^2$ 表示两张图像在第 $l$ 层特征空间的差异，使用平方欧几里得距离。
+    \item $w_l$ 是第 $l$ 层的权重，用于控制每一层对最终相似度的影响。
+\end{enumerate}
+\end{itemize}
+\section{本章小结}
+
+本章中对论文整体研究的科学问题进行了详细的描述，将多维度特征融合任务拆解为两个子科学任务，第一个子任务通过基准数据集构建方法生成对应的人体多维度合成图像表示，第二个子任务利用基于多维度特征融合的条件对抗生成网络实现多维度特征融合的数字人建模。
+本章中针对第一个子任务详细介绍了基于多维度特征的基准数据集构建方法，通过五种合成图像，详细的建模了人体的全局特征和局部特征，提高数字人生成结果的可控性。通过该构建方法最终整合并处理多个现有的视频数据集和自采集的数据集，得到本文包含多场景、多人物类型的数字人数据集。
+后续章节中，主要沿第二个子科学任务进一步探索，即针对多维度特征融合的条件对抗生成网络实现及其优化，进一步探索高质量生成式数字人方案。
