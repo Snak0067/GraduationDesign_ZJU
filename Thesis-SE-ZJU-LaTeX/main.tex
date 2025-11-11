@@ -26,8 +26,8 @@
 \spvtitle{教授}               % 职称 封面使用
 
 %\cpsupervisor{桂和纱}       % 合作导师，如果没有合作导师，就在此文件第 4 行\documentclass选项栏中加上"nocpsupervisor"。
-\cpsupervisor{师之名}
-\cspvtitle{职称}             % 合作导师职称
+\cpsupervisor{}
+\cspvtitle{}             % 合作导师职称
 
 % 从机械工程学院改来，保留设定变量命名
 %\major{船舶工程}            % 专业学位类别栏 填 工程硕士
@@ -63,6 +63,7 @@
 % 论文前置部分变量填写完毕 开始全书排版
 \begin{document}
 
+
 % 封面、中文题名页、英文题名页、独创声明和版权使用书 无页码
 \maketitle
 
@@ -86,8 +87,9 @@
 % 正文排版开始 建议一章一文件 （好像无法嵌套 include） 
 \mainmatter
 \include{contents/intro} % 绪论
-\include{contents/whyla}
-\include{contents/elem}
+\include{contents/chapter2} % 相关工作
+\include{contents/chapter3} % 第三章：改进点1
+\include{contents/chapter4} % 第四章：改进点2
 \include{contents/sum}  % 总结和展望
 
 % 结尾部分排版
@@ -95,6 +97,7 @@
 
 % 引用参考文献数据库
 \bibliography{references/test.bib}
+
 
 % 附录部分
 %\appendix
