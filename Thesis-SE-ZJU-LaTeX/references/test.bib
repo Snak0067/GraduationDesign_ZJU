@@ -5,6 +5,236 @@
     language={zh},
     url={http://www.yinwang.org/blog-cn/2013/03/07/linux-windows-mac}
 }
+
+@inproceedings{图结构数据1,
+author = {Dong, Yushun and Liu, Ninghao and Jalaian, Brian and Li, Jundong},
+title = {EDITS: Modeling and Mitigating Data Bias for Graph Neural Networks},
+year = {2022},
+isbn = {9781450390965},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3485447.3512173},
+doi = {10.1145/3485447.3512173},
+abstract = {Graph Neural Networks (GNNs) have shown superior performance in analyzing attributed networks in various web-based applications such as social recommendation and web search. Nevertheless, in high-stake decision-making scenarios such as online fraud detection, there is an increasing societal concern that GNNs could make discriminatory decisions towards certain demographic groups. Despite recent explorations on fair GNNs, these works are tailored for a specific GNN model. However, myriads of GNN variants have been proposed for different applications, and it is costly to fine-tune existing debiasing algorithms for each specific GNN architecture. Different from existing works that debias GNN models, we aim to debias the input attributed network to achieve fairer GNNs through feeding GNNs with less biased data. Specifically, we propose novel definitions and metrics to measure the bias in an attributed network, which leads to the optimization objective to mitigate bias. We then develop a framework EDITS to mitigate the bias in attributed networks while maintaining the performance of GNNs in downstream tasks. EDITS works in a model-agnostic manner, i.e., it is independent of any specific GNN. Experiments demonstrate the validity of the proposed bias metrics and the superiority of EDITS on both bias mitigation and utility maintenance. Open-source implementation: https://github.com/yushundong/EDITS.},
+booktitle = {Proceedings of the ACM Web Conference 2022},
+pages = {1259–1269},
+numpages = {11},
+keywords = {algorithmic fairness, data bias, graph neural networks},
+location = {Virtual Event, Lyon, France},
+series = {WWW '22}
+}
+@article{图结构数据2,
+  title={Meta-Weight Graph Neural Network: Push the Limits Beyond Global Homophily},
+  author={Xiaojun Ma and Qin Chen and Yuanyi Ren and Guojie Song and Liang Wang},
+  journal={Proceedings of the ACM Web Conference 2022},
+  year={2022},
+  url={https://api.semanticscholar.org/CorpusID:247594750}
+}
+
+@article{Wang2021LearningIB,
+  title={Learning Intents behind Interactions with Knowledge Graph for Recommendation},
+  author={Xiang Wang and Tinglin Huang and Dingxian Wang and Yancheng Yuan and Zhenguang Liu and Xiangnan He and Tat-seng Chua},
+  journal={Proceedings of the Web Conference 2021},
+  year={2021},
+  url={https://api.semanticscholar.org/CorpusID:231924585}
+}
+@article{Liu_Wang_Vu_Moretti_Bodenheimer_Meiler_Derr_2023, title={Interpretable Chirality-Aware Graph Neural Network for Quantitative Structure Activity Relationship Modeling in Drug Discovery}, volume={37}, url={https://ojs.aaai.org/index.php/AAAI/article/view/26679}, DOI={10.1609/aaai.v37i12.26679}, abstractNote={In computer-aided drug discovery, quantitative structure activity relation models are trained to predict biological activity from chemical structure. Despite the recent success of applying graph neural network to this task, important chemical information such as molecular chirality is ignored. To fill this crucial gap, we propose Molecular-Kernel Graph NeuralNetwork (MolKGNN) for molecular representation learning, which features SE(3)-/conformation invariance, chirality-awareness, and interpretability. For our MolKGNN, we first design a molecular graph convolution to capture the chemical pattern by comparing the atom’s similarity with the learnable molecular kernels. Furthermore, we propagate the similarity score to capture the higher-order chemical pattern. To assess the method, we conduct a comprehensive evaluation with nine well-curated datasets spanning numerous important drug targets that feature realistic high class imbalance and it demonstrates the superiority of MolKGNN over other graph neural networks in computer-aided drug discovery. Meanwhile, the learned kernels identify patterns that agree with domain knowledge, confirming the pragmatic interpretability of this approach. Our code and supplementary material are publicly available at https://github.com/meilerlab/MolKGNN.}, number={12}, journal={Proceedings of the AAAI Conference on Artificial Intelligence}, author={Liu, Yunchao (Lance) and Wang, Yu and Vu, Oanh and Moretti, Rocco and Bodenheimer, Bobby and Meiler, Jens and Derr, Tyler}, year={2023}, month={Jun.}, pages={14356-14364} }
+@article{Brown2020LanguageMA,
+  title={Language Models are Few-Shot Learners},
+  author={Tom B. Brown and Benjamin Mann and Nick Ryder and Melanie Subbiah and Jared Kaplan and Prafulla Dhariwal and Arvind Neelakantan and Pranav Shyam and Girish Sastry and Amanda Askell and Sandhini Agarwal and Ariel Herbert-Voss and Gretchen Krueger and T. J. Henighan and Rewon Child and Aditya Ramesh and Daniel M. Ziegler and Jeff Wu and Clemens Winter and Christopher Hesse and Mark Chen and Eric Sigler and Ma-teusz Litwin and Scott Gray and Benjamin Chess and Jack Clark and Christopher Berner and Sam McCandlish and Alec Radford and Ilya Sutskever and Dario Amodei},
+  journal={ArXiv},
+  year={2020},
+  volume={abs/2005.14165},
+  url={https://api.semanticscholar.org/CorpusID:218971783}
+}
+@article{Alon2020OnTB,
+  title={On the Bottleneck of Graph Neural Networks and its Practical Implications},
+  author={Uri Alon and Eran Yahav},
+  journal={ArXiv},
+  year={2020},
+  volume={abs/2006.05205},
+  url={https://api.semanticscholar.org/CorpusID:219558760}
+}
+@article{Rusch2023ASO,
+  title={A Survey on Oversmoothing in Graph Neural Networks},
+  author={T. Konstantin Rusch and Michael M. Bronstein and Siddhartha Mishra},
+  journal={ArXiv},
+  year={2023},
+  volume={abs/2303.10993},
+  url={https://api.semanticscholar.org/CorpusID:257632346}
+}
+@inproceedings{Llama,
+  title={The Llama 3 Herd of Models},
+  author={Abhimanyu Dubey and Abhinav Jauhri and Abhinav Pandey and Abhishek Kadian and Ahmad Al-Dahle and Aiesha Letman and Akhil Mathur and Alan Schelten and Amy Yang and Angela Fan and Anirudh Goyal and Anthony S. Hartshorn and Aobo Yang and Archi Mitra and Archie Sravankumar and Artem Korenev and Arthur Hinsvark and Arun Rao and Aston Zhang and Aur'elien Rodriguez and Austen Gregerson and Ava Spataru and Baptiste Rozi{\`e}re and Bethany Biron and Binh Tang and Bobbie Chern and Charlotte Caucheteux and Chaya Nayak and Chloe Bi and Chris Marra and Chris McConnell and Christian Keller and Christophe Touret and Chunyang Wu and Corinne Wong and Cris-tian Cant{\'o}n Ferrer and Cyrus Nikolaidis and Damien Allonsius and Daniel Song and Danielle Pintz and Danny Livshits and David Esiobu and Dhruv Choudhary and Dhruv Mahajan and Diego Garcia-Olano and Diego Perino and Dieuwke Hupkes and Egor Lakomkin and Ehab A. AlBadawy and Elina Lobanova and Emily Dinan and Eric Michael Smith and Filip Radenovic and Frank Zhang and Gabriele Synnaeve and Gabrielle Lee and Georgia Lewis Anderson and Graeme Nail and Gr{\'e}goire Mialon and Guanglong Pang and Guillem Cucurell and Hailey Nguyen and Hannah Korevaar and Hu Xu and Hugo Touvron and Iliyan Zarov and Imanol Arrieta Ibarra and Isabel M. Kloumann and Ishan Misra and Ivan Evtimov and Jade Copet and Jaewon Lee and Jan Geffert and Jana Vranes and Jason Park and Jay Mahadeokar and Jeet Shah and Jelmer van der Linde and Jennifer Billock and Jenny Hong and Jenya Lee and Jeremy Fu and Jianfeng Chi and Jianyu Huang and Jiawen Liu and Jie Wang and Jiecao Yu and Joanna Bitton and Joe Spisak and Jongsoo Park and Joseph Rocca and Joshua Johnstun and Joshua Saxe and Ju-Qing Jia and Kalyan Vasuden Alwala and K. Upasani and Kate Plawiak and Keqian Li and Kenneth Heafield and Kevin R. Stone and Khalid El-Arini and Krithika Iyer and Kshitiz Malik and Kuen-ley Chiu and Kunal Bhalla and Lauren Rantala-Yeary and Laurens van der Maaten and Lawrence Chen and Liang Tan and Liz Jenkins and Louis Martin and Lovish Madaan and Lubo Malo and Lukas Blecher and Lukas Landzaat and Luke de Oliveira and Madeline Muzzi and Ma-hesh Pasupuleti and Mannat Singh and Manohar Paluri and Marcin Kardas and Mathew Oldham and Mathieu Rita and Maya Pavlova and Melissa Hall Melanie Kambadur and Mike Lewis and Min Si and Mitesh Kumar Singh and Mona Hassan and Naman Goyal and Narjes Torabi and Niko-lay Bashlykov and Nikolay Bogoychev and Niladri S. Chatterji and Olivier Duchenne and Onur cCelebi and Patrick Alrassy and Pengchuan Zhang and Pengwei Li and Petar Vasi{\'c} and Peter Weng and Prajjwal Bhargava and Pratik Dubal and Praveen Krishnan and Punit Singh Koura and Puxin Xu and Qing He and Qingxiao Dong and Ragavan Srinivasan and Raj Ganapathy and Ramon Calderer and Ricardo Silveira Cabral and Robert Stojnic and Roberta Raileanu and Rohit Girdhar and Rohit Patel and Romain Sauvestre and Ron-nie Polidoro and Roshan Sumbaly and Ross Taylor and Ruan Silva and Rui Hou and Rui Wang and Saghar Hosseini and Sa-hana Chennabasappa and Sanjay Singh and Sean Bell and Seohyun Sonia Kim and Sergey Edunov and Shaoliang Nie and Sharan Narang and Sharath Chandra Raparthy and Sheng Shen and Shengye Wan and Shruti Bhosale and Shun Zhang and Simon Vandenhende and Soumya Batra and Spencer Whitman and Sten Sootla and Stephane Collot and Suchin Gururangan and Sydney Borodinsky and Tamar Herman and Tara Fowler and Tarek Sheasha and Thomas Georgiou and Thomas Scialom and Tobias Speckbacher and Todor Mihaylov and Tong Xiao and Ujjwal Karn and Vedanuj Goswami and Vibhor Gupta and Vignesh Ramanathan and Viktor Kerkez and Vincent Gonguet and Vir-ginie Do and Vish Vogeti and Vladan Petrovic and Weiwei Chu and Wenhan Xiong and Wenyin Fu and Whit-ney Meers and Xavier Martinet and Xiaodong Wang and Xiaoqing Ellen Tan and Xinfeng Xie and Xuchao Jia and Xuewei Wang and Yaelle Goldschlag and Yashesh Gaur and Yasmine Babaei and Yiqian Wen and Yiwen Song and Yuchen Zhang and Yue Li and Yuning Mao and Zacharie Delpierre Coudert and Zhengxu Yan and Zhengxing Chen and Zoe Papakipos and Aaditya K. Singh and Aaron Grattafiori and Abha Jain and Adam Kelsey and Adam Shajnfeld and Adi Gangidi and Adolfo Victoria and Ahuva Goldstand and Ajay Menon and Ajay Sharma and Alex Boesenberg and Alex Vaughan and Alexei Baevski and Allie Feinstein and Amanda Kallet and Amit Sangani and Anam Yunus and Andrei Lupu and Andres Alvarado and Andrew Caples and Andrew Gu and Andrew Ho and Andrew Poulton and Andrew Ryan and Ankit Ramchandani and Annie Franco and Aparajita Saraf and Arkabandhu Chowdhury and Ashley Gabriel and Ashwin Bharambe and Assaf Eisenman and Azadeh Yazdan and Beau James and Ben Maurer and Benjamin Leonhardi and Po-Yao (Bernie) Huang and Beth Loyd and Beto de Paola and Bhargavi Paranjape and Bing Liu and Bo Wu and Boyu Ni and Braden Hancock and Bram Wasti and Brandon Spence and Brani Stojkovic and Brian Gamido and Britt Montalvo and Carl Parker and Carly Burton and Catalina Mejia and Changhan Wang and Changkyu Kim and Chao Zhou and Chester Hu and Ching-Hsiang Chu and Chris Cai and Chris Tindal and Christoph Feichtenhofer and Damon Civin and Dana Beaty and Daniel Kreymer and Shang-Wen Li and Danny Wyatt and David Adkins and David Xu and Davide Testuggine and Delia David and Devi Parikh and Diana Liskovich and Didem Foss and Dingkang Wang and Duc Le and Dustin Holland and Edward Dowling and Eissa Jamil and Elaine Montgomery and Eleonora Presani and Emily Hahn and Emily Wood and Erik Brinkman and Esteban Arcaute and Evan Dunbar and Evan Smothers and Fei Sun and Felix Kreuk and Feng Tian and Firat Ozgenel and Francesco Caggioni and Francisco Guzm’an and Frank J. Kanayet and Frank Seide and Gabriela Medina Florez and Gabriella Schwarz and Gada Badeer and Georgia Swee and Gil Halpern and Govind Thattai and Grant Herman and Grigory G. Sizov and Guangyi Zhang and Guna Lakshminarayanan and Hamid Shojanazeri and Han Zou and Hannah Wang and Han Zha and Haroun Habeeb and Harrison Rudolph and Helen Suk and Henry Aspegren and Hunter Goldman and Igor Molybog and Igor Tufanov and Irina-Elena Veliche and Itai Gat and Jake Weissman and James Geboski and James Kohli and Japhet Asher and Jean-Baptiste Gaya and Jeff Marcus and Jeff Tang and Jennifer Chan and Jenny Zhen and Jeremy Reizenstein and Jeremy Teboul and Jessica Zhong and Jian Jin and Jingyi Yang and Joe Cummings and Jon Carvill and Jon Shepard and Jonathan McPhie and Jonathan Torres and Josh Ginsburg and Junjie Wang and Kaixing(Kai) Wu and U KamHou and Karan Saxena and Karthik Prasad and Kartikay Khandelwal and Katayoun Zand and Kathy Matosich and Kaushik Veeraraghavan and Kelly Michelena and Keqian Li and Kun Huang and Kunal Chawla and Kushal Lakhotia and Kyle Huang and Lailin Chen and Lakshya Garg and A Lavender and Leandro Silva and Lee Bell and Lei Zhang and Liangpeng Guo and Licheng Yu and Liron Moshkovich and Luca Wehrstedt and Madian Khabsa and Manav Avalani and Manish Bhatt and Maria Tsimpoukelli and Martynas Mankus and Matan Hasson and Matthias Lennie and Matthias Reso and Maxim Groshev and Maxim Naumov and Maya Lathi and Meghan Keneally and Michael L. Seltzer and Michal Valko and Michelle Restrepo and Mihir Patel and Mik Vyatskov and Mikayel Samvelyan and Mike Clark and Mike Macey and Mike Wang and Miquel Jubert Hermoso and Mo Metanat and Mohammad Rastegari and Mun-ish Bansal and Nandhini Santhanam and Natascha Parks and Natasha White and Navy-ata Bawa and Nayan Singhal and Nick Egebo and Nicolas Usunier and Nikolay Pavlovich Laptev and Ning Dong and Ning Zhang and Norman Cheng and Oleg Chernoguz and Olivia Hart and Omkar Salpekar and Ozlem Kalinli and Parkin Kent and Parth Parekh and Paul Saab and Pavan Balaji and Pe-dro Rittner and Philip Bontrager and Pierre Roux and Piotr Doll{\'a}r and Polina Zvyagina and Prashant Ratanchandani and Pritish Yuvraj and Qian Liang and Rachad Alao and Rachel Rodriguez and Rafi Ayub and Raghotham Murthy and Raghu Nayani and Rahul Mitra and Raymond Li and Rebekkah Hogan and Robin Battey and Rocky Wang and Rohan Maheswari and Russ Howes and Ruty Rinott and Sai Jayesh Bondu and Samyak Datta and Sara Chugh and Sara Hunt and Sargun Dhillon and Sasha Sidorov and Satadru Pan and Saurabh Verma and Seiji Yamamoto and Sharadh Ramaswamy and Shaun Lindsay and Sheng Feng and Shenghao Lin and Shengxin Cindy Zha and Shiva Shankar and Shuqiang Zhang and Sinong Wang and Sneha Agarwal and Soji Sajuyigbe and Soumith Chintala and Stephanie Max and Stephen Chen and Steve Kehoe and Steve Satterfield and Sudarshan Govindaprasad and Sumit Kumar Gupta and Sung-Bae Cho and Sunny Virk and Suraj Subramanian and Sy Choudhury and Sydney Goldman and Tal Remez and Tamar Glaser and Tamara Best and Thilo Kohler and Thomas Robinson and Tianhe Li and Tianjun Zhang and Tim Matthews and Timothy Chou and Tzook Shaked and Varun Vontimitta and Victoria Ajayi and Victoria Montanez and Vijai Mohan and Vinay Satish Kumar and Vishal Mangla and Vlad Ionescu and Vlad Andrei Poenaru and Vlad T. Mihailescu and Vladimir Ivanov and Wei Li and Wenchen Wang and Wenwen Jiang and Wes Bouaziz and Will Constable and Xia Tang and Xiaofang Wang and Xiaojian Wu and Xiaolan Wang and Xide Xia and Xilun Wu and Xinbo Gao and Yanjun Chen and Ye Hu and Ye Jia and Ye Qi and Yenda Li and Yilin Zhang and Ying Zhang and Yossi Adi and Youngjin Nam and Yu Wang and Yuchen Hao and Yundi Qian and Yuzi He and Zach Rait and Zachary DeVito and Zef Rosnbrick and Zhaoduo Wen and Zhenyu Yang and Zhiwei Zhao},
+  year={2024},
+  url={https://api.semanticscholar.org/CorpusID:271571434}
+}
+@article{T5,
+  title={Exploring the Limits of Transfer Learning with a Unified Text-to-Text Transformer},
+  author={Colin Raffel and Noam M. Shazeer and Adam Roberts and Katherine Lee and Sharan Narang and Michael Matena and Yanqi Zhou and Wei Li and Peter J. Liu},
+  journal={J. Mach. Learn. Res.},
+  year={2019},
+  volume={21},
+  pages={140:1-140:67},
+  url={https://api.semanticscholar.org/CorpusID:204838007}
+}
+@inproceedings{BERT,
+  title={BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding},
+  author={Jacob Devlin and Ming-Wei Chang and Kenton Lee and Kristina Toutanova},
+  booktitle={North American Chapter of the Association for Computational Linguistics},
+  year={2019},
+  url={https://api.semanticscholar.org/CorpusID:52967399}
+}
+@article{Zhao2023ASO,
+  title={A Survey of Large Language Models},
+  author={Wayne Xin Zhao and Kun Zhou and Junyi Li and Tianyi Tang and Xiaolei Wang and Yupeng Hou and Yingqian Min and Beichen Zhang and Junjie Zhang and Zican Dong and Yifan Du and Chen Yang and Yushuo Chen and Z. Chen and Jinhao Jiang and Ruiyang Ren and Yifan Li and Xinyu Tang and Zikang Liu and Peiyu Liu and Jianyun Nie and Ji-rong Wen},
+  journal={ArXiv},
+  year={2023},
+  volume={abs/2303.18223},
+  url={https://api.semanticscholar.org/CorpusID:257900969}
+}
+
+@inproceedings{Guo2022GraphbasedMR,
+  title={Graph-based Molecular Representation Learning},
+  author={Zhichun Guo and Bozhao Nan and Yijun Tian and O. Wiest and Chuxu Zhang and N. Chawla},
+  booktitle={International Joint Conference on Artificial Intelligence},
+  year={2022},
+  url={https://api.semanticscholar.org/CorpusID:250426584}
+}
+@inproceedings{社交网络分析2,
+author = {Zhang, Yanfu and Gao, Hongchang and Pei, Jian and Huang, Heng},
+title = {Robust Self-Supervised Structural Graph Neural Network for Social Network Prediction},
+year = {2022},
+isbn = {9781450390965},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/3485447.3512182},
+doi = {10.1145/3485447.3512182},
+abstract = {The self-supervised graph representation learning has achieved much success in recent web based research and applications, such as recommendation system, social networks, and anomaly detection. However, existing works suffer from two problems. Firstly, in social networks, the influential neighbors are important, but the overwhelming routine in graph representation-learning utilizes the node-wise similarity metric defined on embedding vectors that cannot exactly capture the subtle local structure and the network proximity. Secondly, existing works implicitly assume a universal distribution across datasets, which presumably leads to sub-optimal models considering the potential distribution shift. To address these problems, in this paper, we learn structural embeddings in which the proximity is characterized by 1-Wasserstein distance. We propose a distributionally robust self-supervised graph neural network framework to learn the representations. More specifically, in our method, the embeddings are computed based on subgraphs centering at the node of interest and represent both the node of interest and its neighbors, which better preserves the local structure of nodes. To make our model end-to-end trainable, we adopt a deep implicit layer to compute the Wasserstein distance, which can be formulated as a differentiable convex optimization problem. Meanwhile, our distributionally robust formulation explicitly constrains the maximal diversity for matched queries and keys. As such, our model is insensitive to the data distributions and has better generalization abilities. Extensive experiments demonstrate that the graph encoder learned by our approach can be utilized for various downstream analyses, including node classification, graph classification, and top-k similarity search. The results show our algorithm outperforms state-of-the-art baselines, and the ablation study validates the effectiveness of our design.},
+booktitle = {Proceedings of the ACM Web Conference 2022},
+pages = {1352–1361},
+numpages = {10},
+keywords = {Graph neural networks, non-Euclidean distance, self-supervised learning},
+location = {Virtual Event, Lyon, France},
+series = {WWW '22}
+}
+@article{社交网络分析1,
+  title={Pre-training Enhanced Spatial-temporal Graph Neural Network for Multivariate Time Series Forecasting},
+  author={Zezhi Shao and Zhao Zhang and Fei Wang and Yongjun Xu},
+  journal={Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+  year={2022},
+  url={https://api.semanticscholar.org/CorpusID:249889716}
+}
+
+@article{Perozzi2014DeepWalkOL,
+  title={DeepWalk: online learning of social representations},
+  author={Bryan Perozzi and Rami Al-Rfou and Steven S. Skiena},
+  journal={Proceedings of the 20th ACM SIGKDD international conference on Knowledge discovery and data mining},
+  year={2014},
+  url={https://api.semanticscholar.org/CorpusID:3051291}
+}
+@inproceedings{有向图高阶传递性嵌入,
+author = {Ou, Mingdong and Cui, Peng and Pei, Jian and Zhang, Ziwei and Zhu, Wenwu},
+title = {Asymmetric Transitivity Preserving Graph Embedding},
+year = {2016},
+isbn = {9781450342322},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/2939672.2939751},
+doi = {10.1145/2939672.2939751},
+abstract = {Graph embedding algorithms embed a graph into a vector space where the structure and the inherent properties of the graph are preserved. The existing graph embedding methods cannot preserve the asymmetric transitivity well, which is a critical property of directed graphs. Asymmetric transitivity depicts the correlation among directed edges, that is, if there is a directed path from u to v, then there is likely a directed edge from u to v. Asymmetric transitivity can help in capturing structures of graphs and recovering from partially observed graphs. To tackle this challenge, we propose the idea of preserving asymmetric transitivity by approximating high-order proximity which are based on asymmetric transitivity. In particular, we develop a novel graph embedding algorithm, High-Order Proximity preserved Embedding (HOPE for short), which is scalable to preserve high-order proximities of large scale graphs and capable of capturing the asymmetric transitivity. More specifically, we first derive a general formulation that cover multiple popular high-order proximity measurements, then propose a scalable embedding algorithm to approximate the high-order proximity measurements based on their general formulation. Moreover, we provide a theoretical upper bound on the RMSE (Root Mean Squared Error) of the approximation. Our empirical experiments on a synthetic dataset and three real-world datasets demonstrate that HOPE can approximate the high-order proximities significantly better than the state-of-art algorithms and outperform the state-of-art algorithms in tasks of reconstruction, link prediction and vertex recommendation.},
+booktitle = {Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+pages = {1105–1114},
+numpages = {10},
+keywords = {asymmetric transitivity, directed graph, graph embedding, high-order proximity},
+location = {San Francisco, California, USA},
+series = {KDD '16}
+}
+@inproceedings{高阶邻接嵌入,
+author = {Cao, Shaosheng and Lu, Wei and Xu, Qiongkai},
+title = {GraRep: Learning Graph Representations with Global Structural Information},
+year = {2015},
+isbn = {9781450337946},
+publisher = {Association for Computing Machinery},
+address = {New York, NY, USA},
+url = {https://doi.org/10.1145/2806416.2806512},
+doi = {10.1145/2806416.2806512},
+abstract = {In this paper, we present {GraRep}, a novel model for learning vertex representations of weighted graphs. This model learns low dimensional vectors to represent vertices appearing in a graph and, unlike existing work, integrates global structural information of the graph into the learning process. We also formally analyze the connections between our work and several previous research efforts, including the DeepWalk model of Perozzi et al. as well as the skip-gram model with negative sampling of Mikolov et al.We conduct experiments on a language network, a social network as well as a citation network and show that our learned global representations can be effectively used as features in tasks such as clustering, classification and visualization. Empirical results demonstrate that our representation significantly outperforms other state-of-the-art methods in such tasks.},
+booktitle = {Proceedings of the 24th ACM International on Conference on Information and Knowledge Management},
+pages = {891–900},
+numpages = {10},
+keywords = {algorithms, experimentation},
+location = {Melbourne, Australia},
+series = {CIKM '15}
+}
+@article{Grover2016node2vecSF,
+  title={node2vec: Scalable Feature Learning for Networks},
+  author={Aditya Grover and Jure Leskovec},
+  journal={Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining},
+  year={2016},
+  url={https://api.semanticscholar.org/CorpusID:207238980}
+}
+
+@article{Tang2015LINELI,
+  title={LINE: Large-scale Information Network Embedding},
+  author={Jian Tang and Meng Qu and Mingzhe Wang and Ming Zhang and Jun Yan and Qiaozhu Mei},
+  journal={Proceedings of the 24th International Conference on World Wide Web},
+  year={2015},
+  url={https://api.semanticscholar.org/CorpusID:8399404}
+}
+@article{图同构检测,
+  title={Wasserstein Weisfeiler-Lehman Graph Kernels},
+  author={Matteo Togninalli and M. Elisabetta Ghisu and Felipe Llinares-L{\'o}pez and Bastian Alexander Rieck and Karsten M. Borgwardt},
+  journal={ArXiv},
+  year={2019},
+  volume={abs/1906.01277},
+  url={https://api.semanticscholar.org/CorpusID:174798401}
+}
+@article{标签传播,
+  title = {Near linear time algorithm to detect community structures in large-scale networks},
+  author = {Raghavan, Usha Nandini and Albert, R\'eka and Kumara, Soundar},
+  journal = {Phys. Rev. E},
+  volume = {76},
+  issue = {3},
+  pages = {036106},
+  numpages = {11},
+  year = {2007},
+  month = {Sep},
+  publisher = {American Physical Society},
+  doi = {10.1103/PhysRevE.76.036106},
+  url = {https://link.aps.org/doi/10.1103/PhysRevE.76.036106}
+}
+
+@article{Blondel2008FastUO,
+  title={Fast unfolding of communities in large networks},
+  author={Vincent D. Blondel and Jean-Loup Guillaume and Renaud Lambiotte and Etienne Lefebvre},
+  journal={Journal of Statistical Mechanics: Theory and Experiment},
+  year={2008},
+  volume={2008},
+  pages={P10008},
+  url={https://api.semanticscholar.org/CorpusID:334423}
+}
+
+@article{谱聚类,
+  title={On Spectral Clustering: Analysis and an algorithm},
+  author={ Ng, Andrew Y.  and  Jordan, Michael I.  and  Weiss, Yair },
+  journal={proc nips},
+  year={2002},
+}
+
+@article{
+随机游走,
+author = {Martin Rosvall  and Carl T. Bergstrom },
+title = {Maps of random walks on complex networks reveal community structure},
+journal = {Proceedings of the National Academy of Sciences},
+volume = {105},
+number = {4},
+pages = {1118-1123},
+year = {2008},
+doi = {10.1073/pnas.0706851105},
+URL = {https://www.pnas.org/doi/abs/10.1073/pnas.0706851105},
+eprint = {https://www.pnas.org/doi/pdf/10.1073/pnas.0706851105},
+abstract = {To comprehend the multipartite organization of large-scale biological and social systems, we introduce an information theoretic approach that reveals community structure in weighted and directed networks. We use the probability flow of random walks on a network as a proxy for information flows in the real system and decompose the network into modules by compressing a description of the probability flow. The result is a map that both simplifies and highlights the regularities in the structure and their relationships. We illustrate the method by making a map of scientific communication as captured in the citation patterns of \&gt;6,000 journals. We discover a multicentric organization with fields that vary dramatically in size and degree of integration into the network of science. Along the backbone of the network—including physics, chemistry, molecular biology, and medicine—information flows bidirectionally, but the map reveals a directional pattern of citation from the applied fields to the basic sciences.}}
 @article{Hu2020OpenGB,
   title={Open Graph Benchmark: Datasets for Machine Learning on Graphs},
   author={Weihua Hu and Matthias Fey and Marinka Zitnik and Yuxiao Dong and Hongyu Ren and Bowen Liu and Michele Catasta and Jure Leskovec},
