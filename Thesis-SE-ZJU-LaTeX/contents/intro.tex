@@ -54,7 +54,50 @@
 为避免引起评阅老师判定有凑篇幅之嫌，
 请有针对的描述前人研究的不足之处，
 做到``有破有立''。
-\subsection{}
+\subsection{基于图神经网络的方法}
+
+长期以来，图神经网络（Graph Neural Networks, GNNs）\cite{Kipf2016SemiSupervisedCW,Wu2019ACS,Han2023PiVePW,Wu2019SimplifyingGC,Wang2021BagOT}
+一直是图机器学习的主导范式。GNN 通过消息传递与邻域聚合机制，在统一框架下同时建模节点特征与图拓扑结构，为各类图表示学习任务提供了基础工具。
+
+从模型设计范式来看，基于不同的消息传递与卷积定义方式，主流 GNN 模型大致可以分为谱域方法和空间域方法两大类。
+谱域方法以图拉普拉斯谱理论为基础，在频域中定义卷积核再映射回节点空间。Defferrard 等人提出的 ChebNet\cite{Defferrard2016ConvolutionalNN}
+通过切比雪夫多项式对谱卷积进行局部近似，显著降低了谱滤波的计算成本；
+Kipf 和 Welling 提出的图卷积网络（Graph Convolutional Network, GCN）\cite{Kipf2016SemiSupervisedCW}
+在 ChebNet 的基础上进一步采用一阶谱近似，形成简单而高效的“归一化邻接矩阵 + 线性变换”结构，被广泛视为谱域 GNN 的里程碑工作；
+随后，Wu 等人\cite{Wu2019SimplifyingGC}从信号平滑视角对 GCN 进行简化，揭示了多层 GCN 本质上是一种低通滤波器，为后续关于过平滑现象的研究奠定了理论基础。
+
+与之相对，空间域方法直接在图的邻接结构上定义局部消息传递规则，通过聚合节点一阶或多阶邻域特征完成表示更新。
+Hamilton 等人提出的 GraphSAGE\cite{Hamilton2017InductiveRL}
+针对 GCN 难以处理未见节点的问题，构建了“邻域采样 + 特征聚合”的归纳式框架，支持在大规模动态图上进行在线推断；
+Veličković 等人提出的图注意力网络（Graph Attention Network, GAT）\cite{Velickovic2017GraphAN}
+将自注意力机制引入邻域聚合，通过学习可变权重区分不同邻居的重要性，缓解了简单平均聚合对噪声节点与不相关邻居的过度平滑问题；
+在此基础上，Brody 等人\cite{Brody2021HowAA}指出原始 GAT 的注意力打分实质上是“静态”的，难以捕捉特征变换后的高阶依赖关系，并提出动态注意力变体以提升表达灵活性。
+Chen 等人\cite{Chen2021EdgeFeaturedGA}进一步沿注意力方向扩展，提出显式建模边特征的 Edge-featured GAT（EGAT），
+通过对节点和边分别构建注意力通道、在多层结构中进行多尺度融合，使 GNN 能够在节点与边两个层面同时学习表征。
+
+在提升表达能力方面，Xu 等人提出的图同构网络（Graph Isomorphism Network, GIN）\cite{Xu2018HowPA}
+通过在聚合时显式引入自环并采用求和聚合，在理论上证明其判别能力与 Weisfeiler–Lehman 图同构测试等价，显著增强了模型对局部子结构模式的区分能力。
+Monti 等人\cite{Monti2016GeometricDL}则从几何深度学习视角出发，将图卷积推广至一般流形与不规则网格，通过构造局部坐标系与核函数，在统一框架下处理社交网络、交通网络等空间图数据。
+
+尽管取得了大量进展，GNN 也暴露出一系列固有局限。
+一方面，随着网络层数加深，节点表征逐渐趋于同质化，即所谓“过平滑”现象\cite{Rusch2023ASO}，导致不同类别或结构位置的节点难以区分；
+另一方面，多跳依赖在固定维度表示中的累积压缩会引发“过压缩”问题\cite{Alon2020OnTB}，远距离结构信号在传播过程中易被淹没，在大规模稀疏图上尤为突出。
+为缓解这些问题，研究者提出了多种正则化与结构改进策略，如 MixHop\cite{AbuElHaija2019MixHopHG} 通过显式聚合多阶邻域特征提升多尺度表达能力，
+Jump Knowledge 网络\cite{Xu2018RepresentationLO}通过跨层跳连与层级特征聚合缓解深层表征退化，
+DropEdge\cite{Rong2019DropEdgeTD}通过随机丢弃部分边改善过平滑并提升训练稳定性，相关“tricks”在系统性基准研究中得到了总结\cite{Wang2021BagOT}。
+然而，这些方法大多仍在消息传递与正则化层面进行局部改进，对超大规模图的可扩展性、对非结构模态（文本、图像等）的直接建模能力以及与通用大模型的无缝集成仍然存在明显不足\cite{Wang2023CanLM}，
+这也为后续基于大规模语言模型的图结构计算范式与 Graph-LLMs 的发展留下了广阔空间。
+
+\subsection{基于 Transformer 的方法}
+
+近年来，随着 Transformer \cite{Vaswani2017AttentionIA}在自然语言处理\cite{Lin2021ASO}与计算机视觉中\cite{Han2020ASO}的成功应用，
+人们开始系统性地探索如何将基于注意力的架构扩展到图结构数据，
+形成所谓的图 Transformer（Graph Transformers,GAs）方法族\cite{Ying2021DoTR} 。
+这一方向旨在在保留 Transformer 全局建模与强表达能力的同时，引入必要的图结构归纳偏置，
+从而缓解传统 GNN 在长程依赖建模与表达上限方面的固有局限。
+
+在模型设计上，第一类代表性工作关注在标准 Transformer\cite{Vaswani2017AttentionIA} 中显式注入图结构与位置编码。
+Dwivedi 和 Bresson 提出的 Graph Transformer（GT）\cite{Dwivedi2020AGO} 将节点视作 token，并通过图拉普拉斯特征、最短路径距离等构造谱域或几何位置编码，使自注意力在全局范围内仍保持对拓扑邻接关系的敏感；Mialon 等人的 GraphiT 则系统分析了“无结构编码时 Transformer 退化为节点多重集合（bag-of-nodes）模型”的问题，提出将结构编码嵌入注意力权重和 token 表示中，以避免结构信息被完全丢失\ 。Ying 等人提出的 Graphormer 进一步结合节点中心性编码、最短路径距离编码和边特征编码，在不改变标准 Transformer 主干的前提下，通过结构偏置矩阵显式建模全局拓扑，在 OGB Large-Scale Challenge 的分子性质预测赛道上取得领先成绩，展示了图 Transformer 在大规模图任务上的潜力\ 。Chen 等人的 Structure-Aware Transformer（SAT）则以“子图感知”为核心，先为每个节点提取根节点子图特征，再在此基础上计算注意力权重，从理论与实验上证明该结构感知注意力在区分结构相似性方面优于仅依赖位置编码的方案\ 。
 
 \section{论文研究内容}
 
