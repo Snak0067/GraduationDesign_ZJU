@@ -54,41 +54,40 @@
 为避免引起评阅老师判定有凑篇幅之嫌，
 请有针对的描述前人研究的不足之处，
 做到``有破有立''。
-\subsection{基于图神经网络的方法}
+\subsection{传统图表示学习}
+\subsubsection{图神经网络}
 
 长期以来，图神经网络（Graph Neural Networks, GNN）\cite{Kipf2016SemiSupervisedCW,Wu2019ACS,Han2023PiVePW,Wu2019SimplifyingGC,Wang2021BagOT}
-一直是图机器学习的主导范式。GNN 通过消息传递与邻域聚合机制，在统一框架下同时建模节点特征与图拓扑结构，为各类图表示学习任务提供了基础工具。
+一直是图机器学习的主导范式。GNN 通过消息传递与邻域聚合机制，在统一框架下同时建模节点特征与图拓扑结构。从模型设计范式来看，基于不同的消息传递与卷积定义方式，主流 GNN 模型大致可以分为谱域方法和空间域方法两大类。
 
-从模型设计范式来看，基于不同的消息传递与卷积定义方式，主流 GNN 模型大致可以分为谱域方法和空间域方法两大类。
+
 谱域方法以图拉普拉斯谱理论为基础，在频域中定义卷积核再映射回节点空间。Defferrard 等人\cite{Defferrard2016ConvolutionalNN}提出的 ChebNet
 通过切比雪夫多项式对谱卷积进行局部近似，显著降低了谱滤波的计算成本；
-Kipf 和 Welling等人\cite{Kipf2016SemiSupervisedCW} 提出的图卷积网络（Graph Convolutional Network, GCN）
+Kipf 和 Welling等人\cite{Kipf2016SemiSupervisedCW} 提出的图卷积网络（GCN）
 在 ChebNet 的基础上进一步采用一阶谱近似，形成简单而高效的“归一化邻接矩阵 + 线性变换”结构，被广泛视为谱域 GNN 的里程碑工作；
 随后，Wu 等人\cite{Wu2019SimplifyingGC}从信号平滑视角对 GCN 进行简化，揭示了多层 GCN 本质上是一种低通滤波器，为后续关于过平滑现象的研究奠定了理论基础。
 
 与之相对，空间域方法直接在图的邻接结构上定义局部消息传递规则，通过聚合节点一阶或多阶邻域特征完成表示更新。
 Hamilton 等人\cite{Hamilton2017InductiveRL}提出的 GraphSAGE
 针对 GCN 难以处理未见节点的问题，构建了“邻域采样 + 特征聚合”的归纳式框架，支持在大规模动态图上进行在线推断；
-Veličković 等人\cite{Velickovic2017GraphAN}提出的图注意力网络（Graph Attention Network, GAT）
+Veličković 等人\cite{Velickovic2017GraphAN}提出的图注意力网络GAT
 将自注意力机制引入邻域聚合，通过学习可变权重区分不同邻居的重要性，缓解了简单平均聚合对噪声节点与不相关邻居的过度平滑问题；
 在此基础上，Brody 等人\cite{Brody2021HowAA}指出原始 GAT 的注意力打分实质上是“静态”的，难以捕捉特征变换后的高阶依赖关系，并提出动态注意力变体以提升表达灵活性。
 Chen 等人\cite{Chen2021EdgeFeaturedGA}进一步沿注意力方向扩展，提出显式建模边特征的 Edge-featured GAT（EGAT），
 通过对节点和边分别构建注意力通道、在多层结构中进行多尺度融合，使 GNN 能够在节点与边两个层面同时学习表征。
 
-在提升表达能力方面，Xu 等人\cite{Xu2018HowPA}提出的图同构网络（Graph Isomorphism Network, GIN）
+在提升表达能力方面，Xu 等人\cite{Xu2018HowPA}提出的GIN
 通过在聚合时显式引入自环并采用求和聚合，在理论上证明其判别能力与 Weisfeiler–Lehman 图同构测试等价，显著增强了模型对局部子结构模式的区分能力。
 Monti 等人\cite{Monti2016GeometricDL}则从几何深度学习视角出发，将图卷积推广至一般流形与不规则网格，通过构造局部坐标系与核函数，在统一框架下处理社交网络、交通网络等空间图数据。
 
 尽管取得了大量进展，GNN 也暴露出一系列固有局限。
-一方面，随着网络层数加深，节点表征逐渐趋于同质化，即所谓“过平滑”现象\cite{Rusch2023ASO}，导致不同类别或结构位置的节点难以区分；
+一方面，随着网络层数加深，节点表征逐渐趋于同质化，导致不同类别或结构位置的节点难以区分，即“过平滑”现象\cite{Rusch2023ASO}；
 另一方面，多跳依赖在固定维度表示中的累积压缩会引发“过压缩”问题\cite{Alon2020OnTB}，远距离结构信号在传播过程中易被淹没，在大规模稀疏图上尤为突出。
-为缓解这些问题，研究者提出了多种正则化与结构改进策略，如 MixHop\cite{AbuElHaija2019MixHopHG} 通过显式聚合多阶邻域特征提升多尺度表达能力，
-Jump Knowledge 网络\cite{Xu2018RepresentationLO}通过跨层跳连与层级特征聚合缓解深层表征退化，
-DropEdge\cite{Rong2019DropEdgeTD}通过随机丢弃部分边改善过平滑并提升训练稳定性，相关“tricks”在系统性基准研究中得到了总结\cite{Wang2021BagOT}。
-然而，这些方法大多仍在消息传递与正则化层面进行局部改进，对超大规模图的可扩展性、对非结构模态（文本、图像等）的直接建模能力以及与通用大模型的无缝集成仍然存在明显不足\cite{Wang2023CanLM}，
-这也为后续基于大规模语言模型的图结构计算范式与 Graph-LLMs 的发展留下了广阔空间。
+为缓解这些问题，研究者提出了Jump Knowledge \cite{Xu2018RepresentationLO}、MixHop\cite{AbuElHaija2019MixHopHG}以及DropEdge\cite{Rong2019DropEdgeTD}等多种改进策略，
+然而，这些方法大多仍在消息传递与正则化层面进行局部改进，无法直接处理文本或图像等非数字原始数据，需要额外的特征工程技术\cite{Wang2021BagOT}。
+同时，GNN与现有大规模生成模型缺乏兼容性，这对于与视觉和语言等其他人工智能领域集成到统一的智能系统中提出了重大挑战。
 
-\subsection{基于 Transformer 的方法}
+\subsubsection{图Transformerr}
 
 近年来，随着 Transformer \cite{Vaswani2017AttentionIA}在自然语言处理\cite{Lin2021ASO}与计算机视觉中\cite{Han2020ASO}的成功应用，
 研究者开始系统性地探索如何将基于注意力（Attention）的架构扩展到图结构数据，
@@ -99,13 +98,12 @@ DropEdge\cite{Rong2019DropEdgeTD}通过随机丢弃部分边改善过平滑并�
 在模型设计上，第一类代表性工作侧重于在标准 Transformer\cite{Vaswani2017AttentionIA} 中显式注入图结构与位置编码。
 Dwivedi 和 Bresson 提出的 Graph Transformer（GT） \cite{Dwivedi2020AGO}将图节点视作 token，
 并通过图拉普拉斯特征、最短路径距离等构造谱域或几何位置编码，使全局自注意力在计算时仍对拓扑邻接关系保持敏感；
-Mialon 等人\cite{Mialon2021GraphiTEG}的 GraphiT 则系统分析了“无结构编码时 Transformer 退化为节点多重集合（bag-of-nodes）模型”的问题，
-提出将结构编码嵌入注意力权重和 token 表示中，以避免结构信息被完全丢失\ 。
+Mialon 等人\cite{Mialon2021GraphiTEG}的 GraphiT 则提出将结构编码嵌入注意力权重和 token 表示中，以避免结构信息被完全丢失\ 。
 然而，处理大规模图的计算量很大，全局注意力机制无法有效地捕获图的拓扑结构。为了缓解这个问题，一些方法将图结构信息合并到注意力矩阵中。
 Ying 等人\cite{Ying2021DoTR}提出的 Graphormer 结合节点中心性编码、最短路径距离编码和边特征编码，
 在不改变标准 Transformer 主干的前提下，通过结构偏置矩阵显式建模全局拓扑。
-Chen 等人\cite{Chen2022StructureAwareTF}的 Structure-Aware Transformer（SAT）则以“子图感知”为核心，先为每个节点提取根节点子图特征，再在此基础上计算注意力权重，
-从理论与实验上证明该结构感知注意力在区分结构相似性方面优于仅依赖位置编码的方案\ 。
+Chen 等人\cite{Chen2022StructureAwareTF}的 SAT则以“子图感知”为核心，先为每个节点提取根节点子图特征，再在此基础上计算注意力权重，
+理论与实验证明该结构感知注意力在区分结构相似性方面优于仅依赖位置编码的方案\ 。
 
 与上述依赖精心设计结构偏置的路线相比，第二类工作尝试尽量减少图特定设计，直接用“纯 Transformer”学习图。
 Kim 等人\cite{Kim2022PureTA}提出的 Tokenized Graph Transformer（TokenGT）以及
@@ -118,23 +116,55 @@ Chen 等人\cite{Chen2022NAGphormerAT}的NAGphormer将节点与边统一视作�
 即可在多类图基准上获得可与调优 GNN 及图 Transformer 竞争的性能；
 Ma 等人\cite{Ma2025SimplifyingGT}提出的 Simplifying Graph Transformers 则在保持主干接近标准 Transformer 的前提下，
 仅通过相对位置偏置、轻量门控与规范化策略，即显著提升了对复杂图结构的判别能力与长程依赖建模能力。
-这一脉络的结果表明，在配合合适的标识编码、结构感知位置编码与正则化策略后，纯 Transformer 架构本身即具备较强的图学习潜力，
-为构建与语言/视觉基础模型更易对齐的统一架构提供了可行路径。
 
-第三类方法则更强调领域特化与 GNN–Transformer 的融合，尤其在分子与材料科学等应用场景中发展迅速。
-Rong 等人\cite{Rong2020GROVERSM}提出的 GROVER 将消息传递网络嵌入 Transformer 框架，通过节点级、边级与图级多粒度自监督任务，在千万级无标注分子图上预训练得到通用分子表示，在多种分子性质预测基准上显著优于传统 GNN。
-Maziarka 等人\cite{Maziarka2020MoleculeAT}的 Molecule Attention Transformer（MAT） 通过将原子间欧氏距离、键连接关系显式注入自注意力权重，在不改变总体架构简洁性的前提下，系统性提升了跨多类分子性质任务的性能与稳定性。
-Anselmi 等人\cite{Anselmi2024MolecularGT} 提出的 Molecular Graph Transformer（MGT）则在原始键图及其线图上联合进行局部注意力与消息传递，有效捕获分子中的长程相互作用，在量子化学性质预测任务上超过 ALIGNN 等专用 GNN 架构。
-与此同时，Rampášek 等人\cite{Rampek2022RecipeFA} 提出的 GraphGPS与 Masters 等人\cite{Masters2022GPSAO}提出的 GPS++ 给出了一种混合式“MPNN + Transformer”通用配方：在局部采用高效消息传递捕获近邻结构，在全局采用稀疏或线性复杂度注意力实现长程依赖建模，并通过 2D/3D 结构编码与辅助去噪任务在 PCQM4Mv2 \cite{Hu2021OGBLSCAL} 等大规模分子基准上取得领先性能。
+从整体上看，基于 Transformer 的图方法已经在表达能力与任务性能上展现出超越传统 GNN 的潜力 。
+然而，现有图 Transformer 仍面临若干开放问题：一是全局自注意力在大图上的二次复杂度限制了其可扩展性，
+实际应用中往往需要借助局部注意力或稀疏化策略在表达力与效率之间折中；
+二是结构与位置编码的设计高度依赖任务与图分布，不同工作采用的偏置方式差异较大，
+缺乏统一的理论框架与稳健的跨任务迁移能力；三是大多数方法仍主要针对单一模态图数据，
+如何在统一架构下同时处理图结构与自然语言、视觉等模态，使图 Transformer 成为真正的图多模态基础模型，仍是当前研究的前沿方向。
 
-综上，基于 Transformer 的图方法显著提升了图表示学习在长程依赖建模与任务性能上的上限。
-然而，无论是通过在注意力矩阵中注入复杂结构偏置，还是通过 token 化节点与边、叠加多种位置/类型编码，
-现有图 Transformer 往往以间接方式表达图拓扑，计算代价与模型复杂度均较高；
-同时，多数方法仍主要面向结构单模态，尚难直接支撑统一的图–语言基础建模框架。
+\subsection{基于大语言模型的图表示学习}
+\textbf{1）图–文本转换驱动的表示路径}
 
-\subsection{基于大语言模型的方法}
+此类方法的核心思路，是将原本以邻接关系和属性向量给出的图数据转写为大语言模型（LLM）可直接处理的文本序列，借助 LLM 的语义表征能力间接完成图表示学习。
+Huang 等人提出的 GraphGPT\cite{Tang2023GraphGPTGI} 与 Guo 等人的 GPT4Graph\cite{Guo2023GPT4GraphCL} 分别通过指令模板和图描述语言（如 GML、GraphML 等）将节点属性、边关系以及局部拓扑结构编码为自然语言或结构化文本，系统验证了图–文本转换在图任务中的可行性。
+然而，这类“静态模板式”设计难以在文本长度与结构保真之间取得平衡：一方面，完整展开结构细节会显著推高 LLM 的推理开销；另一方面，为适配上下文窗口而进行的裁剪与压缩又不可避免地引入拓扑信息丢失。
+
+为缓解上述矛盾，后续工作开始尝试以动态生成与结构约束的方式提升图–文本表示的一致性。
+Yang 等人提出的 GL-Fusion\cite{Yang2024GLFusionRT} 通过在统一架构中引入图–文本交叉注意力和结构感知 Transformer，使模型能够自适应生成融合拓扑信息的文本表示，从而在语义与结构之间实现协同编码。
+Luo 等人的最新工作\cite{Luo2024GraphconstrainedRF} 则在知识图谱场景下提出 Graph-constrained Reasoning，将知识图谱重构为 KG-Trie 前缀树，并在解码阶段对 LLM 的生成路径施加图结构约束，使推理过程在符号层面严格服从图结构，从而有效抑制基于文本表示的“幻觉式”推理。
+
+与上述以表示学习为中心的工作相对应，另一分支尝试将图推理整体迁移至语言空间，通过模板化描述直接驱动 LLM 执行图算法推理。
+Ye 等人\cite{Ye2023LanguageIA} 提出的 InstructGLM 利用自然语言指令模板描述多尺度图结构，对生成式 LLM 进行指令微调，以完成节点分类等图任务。
+Zhao 等人\cite{Zhao2023GraphTextGR} 提出的 GraphText 构建“图句法树（graph-syntax tree）”统一组织节点属性与关系结构，并将其线性化为 “graph text”，使 LLM 在文本空间中以问答或生成方式执行图推理，在若干基准上实现了训练自由（training-free）的图推理性能。
+然而，无论是静态模板、动态图描述还是句法树形式，上述方案均依赖人工或任务特定的图描述设计，对大规模图和复杂拓扑结构的保真建模与可扩展性仍然有限，难以构成统一、通用的图表示学习范式。
 
 
+\textbf{2）离散 Token 映射驱动的表示路径}
+
+为规避文本转换中的信息损耗，研究人员提出直接将图结构量化为 LLM 原生兼容的离散 Token，实现图表示与 LLM 语义空间的天然对齐。
+Bo等人\cite{Bo2025QuantizingTG}构建基于软量化的图 Token 生成框架，通过自监督学习训练离散码本，将图结构直接映射为 LLM 词汇表兼容的 Token 序列，
+无需人工设计模板且支持零样本跨域迁移，
+而Wang等人\cite{Wang2024LLMsAZ}采用线性投影器将图特征对齐至 LLM 的 Token 嵌入空间，生成专用图 Token，无需微调 LLM 即可保持模型通用性，
+但图 Token 生成依赖预训练 GNN 提取初始特征，未能完全脱离传统图模型依赖。
+Xia等人\cite{Xia2024OpenGraphTO}提出拓扑感知的统一图 Tokenizer，通过高阶平滑邻接矩阵与 SVD 映射生成标准化 Token 序列，解决了跨数据集 Token 集合变化的难题，
+但仍需依赖图 Transformer 进行后续关系建模，未完全发挥 LLM 的端到端建模能力。
+
+
+\textbf{3）LLM 适配与图基础模型路径}
+
+将大型语言模型（LLM）扩展至图结构数据，是当前图基础模型（Graph Foundation Model）形成的关键途径之一。
+相关研究通常通过自监督任务设计或指令微调，使 LLM 能直接处理图的拓扑结构与属性信息，从而构建能够跨任务、跨领域泛化的统一图模型。
+早期研究主要探索 LLM 与图对比学习的结合方式。Yang等人\cite{Yang2024LATEXGCLLL}提出 LLM-as-GraphAugmentor 与 LLM-as-TextEncoder 双策略，利用提示生成更丰富的节点属性，
+从而突破传统图对比学习在“属性无关增强”上的局限；然而该方法在结构建模方面仍依赖轻量图编码器，且提示生成导致的计算开销较大。
+Zhu等人\cite{Zhu2025LLMAG}进一步尝试在语言空间中模拟图的消息传递过程，通过学习图“词汇表”实现隐式结构建模。
+其优势在于无需显式结构展开，但词汇外（OOV）问题与跨图泛化受限仍是主要瓶颈。
+
+随着 Graph-LLM 方向的快速发展，研究者开始寻求构建可支持多任务、多领域的通用图基础模型。Huang等人\cite{Tang2023GraphGPTGI}通过构建大规模图指令数据集，使 LLM 能以自然语言形式交互地处理多种图任务。
+Wang等人\cite{Wang2024InstructGraphBL}在此基础上叠加偏好对齐，通过 DPO 提升模型的推理一致性与输出稳健性，但大规模指令微调带来较高成本，也可能削弱 LLM 的通用语言能力。
+L2T（2025）则将推理步骤显式建模为图结构，
+让 LLM 生成图推理过程，并辅以 GNN 优化节点表示；尽管在复杂图推理任务上取得提升，但该方法仍依赖任务特定的推理过程形式，限制了在开放场景下的适用性。
 
 \section{论文研究内容}
 
