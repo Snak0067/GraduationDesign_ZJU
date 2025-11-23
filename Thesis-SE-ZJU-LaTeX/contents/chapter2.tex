@@ -1,6 +1,6 @@
 %!TEX root = ../main.tex
 
-\chapter{结合强化学习的图结构大语言模型总体方案设计\footnote{请不要在正式论文撰写中如本文般滥用脚注}}
+\chapter{结合强化学习的图结构大语言模型总体方案设计}
 % 原则上，每一章开头不可马上进入第一节
 % 需要一段引文提要起到 TL;DR 的作用
 本章围绕结合强化学习的图结构大语言模型总体方案展开。
@@ -11,12 +11,10 @@
 包括真实图数据与合成图推理数据的使用方式及划分原则，
 为后续章节中具体方法的设计、实验设置与结果分析提供统一的任务背景与实验基础。
 
-
 \section{问题描述}
 
-
 本研究面向文本属性图（Text-Attributed Graphs, TAGs）上的图结构理解与推理任务，
-旨在构建一个统一的图—语言模型框架，使模型在处理图数据时能够同时兼顾预测性能、
+旨在构建一个统一的图—语言模型框架，使模型在处理图数据时同时兼顾预测性能、
 推理可解释性与跨任务泛化能力。
 
 形式化地，给定一张文本属性图
@@ -27,64 +25,249 @@ G = (V,E,A,T),
 \(E \subseteq V \times V\) 为边集合，表示节点之间的关系（如引用关系、共购关系等）；
 \(A \in \{0,1\}^{N \times N}\) 为图的邻接矩阵；
 \(T = \{t_i\}_{i=1}^{N}\) 为节点文本属性集合，\(t_i\) 表示与节点 \(v_i\) 相关的自然语言描述。
-我们希望学习一个参数为 \(\theta\) 的图基础模型（Graph Foundation Models,GFMs）
-\(
+我们希望学习一个参数为 \(\theta\) 的图基础模型（Graph Foundation Model, GFM）
+\[
 F_{\theta} : (G,q) \rightarrow (c,a),
-\)
+\]
 其中 \(q\) 为关于图的自然语言指令或问题，\(a\) 为模型给出的答案，
 \(c=(c_1,\dots,c_L)\) 为可选的链式思维推理过程（Chain-of-Thought），
 用于刻画模型在图上的多步推理轨迹。
 目标是在不同类型的图任务 \(\mathcal{T}\) 上，使 \(F_{\theta}\) 在准确性、可解释性和泛化能力之间取得合理平衡。
 
-针对上述总体目标，本文将研究任务进一步拆解为以下几个子任务：
+针对上述总体目标，本文将整体问题拆解为以下四个的子科学问题:
 
-\textbf{1）节点分类任务:} 给定图 \(G\) 及其中一部分带标签节点集合
+\textbf{1）图结构的编码表征学习问题：}
+给定文本属性图 \(G = (V,E,A,T)\) 和可学习的图编码器 \(\mathrm{Enc}_G: G \rightarrow \mathbb{R}^{N \times d_g}\)，定义结构保持性度量：
+\[
+\mathcal{I}_{\mathrm{struct}}(G, \hat{G}) = \frac{1}{|E|}\sum_{(i,j)\in E}\mathbb{I}[\hat{A}_{ij} = 1] + \frac{1}{|V|}\sum_{i\in V}\mathrm{sim}(t_i, \hat{t}_i)
+\]
+其中 \(\hat{G} = \mathrm{Dec}_G(\mathrm{Enc}_G(G))\) 为重构图，\(\mathrm{sim}(\cdot,\cdot)\) 为文本相似度。目标是实现近无损编码：
+\[
+\sup_{\mathrm{Enc}_G, \mathrm{Dec}_G} \mathbb{E}_{G\sim\mathcal{D}_{\mathrm{graph}}}\left[\mathcal{I}_{\mathrm{struct}}(G, \mathrm{Dec}_G(\mathrm{Enc}_G(G)))\right] \geq 1 - \epsilon, \quad \epsilon \rightarrow 0^+
+\]
+该问题本质是拓扑信息瓶颈的突破：在有限维度 \(d_g \ll N\) 下，最大化保留原始图结构的信息量。
+
+\textbf{2）跨模态语义等价性建模问题：}
+设 \(\mathcal{M}_g = (\mathbb{R}^{d_g}, d_g)\) 为图表征度量空间，\(\mathcal{M}_\ell = (\mathbb{R}^{d_\ell}, d_\ell)\) 为语言嵌入空间。定义结构—语义等价关系 \(\sim_{\mathrm{eq}} \subseteq \mathcal{M}_g \times \mathcal{M}_\ell\)：
+\[
+(h_v^g, s_v^\ell) \in \sim_{\mathrm{eq}} \iff \forall q \in \mathcal{Q}, \quad \mathcal{V}(G,q,a) = \mathcal{V}'(\mathcal{T}(h_v^g),q,a)
+\]
+其中 \(\mathcal{V}\) 为图验证器，\(\mathcal{V}'\) 为文本验证器，\(\mathcal{T}: \mathbb{R}^{d_g} \rightarrow \mathcal{T}_{\mathrm{lang}}\) 为结构到文本的转换函数。目标是学习映射 \(f: \mathcal{M}_g \rightarrow \mathcal{M}_\ell\) 使得：
+\[
+\inf_{f} \sup_{(v,G)\sim\mathcal{D}} \mathbb{E}\left[ d_\ell(f(h_v^g), s_v^\ell) \mid (h_v^g, s_v^\ell) \in \sim_{\mathrm{eq}} \right] \rightarrow 0
+\]
+该问题的本质是发现跨模态不变量：识别在结构变换和语义变换下保持不变的等价关系。
+
+\textbf{3）可验证推理的自主优化问题：}
+定义图可验证函数类 \(\mathcal{F}_{\mathrm{verif}} = \{f: \mathcal{G} \times \mathcal{Q} \times \mathcal{Y} \rightarrow \{0,1\} \mid f \text{ 可由图算法在多项式时间内计算}\}\)。给定策略 \(\pi_\theta: \mathcal{G} \times \mathcal{Q} \rightarrow \mathcal{Y}\)，其中 \(\mathcal{Y}\) 为推理-答案空间，定义可验证性能：
+\[
+\mathcal{P}_{\mathrm{verif}}(\theta) = \mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{test}}}\left[ \sup_{f\in\mathcal{F}_{\mathrm{verif}}} f(G,q,\pi_\theta(G,q)) \right]
+\]
+目标是通过纯自监督方式优化策略：
+\[
+\theta^* = \arg\max_{\theta} \mathcal{P}_{\mathrm{verif}}(\theta) \quad \text{s.t.} \quad \nabla_\theta \mathcal{P}_{\mathrm{verif}}(\theta) \text{ 可通过可微分代理函数估计}
+\]
+该问题突破了传统RLHF范式，提出可验证性驱动的学习：将形式化验证规则转化为可优化的学习信号。
+
+\textbf{4）任务泛化与结构特异性的统一表征问题：}
+设 \(\mathcal{T} = \{\tau_1,\dots,\tau_m\}\) 为图任务集合（如节点分类、链路预测、结构QA），每个任务 \(\tau_j\) 有其最优表征空间 \(\mathcal{H}_j^* \subseteq \mathbb{R}^{d_j}\)。定义任务适应性度量：
+\[
+\mathcal{A}(\theta, \tau_j) = \inf_{g_j} \mathbb{E}_{(G,q)\sim\mathcal{D}_{\tau_j}}\left[ \ell_j(g_j(F_\theta(G,q)), y^*) \right]
+\]
+其中 \(g_j\) 为任务头，\(\ell_j\) 为任务损失。定义泛化性度量：
+\[
+\mathcal{G}(\theta) = \frac{1}{|\mathcal{T}|}\sum_{\tau_j\in\mathcal{T}} \mathcal{A}(\theta, \tau_j)
+\]
+目标是学习参数 \(\theta\) 和任务路由机制 \(r: \mathcal{Q} \rightarrow \Delta^{|\mathcal{T}|}\) 使得：
+\[
+\theta^*, r^* = \arg\max_{\theta,r} \left[ \lambda \mathcal{G}(\theta) + (1-\lambda) \mathbb{E}_{\tau_j\sim r(q)} \mathcal{A}(\theta, \tau_j) \right], \quad \lambda \in [0,1]
+\]
+该问题本质是元学习的结构化扩展：在单一模型中同时优化通用结构理解能力和任务特定适应能力。
+
+\textbf{1）图结构表征预训练：}
+输入以节点 \(v\) 为中心的局部子图
 \(
-V_{\text{lab}} \subseteq V,
+S(v) = (V_v,E_v,A_v,T_v) \subseteq G,
 \)
-每个标注节点 \(v_i \in V_{\text{lab}}\) 对应类别标签 \(y_i \in \mathcal{Y}\)
-（\(\mathcal{Y}\) 为类别空间）。
-模型需要利用图结构 \(A\)、节点文本属性 \(T\) 以及自然语言提示 \(q\)，
-学习条件分布
+通过半欧拉路径构造得到覆盖子图边集的有序序列
 \(
-p_{\theta}(y \mid G,v,q),
-\)
-并对未标注节点 \(v \in
-V_{\text{unlab}} = V \setminus V_{\text{lab}},
-\) 进行类别预测，
-实现对图中节点语义与结构角色的统一建模。
-
-\textbf{2）链路预测任务:}
-在同一张图 \(G\) 上，给定若干节点对 \((v_i,v_j)\)，其中部分为真实存在的边，
-部分为负样本，模型需要估计边 \((v_i,v_j)\in E\) 出现的概率
+\pi(S(v)) = (e_1,\dots,e_L)
+\)，并进一步离散化为图 token 序列
 \(
-p_{\theta}\big((v_i,v_j)\in E \mid G,q\big) \in [0,1],
-\)
-据此完成缺失边的预测或潜在关系的发现。
-相比传统仅依赖结构或嵌入的方法，本研究要求模型在推理过程中
-同时利用图结构模式与节点文本含义，并可通过自然语言形式解释预测结果。
-
-\textbf{3）图推理与问答任务:}
-在更一般的设定下，给定图 \(G\) 及其文本属性，
-以及一条关于结构或语义关系的自然语言问题 \(q\)
-（如“节点 A 与节点 B 是否存在长度不超过 \(L\) 的路径？”
-“该节点更接近哪一类研究方向？”等），
-模型需要生成一段多步推理链 \(c\) 以及最终答案 \(a\)：
+z_v = (z_1,\dots,z_L) \in \mathcal{V}_g^L
+\)。
+本文学习一个图编码器
+\[
+\mathrm{Enc}_G : \mathcal{V}_g^L \rightarrow \mathbb{R}^{L \times d_g},
+\qquad
+H_v = \mathrm{Enc}_G(z_v),
+\]
+并通过池化算子得到子图级表征
 \(
-(G,q) \xrightarrow{F_{\theta}} (c,a).
+h_v^{\mathrm{glob}} = \mathrm{Pool}(H_v) \in \mathbb{R}^{d_g}
+\)。
+在大规模图数据上，利用自监督目标（如 SMTP 任务）最小化表征损失
+\[
+\mathcal{L}_{\mathrm{repr}}
+=
+\mathbb{E}_{(G,v)}\big[
+\ell_{\mathrm{repr}}\big(H_v, S(v)\big)
+\big],
+\]
+从而获得既保留拓扑结构、又具备良好泛化性的图结构表征。
+
+\textbf{2）图—语言多层次语义对齐：}
+设预训练语言模型的嵌入维度为 \(d_\ell\)，
+引入映射层
+\[
+f_{\mathrm{proj}} : \mathbb{R}^{d_g} \rightarrow \mathbb{R}^{d_\ell},
+\qquad
+\tilde{h}_v = f_{\mathrm{proj}}(h_v^{\mathrm{glob}}),
+\]
+并记与语言模型共享嵌入层的文本编码函数为 \(\phi_{\mathrm{text}}\)，
+描述文本 \(t_v\) 的池化表征为
+\[
+s_v = \mathrm{Pool}(\phi_{\mathrm{text}}(t_v)) \in \mathbb{R}^{d_\ell}.
+\]
+为缩小图与文本表征之间的语义差异，
+本文设计多层次对齐目标：全局对比对齐损失
+\(\mathcal{L}_{\mathrm{con}}\) 拉近 \(\tilde{h}_v\) 与 \(s_v\) 的相似度，
+局部匹配损失 \(\mathcal{L}_{\mathrm{match}}\) 约束节点 / 子结构表征与对应文本片段的一致性，
+生成式损失 \(\mathcal{L}_{\mathrm{gen}}\) 要求大语言模型在条件于图表示时能够重建图的自然语言描述。
+综合得到整体对齐目标
+\[
+\mathcal{L}_{\mathrm{align}}
+=
+\lambda_1 \mathcal{L}_{\mathrm{con}}
++
+\lambda_2 \mathcal{L}_{\mathrm{match}}
++
+\lambda_3 \mathcal{L}_{\mathrm{gen}},
+\]
+在冻结大语言模型主体参数的前提下优化图编码器与映射层参数，
+建立统一的图—语言语义空间。
+
+\textbf{3）监督式冷启动微调：}
+在获得对齐的图—语言表征基础上，第三个子问题关注如何为模型注入结构化的链式推理先验。
+设冻结的图编码器与映射层将整图 \(G\) 映射为条件表征
+\[
+H = \mathrm{Enc}_G(G),\qquad
+\tilde{H} = f_{\mathrm{proj}}(H) \in \mathbb{R}^{N \times d_\ell},
+\]
+其中 \(N\) 为图中节点数。
+记大语言模型的嵌入函数为 \(\phi_{\mathrm{LLM}}\)，参数为 \(\theta_{\mathrm{LLM}}\)。
+给定自然语言问题
+\(q = (w_1,\dots,w_{|q|})\)，其 token 级嵌入为
+\(
+\phi_{\mathrm{LLM}}(q) \in \mathbb{R}^{|q| \times d_\ell}
+\)。
+将图条件表征与问题嵌入在序列维度上拼接，得到输入给语言模型的联合提示：
+\[
+x = [\,\tilde{H};\ \phi_{\mathrm{LLM}}(q)\,] \in \mathbb{R}^{(N+|q|) \times d_\ell}.
+\]
+模型需要生成包含推理链与答案的输出序列
+\(
+y = (c,a) = (y_1,\dots,y_T),
 \)
-其中 \(c\) 应体现对图结构的逐步分析与决策依据，
-\(a\) 需满足由图算法或规则可验证的正确性约束。
-该子任务综合考察模型对图结构的深度理解、跨模态信息融合以及链式推理能力，
-是评估 Graph-LLM 真实实用价值的核心场景。
+其中 \(c\) 为链式思维推理步骤，\(a\) 为最终答案。
+在监督微调阶段，冻结图编码器与映射层参数，仅优化大语言模型参数 \(\theta_{\mathrm{LLM}}\)，
+在由拒绝采样与图论校验器构造的高质量 CoT 数据集
+\(\mathcal{D}_{\mathrm{CoT}}\) 上最小化条件语言建模损失：
+\[
+\mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}})
+=
+- \mathbb{E}_{(G,q,y)\sim\mathcal{D}_{\mathrm{CoT}}}
+\left[
+    \sum_{t=1}^{T}
+    \log p_{\theta_{\mathrm{LLM}}} \big( y_t \mid x,\ y_{<t} \big)
+\right],
+\]
+得到的最优参数为
+\[
+\theta_{\mathrm{LLM}}^{\ast}
+=
+\arg\min_{\theta_{\mathrm{LLM}}} \mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}),
+\]
+并将 \(F_{\theta_{\mathrm{LLM}}^{\ast}}\) 作为后续强化学习阶段的初始化策略。
 
-综上，本课题的根本目标在于：
-在统一的图—语言框架下，通过合理的图结构表示、
-图与文本的表征对齐以及后续训练与强化学习策略，
-使模型能够在上述多个子任务上表现出稳定、可解释且具备迁移能力的图推理行为。
+\textbf{4）可验证奖励驱动的强化学习：}
+在监督微调获得初始策略 \(\pi_{\theta_{\mathrm{LLM}}^{\ast}}\) 后，
+第四个子问题关注如何利用可验证的图论规则设计奖励，进一步优化模型在复杂图结构上的推理能力。
+将图基础模型形式化为条件策略生成器
+\[
+\pi_\theta(y \mid G, q)
+=
+p_\theta\big((c,a) \mid G, q\big),
+\]
+其中 \(\theta\) 为待优化参数，\(y = (c_1,\dots,c_T,a)\) 为长度为 \(T+1\) 的推理–答案序列。
+为量化生成结果的结构合规性与逻辑正确性，设计可验证奖励函数
+\(\mathcal{R}: (G,q,y) \rightarrow \mathbb{R}_{\geq 0}\)：
+\[
+\mathcal{R}(G,q,y)
+=
+\alpha \cdot \mathbb{I}\big[\mathcal{V}_{\mathrm{ans}}(G,q,a)=\mathrm{true}\big]
++
+\beta \cdot \mathrm{PathScore}(G,c)
++
+\gamma \cdot \mathrm{ConstraintSat}(q,c),
+\]
+其中 \(\mathcal{V}_{\mathrm{ans}}\) 为基于图算法的答案验证器，
+\(\mathrm{PathScore}\) 评估推理链 \(c\) 与图拓扑路径的一致性，
+\(\mathrm{ConstraintSat}\) 度量 \(c\) 对问题 \(q\) 中逻辑约束的满足程度，
+\(\alpha+\beta+\gamma=1\) 为权重系数。
 
+采用组式策略优化（Group-wise Policy Optimization, GRPO）算法进行策略更新。
+对每个 \((G,q)\)，从当前策略 \(\pi_\theta\) 采样 \(K\) 条独立推理轨迹
+\(
+\mathcal{Y}_{\mathrm{raw}} = \{y^{(k)}\}_{k=1}^K
+\)，并计算对应奖励
+\(
+r^{(k)} = \mathcal{R}(G,q,y^{(k)})
+\)。
+按奖励降序排列得到 \(\mathcal{Y}_{\mathrm{sorted}}\)，
+选取高于动态阈值 \(r_{\mathrm{thres}}\) 的前若干条构成正样本集
+\[
+\mathcal{Y}^+ = \{y^{(k)} \mid r^{(k)} \geq r_{\mathrm{thres}}\},
+\]
+其中 \(r_{\mathrm{thres}}\) 可取奖励序列的某一分位数。
+将所有轨迹的平均奖励作为基线函数
+\[
+b(G,q) = \frac{1}{K}\sum_{k=1}^K r^{(k)},
+\]
+用于降低梯度估计方差。
+GRPO 的策略优化目标为
+\[
+\mathcal{J}_{\mathrm{GRPO}}(\theta)
+=
+\mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}}}
+\left[
+\frac{1}{|\mathcal{Y}^+|}
+\sum_{y\in\mathcal{Y}^+}
+\sum_{t=1}^{T_y}
+\log \pi_\theta(y_t \mid G, q, y_{<t})
+\cdot
+\big(r(y) - b(G,q)\big)
+\right],
+\]
+其中 \(T_y\) 为轨迹 \(y\) 的长度。
+参数更新通过梯度上升实现：
+\[
+\theta \leftarrow \theta + \eta \nabla_\theta \mathcal{J}_{\mathrm{GRPO}}(\theta),
+\]
+\(\eta\) 为学习率。
+该机制在无需人工偏好标注的前提下，
+利用可验证奖励和组内排序选择使策略逐步聚焦于结构合法、逻辑自洽且答案正确的推理模式。
 
-
+\textbf{5）基于 HPT 的统一后训练框架：}
+为协调监督学习的稳定性与强化学习的探索性，
+本文构建混合后训练（Hybrid Post-Training, HPT）统一框架。
+设当前训练批次的推理正确率为：
+ \[ \mathcal{P} = \frac{1}{|\mathcal{B}|} \sum_{(G,q)\in\mathcal{B}} \mathbb{I}\big[ \mathcal{V}_{\mathrm{ans}}\big(G,q,\pi_\theta(G,q)_a\big) = \mathrm{true} \big], \] 其中 $\mathcal{B}$ 
+ 为当前批次，$\pi_\theta(G,q)_a$ 
+ 表示策略 $\pi_\theta$ 针对 $(G,q)$ 生成的答案部分。
+ 定义动态权重调度函数： 
+ \[ \alpha(\mathcal{P}) = \mathbb{I}[\mathcal{P} \geq \gamma], \quad \beta(\mathcal{P}) = 1 - \alpha(\mathcal{P}), \quad \gamma = 0.6. \] 统一优化目标为监督损失与强化学习目标的加权组合： \[ \mathcal{J}_{\mathrm{HPT}}(\theta) = \alpha(\mathcal{P}) \cdot \mathcal{J}_{\mathrm{GRPO}}(\theta) + \beta(\mathcal{P}) \cdot \mathcal{L}_{\mathrm{SFT}}(\theta). \] 最终通过梯度优化获得图基础模型参数： \[ \theta^* = \arg\max_{\theta} \mathcal{J}_{\mathrm{HPT}}(\theta). \] 该框架通过可验证奖励与动态调度机制，自主平衡基础能力巩固与复杂推理探索，
+在无需人工偏好数据的前提下实现高效、可扩展的图结构推理训练。
 
 \section{总体流程框架}
 针对上述科学问题, 本文构建了一个三阶段渐进式训练框架，
@@ -95,33 +278,84 @@ p_{\theta}\big((v_i,v_j)\in E \mid G,q\big) \in [0,1],
 
 \textbf{1)无损图结构解析与表征预训练阶段}
 
-在第一阶段，针对文本属性图中局部子图结构，本文借鉴基于欧拉路径的图序列化思想，
-构造对节点及其邻域的半欧拉路径表示，将原本离散的拓扑结构转换为可逆的序列输入。
-与传统基于邻域模板的线性化方式相比，该方案尽可能保留节点与边的完整连接关系，
-避免因采样和裁剪带来的结构信息丢失。
-在此基础上，引入基于Transformer架构的图结构编码器，对欧拉序列进行预训练，使其学习到对度分布、
-路径模式以及局部子结构等关键信息敏感的表征。
-这一阶段的目标是在不依赖大规模人工标注的前提下，为后续图–语言融合提供结构保真、
-可迁移的图表示基础。
+图结构表征预训练阶段对应上述的第一个子任务。
+针对现有 Graph-LLM 普遍采用局部邻域模板或随机采样进行序列化，导致拓扑信息丢失的问题，
+本文借鉴基于欧拉路径的图序列化思想\cite{Zhao2023GraphGPTGP}，
+对节点及其邻域进行半欧拉路径（semi-Eulerian path）构造与规范化排序，
+将原本离散的拓扑结构转换为可逆的序列输入，实现对子图的近无损、可逆序列化编码。
+在此基础上，引入Graph Eulerian Transformer（GET）图编码器，
+在大规模真实图混合数据集上基于SMTP任务对欧拉路径序列进行建模，
+同时引入节点类型、度数等结构特征作为附加信号，
+以获得既能保留原始拓扑结构、又适配大语言模型输入形式的高质量图表征。
+本文将在第 3 章节中详细介绍该改进方案的设计思路和实现细节。
 
 
 \textbf{2)多层次图—语言语义对齐阶段}
 
-第二阶段致力于图–语言多模态对齐。在保持预训练语言模型参数基本稳定的前提下，
-将图编码器产生的结构表征映射到语言嵌入空间，并结合全局对比、
-局部匹配以及生成式约束等多种训练信号，对图表示与文本表示进行联合优化。
-通过这一过程，模型逐步建立起“图结构—自然语言描述—任务指令”三者之间的一致语义空间，
-使得语言模型在接收图相关输入时能够“读懂”图特征，而不仅仅视其为无结构的附加向量。
+多层级表征对齐约束对应上述的第二个子任务。
+在获得图表征的基础上，本文进一步面向图–语言语义鸿沟问题。
+保持预训练语言模型参数冻结，
+将图编码器产生的结构表征映射到语言嵌入空间，设计多层次损失约束，
+对图表示与文本表示进行联合优化。
+具体而言，一方面通过InfoNCE损失拉近全局图级向量与对应整体文本描述的表征，
+提升跨模态空间的一致性；另一方面，局部token级对齐通过跨模态注意力机制\cite{Zhang2024GraphTranslatorAG}，
+将图结构单元与文本语义片段进行细粒度匹配，提升局部语义一致性；
+此外，采用生成式交叉熵损失训练图结构表征具备重建对应文本序列的能力，
+使模型内化文本的细粒度语义信息。
+三维度协同的跨模态对齐方案，
+显著提升图结构表征与文本语义表征在LLM嵌入空间中的有效对齐。
 
-\textbf{3)面向图结构推理的大模型后训练阶段}
 
-第三阶段面向强化学习驱动的后训练。
-在多种图推理与预测任务上，将图大语言模型视作策略生成器，
-令其给出包含中间分析步骤的推理链及最终答案，
-再借助图算法或规则系统对生成结果进行自动验证，
-构造可度量的奖励信号。在此基础上，通过策略优化方法对模型进行迭代更新，
-使其在满足结构约束的前提下，倾向于生成更准确、
-更连贯且更具可解释性的推理过程，同时提升在未见图结构与新任务上的泛化能力。
+\textbf{3) 面向图结构推理的大模型后训练阶段}
+
+第三阶段对应上述的第三至第五子任务。
+在前两阶段已获得统一图–语言表征的基础上，
+针对图推理与问答类任务，对图基础模型进行系统的后训练增强。
+该阶段由三个相互衔接的组成部分构成：监督式冷启动微调、基于可验证奖励的强化学习优化以及基于 HPT 的统一后训练框架，
+共同作用于模型的策略层，直接优化其生成的链式推理过程与最终答案。
+
+\textbf{监督式冷启动微调：}
+本工作首先通过监督式冷启动微调（CoT-SFT）为模型注入高质量的链式思维先验。
+受 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR} 和 G1\cite{Guo2025G1TL} 中拒绝采样构造 CoT 数据策略的启发，
+从真实图任务和合成图任务中采样一批图–问题实例 \((G,q)\)，
+采用 Qwen2.5-14B-Instruct 作为教师模型，
+在给定图结构编码与自然语言提示的条件下多次生成候选推理链与答案序列 \(y = (c,a)\)。
+随后利用精确图算法或任务特定校验器（verifier）自动评估答案正确性及结构约束，
+仅保留通过验真的样本，构成高置信度的 CoT 监督数据集。
+训练时冻结图结构编码与多模态对齐模块，仅对大语言模型参数进行条件语言建模微调，
+以最小化标准负对数似然损失，从而获得一套结构一致、语义合理的初始链式推理策略。
+
+\textbf{可验证奖励驱动的强化学习：}
+在监督式冷启动获得基础推理能力之后，引入基于可验证奖励的强化学习机制，
+以缓解图结构推理泛化性弱、对高质量标注依赖强的问题。
+将模型视作策略生成器 \(\pi_\theta(a \mid q,G)\)，
+在图结构 \(G\) 和查询 \(q\) 条件下生成包含中间分析步骤的推理链与答案
+\(y_{1:T} = (c_1,\ldots,c_T,a)\)。
+图算法或规则系统对生成结果进行自动验证，返回综合考虑答案正确性、路径合法性和约束满足程度的奖励。
+在优化层面，采用组式策略优化算法（GRPO）对模型进行迭代更新，
+每轮采样多组推理轨迹并按奖励排序，仅对高奖励轨迹对应的策略进行更新，
+在满足图结构约束的前提下强化准确且可验证的推理行为，
+同时缓解传统强化学习中探索效率低与训练不稳定的问题。
+
+\textbf{基于 HPT 的统一后训练框架：}
+参考混合后训练（HPT）的统一视角\cite{Lv2025TowardsAU}，
+本文将监督微调目标与强化学习目标纳入同一优化框架，通过动态权重调度实现二者的协同作用：
+\[
+\mathcal{J}_{\mathrm{HPT}}(\theta)
+=
+\alpha(\mathcal{P})\,\mathcal{J}_{\mathrm{GRPO}}(\theta)
++
+\beta(\mathcal{P})\,\mathcal{J}_{\mathrm{SFT}}(\theta),
+\]
+其中 \(\mathcal{P}\) 为当前批次的推理正确率，
+\(\alpha(\mathcal{P}) = \mathbb{I}[\mathcal{P} \geq \gamma]\)、\(\beta(\mathcal{P}) = 1 - \alpha(\mathcal{P})\)，阈值取 \(\gamma = 0.6\)。
+当模型在当前任务上的表现欠佳（\(\mathcal{P} < \gamma\)）时，以 SFT 信号为主巩固基础能力；
+当表现达到阈值（\(\mathcal{P} \geq \gamma\)）后，则更多依赖强化学习信号探索更复杂的推理空间。
+该框架将可验证规则奖励与动态信号融合机制结合起来，
+在无需人工偏好标注的前提下，仅依托合成图任务的内在可验证性，
+即可引导模型自主探索复杂图结构，生成逻辑清晰且可验证的推理链，
+为图基础模型的高效训练提供了一种可扩展的技术路径。
+
 
 
 \subsection{发行版和文本编辑器}
@@ -250,26 +484,26 @@ p_{\theta}\big((v_i,v_j)\in E \mid G,q\big) \in [0,1],
 
 
 % 和图一样，这里的htbp先不要管，先照抄
-\begin{table}[htbp]
-    \centering  % 依照规定 表格必须居中版心放置
-    \caption{\LaTeX 命令专用字符逃逸规则} % 表格题注，zjuthesis.cls 将其设置在表格之上
-    \label{tab:escape} % 交叉引用
-    \begin{tabu}{lllllllll} % 9 列均左对齐
-        \toprule % 头线
-        输出 & \#  & \$  & \&  & \_  & \{   & \}  & \~{}  & \`{} \\ % 注意到了这个换行符吗
-        \midrule % 中线
-        源码 &  % 感受一下这里的「逃逸」
-        \texttt{$\backslash$\#} &
-        \texttt{$\backslash$\$} &
-        \texttt{$\backslash$\&} &
-        \texttt{$\backslash$\_} &
-        \texttt{$\backslash$\{} &
-        \texttt{$\backslash$\}} &
-        \texttt{$\backslash$\~{}} &
-        \texttt{$\backslash$\`{}}\\
-        \bottomrule % 底线
-    \end{tabu}
-\end{table}
+% \begin{table}[htbp]
+%     \centering  % 依照规定 表格必须居中版心放置
+%     \caption{\LaTeX 命令专用字符逃逸规则} % 表格题注，zjuthesis.cls 将其设置在表格之上
+%     \label{tab:escape} % 交叉引用
+%     \begin{tabu}{lllllllll} % 9 列均左对齐
+%         \toprule % 头线
+%         输出 & \  & \$  & \&  & \_  & \{   & \}  & \~{}  & \`{} \\ % 注意到了这个换行符吗
+%         \midrule % 中线
+%         源码 &  % 感受一下这里的「逃逸」
+%         \texttt{$\backslash$\} &
+%         \texttt{$\backslash$\$} &
+%         \texttt{$\backslash$\&} &
+%         \texttt{$\backslash$\_} &
+%         \texttt{$\backslash$\{} &
+%         \texttt{$\backslash$\}} &
+%         \texttt{$\backslash$\~{}} &
+%         \texttt{$\backslash$\`{}}\\
+%         \bottomrule % 底线
+%     \end{tabu}
+% \end{table}
 
 至于反斜杠本身的逃逸方法，请见上一段文字或表格的源码。
 
