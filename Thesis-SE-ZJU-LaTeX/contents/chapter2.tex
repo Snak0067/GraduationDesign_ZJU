@@ -36,7 +36,7 @@ F_{\theta} : (G,q) \rightarrow (c,a),
 
 针对上述总体目标，本文将整体问题拆解为以下四个的子科学问题:
 
-\textbf{1）图结构的编码表征学习问题：}
+\textbf{1）图结构编码的表征学习问题：}
 给定文本属性图 \(G = (V,E,A,T)\) 和可学习的图编码器 \(\mathrm{Enc}_G: G \rightarrow \mathbb{R}^{N \times d_g}\)，定义结构保持性度量：
 \[
 \mathcal{I}_{\mathrm{struct}}(G, \hat{G}) = \frac{1}{|E|}\sum_{(i,j)\in E}\mathbb{I}[\hat{A}_{ij} = 1] + \frac{1}{|V|}\sum_{i\in V}\mathrm{sim}(t_i, \hat{t}_i)
@@ -322,34 +322,6 @@ GRPO 的策略优化目标为
 \(\eta\) 为学习率。
 该机制在无需人工偏好标注的前提下，
 利用可验证奖励和组内排序选择使策略逐步聚焦于结构合法、逻辑自洽且答案正确的推理模式。
-
-\textbf{基于 HPT 的统一后训练框架：}
-参考混合后训练（HPT）的统一视角\cite{Lv2025TowardsAU}，
-本文将监督微调目标与强化学习目标纳入同一优化框架，通过动态权重调度实现二者的协同作用：
-\[
-\mathcal{J}_{\mathrm{HPT}}(\theta)
-=
-\alpha(\mathcal{P})\,\mathcal{J}_{\mathrm{GRPO}}(\theta)
-+
-\beta(\mathcal{P})\,\mathcal{J}_{\mathrm{SFT}}(\theta),
-\]
-其中 \(\mathcal{P}\) 为当前批次的推理正确率，
-\(\alpha(\mathcal{P}) = \mathbb{I}[\mathcal{P} \geq \gamma]\)、\(\beta(\mathcal{P}) = 1 - \alpha(\mathcal{P})\)，阈值取 \(\gamma = 0.6\)。
-当模型在当前任务上的表现欠佳（\(\mathcal{P} < \gamma\)）时，以 SFT 信号为主巩固基础能力；
-当表现达到阈值（\(\mathcal{P} \geq \gamma\)）后，则更多依赖强化学习信号探索更复杂的推理空间。
-该框架将可验证规则奖励与动态信号融合机制结合起来，
-在无需人工偏好标注的前提下，仅依托合成图任务的内在可验证性，
-即可引导模型自主探索复杂图结构，生成逻辑清晰且可验证的推理链，
-为图基础模型的高效训练提供了一种可扩展的技术路径。
-
-形式化描述如下：
-设当前训练批次的推理正确率为：
- \[ \mathcal{P} = \frac{1}{|\mathcal{B}|} \sum_{(G,q)\in\mathcal{B}} \mathbb{I}\big[ \mathcal{V}_{\mathrm{ans}}\big(G,q,\pi_\theta(G,q)_a\big) = \mathrm{true} \big], \] 其中 $\mathcal{B}$ 
- 为当前批次，$\pi_\theta(G,q)_a$ 
- 表示策略 $\pi_\theta$ 针对 $(G,q)$ 生成的答案部分。
- 定义动态权重调度函数： 
- \[ \alpha(\mathcal{P}) = \mathbb{I}[\mathcal{P} \geq \gamma], \quad \beta(\mathcal{P}) = 1 - \alpha(\mathcal{P}), \quad \gamma = 0.6. \] 统一优化目标为监督损失与强化学习目标的加权组合： \[ \mathcal{J}_{\mathrm{HPT}}(\theta) = \alpha(\mathcal{P}) \cdot \mathcal{J}_{\mathrm{GRPO}}(\theta) + \beta(\mathcal{P}) \cdot \mathcal{L}_{\mathrm{SFT}}(\theta). \] 最终通过梯度优化获得图基础模型参数： \[ \theta^* = \arg\max_{\theta} \mathcal{J}_{\mathrm{HPT}}(\theta). \] 该框架通过可验证奖励与动态调度机制，自主平衡基础能力巩固与复杂推理探索，
-在无需人工偏好数据的前提下实现高效、可扩展的图结构推理训练。
 
 
 
