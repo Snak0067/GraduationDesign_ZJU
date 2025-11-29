@@ -41,12 +41,12 @@ F_{\theta} : (G,q) \rightarrow (c,a),
 通过半欧拉路径构造可逆序列 \(\pi(S(v)) = (e_1,\dots,e_L)\) 
 并离散化为图 token 序列 \(z_v \in \mathcal{V}_g^L\)，
 学习图编码器 \(\mathrm{Enc}_G: \mathcal{V}_g^L \rightarrow \mathbb{R}^{L \times d_g}\)，
-通过池化算子得到子图级表征，其公式为2.1:
+通过池化算子得到子图级表征，其公式为(2.1)：
 \begin{equation}
 h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 \end{equation}
 以 SMTP 任务为自监督目标，
-最小化表征损失，其公式定义为2.2：
+最小化表征损失，其公式定义为(2.2)：
 \begin{equation}
     \mathcal{L}_{\mathrm{repr}} = \mathbb{E}_{(G,v)}\big[ \ell_{\mathrm{repr}}\big(\mathrm{Enc}_G(z_v), S(v)\big) \big]
 \end{equation}
@@ -55,7 +55,7 @@ h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 \textbf{2）图-语义跨模态优化建模问题：}
 在获得图结构表征 \(h_v^\mathrm{glob}\)的基础上，解决图拓扑特征与文本语义特征在表示空间中的割裂问题，实现从异构特征空间到统一语义空间的投影，保证相同语义概念在跨模态空间中具有高相似度。
 形式化描述如下：设图表征维度为 \(d_g\)，语言模型嵌入维度为 \(d_\ell\)，引入映射层 \(f_{\mathrm{proj}}: \mathbb{R}^{d_g} \rightarrow \mathbb{R}^{d_\ell}\) 得到投影表征 \(\tilde{h}_v = f_{\mathrm{proj}}(h_v^{\mathrm{glob}})\)；通过文本编码函数 \(\phi_{\mathrm{text}}\) 得到描述文本的池化表征 \(s_v = \mathrm{Pool}(\phi_{\mathrm{text}}(t_v))\)。
-设计三维度对齐损失函数\(\mathcal{L}_{\mathrm{align}}\)，其公式定义如2.3所示：
+设计三维度对齐损失函数\(\mathcal{L}_{\mathrm{align}}\)，其公式定义如(2.3)所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{align}} = \lambda_1 \mathcal{L}_{\mathrm{con}} + \lambda_2 \mathcal{L}_{\mathrm{match}} + \lambda_3 \mathcal{L}_{\mathrm{gen}}
 \end{equation}
@@ -67,13 +67,14 @@ h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 核心目标是在冻结图编码与跨模态对齐模块的约束下，优化语言模型参数，
 使其能够生成结构一致、语义合理的推理链与答案，实现推理能力的冷启动。
 数学表达：
-设冻结模块将整图 G 映射为条件表征\(\tilde{H}\)，其公式定义如2.4所示：
+设冻结模块将整图 G 映射为条件表征\(\tilde{H}\)，其公式定义如(2.4)所示：
 \begin{equation}
     \tilde{H} = f_{\mathrm{proj}}(\mathrm{Enc}_G(G)) \in \mathbb{R}^{N \times d_\ell}
 \end{equation}
 语言模型嵌入函数 \(\phi_{\mathrm{LLM}}\) 
 将问题 q 编码为 \(\phi_{\mathrm{LLM}}(q) \in \mathbb{R}^{|q| \times d_\ell}\)，联合输入为 \(x = [\tilde{H}; \phi_{\mathrm{LLM}}(q)]\)。模型需生成推理链 - 答案序列 \(y = (c,a)\)，
-优化目标为最小化条件语言建模损失\(\mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) \)，其公式定义如2.5所示：
+优化目标为最小化条件语言建模损失\(\mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) \)，
+其公式定义如(2.5)所示：
 \begin{equation}
     \mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) = - \mathbb{E}_{(G,q,y)\sim\mathcal{D}_{\mathrm{CoT}}} \left[ \sum_{t=1}^{T} \log p_{\theta_{\mathrm{LLM}}} \big( y_t \mid x,\ y_{<t} \big) \right]
 \end{equation}
@@ -85,14 +86,14 @@ h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 使模型聚焦于结构合法、逻辑自洽且答案正确的推理模式，
 最大化奖励加权的策略目标。
 形式化描述如下：将模型形式化为条件策略生成器
- \(\pi_\theta(y \mid G, q) = p_\theta((c,a) \mid G, q)\)，
-设计可验证奖励函数\(\mathcal{R}(G,q,y)\)，其公式表示如2.6所示：
+ \(\pi_\theta(y \mid G, q) = p_\theta((c,a) \mid G, q)\)，
+设计可验证奖励函数\(\mathcal{R}(G,q,y)\)，其公式表示如(2.6)所示：
 \begin{equation}
 \mathcal{R}(G,q,y) = \alpha \cdot \mathbb{I}\big[\mathcal{V}_{\mathrm{ans}}(G,q,a)=\mathrm{true}\big] + \beta \cdot \mathrm{PathScore}(G,c) + \gamma \cdot \mathrm{ConstraintSat}(q,c)    
 \end{equation}
 其中 \(\alpha+\beta+\gamma=1\)，\(\mathcal{V}_{\mathrm{ans}}\) 为答案验证器，
 \(\mathrm{PathScore}\) 为拓扑一致性得分，\(\mathrm{ConstraintSat}\) 为约束满足度。
-采用 GRPO 算法最大化策略目标，其公式表示如2.7所示：
+采用 GRPO 算法最大化策略目标，其公式表示如(2.7)所示：
 \begin{equation}
 \mathcal{J}_{\mathrm{GRPO}}(\theta) = \mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}}} \left[ \frac{1}{|\mathcal{Y}^+|} \sum_{y\in\mathcal{Y}^+} \sum_{t=1}^{T_y} \log \pi_\theta(y_t \mid G, q, y_{<t}) \cdot \big(r(y) - b(G,q)\big) \right]
 \end{equation}
@@ -115,7 +116,7 @@ G = (V,E,A,T)
 V_L \subseteq V
 \)
 上，每个节点 \(v \in V_L\) 关联有真实标签 \(y_v \in \mathcal{C}\)。
-模型需要在利用图结构与文本属性的前提下，学习一个判别函数\(f_{\theta}^{\mathrm{node}}\)，其公式表示如2.8所示
+模型需要在利用图结构与文本属性的前提下，学习一个判别函数\(f_{\theta}^{\mathrm{node}}\)，其公式表示如(2.8)所示
 \begin{equation}
     f_{\theta}^{\mathrm{node}} : (G,v) \rightarrow \Delta^{C-1},
 \end{equation}
@@ -127,7 +128,7 @@ V_L \subseteq V
 在训练阶段，节点分类可表示为最小化经验风险的优化问题。记训练数据集为
 \(
 \mathcal{D}_{\mathrm{cls}} = \{(G, v, y_v)\}
-\)，则分类损失定义如2.9所示：
+\)，则分类损失定义如(2.9)所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{cls}}(\theta)
 =
@@ -165,7 +166,7 @@ c = (c_1,\dots,c_T)
 y = (c,a)
 \)。
 记真实答案为 \(a^{\ast}\)，图推理任务可以形式化为条件生成和决策问题：学习一个图基础模型
-\(F_{\theta}\)，其公式表示如2.10所示：
+\(F_{\theta}\)，其公式表示如(2.10)所示：
 \begin{equation}
     F_{\theta} : (G,q) \rightarrow (c,a),
 \end{equation}
@@ -173,7 +174,7 @@ y = (c,a)
 在给定 \((G,q)\) 的条件下最大化生成正确答案的概率，同时推理链 \(c\) 与图结构及问题约束保持一致。设标注数据集为
 \(
 \mathcal{D}_{\mathrm{reason}} = \{(G_i,q_i,a_i^{\ast})\}_{i=1}^N
-\)，则对应的条件语言建模目标可写如2.11所示：
+\)，则对应的条件语言建模目标可写如(2.11)所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{reason}}(\theta)
 =
@@ -273,7 +274,7 @@ y = (c,a)
 准确率用于衡量模型预测正确的节点占总节点数的比例，是分类任务最基础的性能基准，
 直观反映模型整体预测能力，是图节点分类中最常用的指标之一。
 设测试集共有 $N$ 个节点，第 $i$ 个节点的真实标签为 $y_i$，
-模型预测标签为 $\hat{y}_i$，则测试准确率计算公式如2.12所示：
+模型预测标签为 $\hat{y}_i$，则测试准确率计算公式如(2.12)所示：
 \begin{equation}
 \mathrm{Acc} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{I}\{\hat{y}_i = y_i\},
 \end{equation}
@@ -288,7 +289,7 @@ y = (c,a)
 
 设第 $c$ 类的真正例、假正例与假反例分别为 
 $\mathrm{TP}_c$、$\mathrm{FP}_c$ 与 $\mathrm{FN}_c$，
-其类级精确率、召回率以及类级 $F1$ 公式如2.13所示：
+其类级精确率、召回率以及类级 $F1$ 公式如(2.13)所示：
 \begin{equation}
 P_c = \frac{\mathrm{TP}_c}{\mathrm{TP}_c + \mathrm{FP}_c}, \qquad
 R_c = \frac{\mathrm{TP}_c}{\mathrm{TP}_c + \mathrm{FN}_c}, \qquad
@@ -298,25 +299,25 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 
 \begin{itemize}
   \item \textbf{Micro-F1}：在全局层面汇总所有类别的
-   \(\mathrm{TP},\mathrm{FP},\mathrm{FN}\)，其公式如2.14所示
+   \(\mathrm{TP},\mathrm{FP},\mathrm{FN}\)，其公式如(2.14)所示
   \begin{equation}
   \mathrm{TP}=\sum_c \mathrm{TP}_c,\quad
   \mathrm{FP}=\sum_c \mathrm{FP}_c,\quad
   \mathrm{FN}=\sum_c \mathrm{FN}_c,
   \end{equation}
-  得到全局精确率\(P_{\text{micro}}\)与召回率\(R_{\text{micro}}\)，计算方式如2.15所示：
+  得到全局精确率\(P_{\text{micro}}\)与召回率\(R_{\text{micro}}\)，计算方式如(2.15)所示：
   \begin{equation}
   P_{\text{micro}}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}},\qquad
   R_{\text{micro}}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}},
   \end{equation}
-  从而计算得到最终\(F1_{\text{micro}}\)公式如2.16所示：
+  从而计算得到最终\(F1_{\text{micro}}\)公式如(2.16)所示：
   \begin{equation}
   F1_{\text{micro}}=\frac{2 P_{\text{micro}} R_{\text{micro}}}{P_{\text{micro}}+R_{\text{micro}}}.
   \end{equation}
 
   Micro-F1 对样本量较大的类别赋予更高权重，通常反映模型在整体样本层面的平均性能。
 
-  \item \textbf{Macro-F1}：对所有类别的 F1 分数取算术平均，不考虑类别样本量差异，平等对待每个类别，核心用于缓解类别不均衡带来的评估偏差，精准刻画模型对少数类的预测能力。其计算公式如2.17所示：
+  \item \textbf{Macro-F1}：对所有类别的 F1 分数取算术平均，不考虑类别样本量差异，平等对待每个类别，核心用于缓解类别不均衡带来的评估偏差，精准刻画模型对少数类的预测能力。其计算公式如(2.17)所示：
   \begin{equation}
   F1_{\text{macro}}=\frac{1}{C}\sum_{c=1}^{C} F1_c,
   \end{equation}
@@ -330,7 +331,7 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 
 设对某一类别，模型对所有节点给出置信度分数，
 遍历不同阈值可得到一系列“真正例率–假正例率”（TPR–FPR）对，描绘出 ROC 曲线。
-其面积计算如公式2.18所示：
+其面积计算如公式(2.18)所示：
 \begin{equation}
 \mathrm{AUC} = \int_{0}^{1} \mathrm{TPR}(\mathrm{FPR})\, d\mathrm{FPR},
 \end{equation}
@@ -343,7 +344,7 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 将每道图推理题视作一个判定问题，采用 Test Accuracy 作为核心指标。
 
 设测试集中共有 $N$ 个图推理问题，第 $i$ 个问题的标准答案为 $a_i$，
-模型输出最终答案为 $\hat{a}_i$，定义准确率\(\mathrm{Acc}\)计算公式如2.19所示：
+模型输出最终答案为 $\hat{a}_i$，定义准确率\(\mathrm{Acc}\)计算公式如(2.19)所示：
 \begin{equation}
 \mathrm{Acc} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{I}\{\hat{a}_i \equiv a_i\},
 \end{equation}
@@ -375,7 +376,8 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 \subparagraph{Recall@k}
 在跨模态／零样本检索实验中，对于给定图节点表征，检索最匹配的类别描述或原型向量。本文采用 Recall@k 评估前 $k$ 个候选中召回真实类别的能力。Recall@k 在跨模态检索和表示对齐任务中被广泛采用，用于衡量嵌入空间的一致性。
 
-设某一查询（如一个节点）对应的相关目标集合大小为 $R$，在排序结果的前 $k$ 个中命中的相关目标数为 $r_k$，对所有查询求平均，可得：
+设某一查询（如一个节点）对应的相关目标集合大小为 $R$，
+在排序结果的前 $k$ 个中命中的相关目标数为 $r_k$，对所有查询求平均，可得其计算公式如(2.20)所示：
 \begin{equation}
 \mathrm{Recall@}k = \frac{1}{Q} \sum_{q=1}^{Q} \frac{r_k^{(q)}}{R^{(q)}},
 \end{equation}

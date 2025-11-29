@@ -61,12 +61,353 @@
 本章3.5节展示在节点分类任务上的性能测评与实验分析，XX
 
 
+\section{基于预训练语言大模型的图结构理解框架} 
+参考 LLaGA\cite{Chen2024LLaGALL} 中的网络架构，本文构建的基于预训练语言大模型的图结构理解框架如图~X 所示。整体由四个核心模块构成，分别为：  
+（1）图结构特征编码器 \(\mathrm{Enc}_G\)，负责从原始图中抽取节点的拓扑信息，并将其转化为结构化的节点级表示；  
+（2）文本特征编码器 \(\mathrm{Enc}_T\)，负责对节点附带的自然语言描述进行语义编码；  
+（3）图结构--语义对齐网络 \(N_A\)，用于在共享表示空间中实现结构特征与语义特征之间的跨模态对齐；  
+（4）语言模型编解码器 \(\mathrm{Dec}_T\)，通过自回归解码建模条件分布 \(p(y\mid G,T,i)\)，生成节点类别标签及其自然语言解释。
 
-\section{基于LLM的图结构理解框架} 
+\textbf{图结构编码器 \(\mathrm{Enc}_G\)：}
+给定文本属性图
+\(G=(V,E,A,T)\)，
+图结构编码器 \(\mathrm{Enc}_G\) 的目标是构建映射
+\(
+\mathrm{Enc}_G:\mathcal{X}_G \rightarrow \mathbb{R}^{d_g},
+\)
+将节点的局部或全局拓扑信息压缩为节点级结构向量
+\(h_v^{\mathrm{struc}} \in \mathbb{R}^{d_g}\)，
+并作为跨模态对齐与节点分类的结构语义基底。
+在 LLaGA 范式下，图编码器 \(\mathrm{Enc}_G\) 通过邻域采样模板构建结构序列。
+
+具体而言，给定中心节点 \(v\)，首先利用 \(h\)-跳邻域采样算子
+\(\mathcal{S}_\tau\)（其中 \(\tau\) 表示 ND、HO 等模板）
+获得局部子图
+\(
+S_\tau(v)=(V_v,E_v,A_v,T_v)\subseteq G
+\)。
+随后，采用模板化线性化算子
+\(\phi_\tau:S_\tau(v)\rightarrow \mathcal{W}^{L_v}\)
+将子图转化为节点和边关系的自然语言 token 序列
+\(s_v=(w_1,\dots,w_{L_v})\)，
+再经由预训练语言模型的嵌入层
+\(\mathrm{Emb}_T\) 映射为向量序列 \(X_v\)，如式~(3.1) 所示：
+\begin{equation}
+    X_v = \mathrm{Emb}_T(s_v)\in\mathbb{R}^{L_v\times d_t}.
+\end{equation}
+
+随后利用共享的 Transformer 层 \(\mathrm{Trm}(\cdot)\) 进行上下文建模，并通过池化算子 \(\mathrm{Pool}(\cdot)\) 得到最终结构向量 \(h_v^\mathrm{struc}\)，其形式如式~(3.2)：
+\begin{equation}
+    h_v^{\mathrm{struc}} = \mathrm{Pool}\big(\mathrm{Trm}(X_v)\big)\in\mathbb{R}^{d_g}.
+\end{equation}
+
+在该范式中，图结构被间接嵌入到自然语言序列中，其表征能力依赖于模板 
+\(\tau\) 对局部拓扑的覆盖程度以及预训练语言模型对结构描述语句的编码能力。
+与此不同，本文在图表征部分采用更注重结构保真与粒度可控性的编码方式，
+在图侧显式构建基于欧拉路径的图到 token 序列化机制与专用图结构编码器，
+将子图拓扑在同构意义下近似无损地映射到统一的离散表示空间。
+相关改进编码策略与实现细节将在第~3.3 节中系统阐述。
+
+\textbf{文本特征编码器 \(\mathrm{Enc}_T\)：}
+为了对节点及其上下文的自然语言描述进行编码，本文采用预训练语言模型 Qwen2.5\cite{Yang2024Qwen25TR} 作为文本特征编码器。
+形式化地，仍设文本属性图为
+\(G=(V,E,A,T)\)，其中 \(T=\{t_i\}_{i=1}^{N}\) 为节点文本属性集合，
+第 \(i\) 个节点的文本描述记为
+\(
+t_i = (w_{i,1},\dots,w_{i,L_i}),
+\)
+其中 \(w_{i,j}\) 为第 \(j\) 个词元，\(L_i\) 为文本长度。
+文本特征编码器 \(\mathrm{Enc}_T\) 基于预训练语言模型的分词器与 Transformer 主干，
+将自然语言序列映射到连续语义空间，记为
+\(
+\mathrm{Enc}_T : \mathcal{V}_{\text{text}}^{\ast} \rightarrow \mathbb{R}^{d_t},
+\)
+其中 \(\mathcal{V}_{\text{text}}\) 为文本词表，\(d_t\) 为语言模型隐藏维度，输出为节点级语义向量 \(h_i^{\text{text}}\in\mathbb{R}^{d_t}\)。
+
+在具体表征范式上，本文通过指令化模板将节点文本与任务说明拼接为统一的语言输入。
+记预训练语言模型的分词器为 \(\tau(\cdot)\)，
+则节点 \(v_i\) 的输入文本（包含节点属性描述及可选的全局任务指令）
+记为 \(\tilde{t}_i\)，其 token 序列如式~(3.3)：
+\begin{equation}
+    x_i = \tau(\tilde{t}_i) = (x_{i,1},\dots,x_{i,L_i'}) \in \mathcal{V}_{\text{text}}^{L_i'},
+\end{equation}
+其中 \(L_i'\) 为指令化后序列长度。
+令 \(E \in \mathbb{R}^{|\mathcal{V}_{\text{text}}|\times d_t}\) 为
+预训练语言模型的嵌入矩阵，\(\Phi_{\text{LM}}\) 为由多层 Transformer 堆叠构成的编码算子，则文本特征编码器的序列级输出可表示为式~(3.4)：
+\begin{equation}
+    H_i^{(t)} = \Phi_{\text{LM}}(E(x_i)) \in \mathbb{R}^{L_i' \times d_t},
+\end{equation}
+并通过池化或特定位置读取获得节点级语义向量 \(h_i^{\text{text}}\)，其公式表达如~(3.5)所示：
+\begin{equation}
+    h_i^{\text{text}} = \mathrm{Pool}_t\big(H_i^{(t)}\big) \in \mathbb{R}^{d_t},
+\end{equation}
+其中 \(\mathrm{Pool}_t(\cdot)\) 可实现为对有效 token 的平均或加权池化。
+
+与 LLaGA\cite{Chen2024LLaGALL} 的设计一致，\(\mathrm{Enc}_T\) 
+与后续语言模型编解码器 \(\mathrm{Dec}_T\) 共享同一预训练语言模型参数，
+即上述分词器 \(\tau(\cdot)\)、嵌入矩阵 \(E\) 与 Transformer 主干 \(\Phi_{\text{LM}}\) 
+在跨模态对齐预训练和下游任务阶段保持冻结或仅进行轻量调优，从而最大限度保留预训练语言模型的知识与生成能力。
+
+\textbf{图结构--语义对齐网络 \(N_A\)：}
+图结构--语义对齐网络 \(N_A\) 参考了 Tang 等人\cite{Tang2023GraphGPTGI} 提出的跨模态对齐思想，旨在在统一框架下桥接图结构空间与自然语言语义空间，通过对齐约束使预训练语言模型具备理解图结构概念并执行节点分类的能力。形式化地，预训练图编码器输出的节点级结构向量为
+\(h_i^{\mathrm{struc}}\in\mathbb{R}^{d_g}\)，
+文本特征编码器得到的节点级语义表示为
+\(h_i^{\mathrm{text}}\in\mathbb{R}^{d_t}\)。
+图结构--语义对齐网络通过一组可学习投影函数，即图特征投影网络 \(f_g\) 和语义特征投影网络 \(f_t\)，其形式如式~(3.6)：
+\begin{equation}
+    f_g:\mathbb{R}^{d_g}\rightarrow\mathbb{R}^{d_a},\qquad 
+    f_t:\mathbb{R}^{d_t}\rightarrow\mathbb{R}^{d_a},
+\end{equation}
+将两类表征映射至共享对齐空间
+\(\mathbb{R}^{d_a}\)，
+得到跨模态对齐向量 \(\tilde{h}_i^{\mathrm{struc}}\) 和 \(\tilde{h}_i^{\mathrm{text}}\)，
+其公式表达如式~(3.7)：
+\begin{equation}
+    \tilde{h}_i^{\mathrm{struc}} = f_g(h_i^{\mathrm{struc}}),
+    \qquad
+    \tilde{h}_i^{\mathrm{text}} = f_t(h_i^{\mathrm{text}}).
+\end{equation}
+
+在上述全局对齐机制基础上，本文进一步引入多尺度对齐损失函数，从全局节点级对齐、局部子结构对齐和生成式对齐等多个维度强化图结构与文本语义之间的关联建模，使跨模态表征在结构保真与语义一致性方面得到协同优化。相关对齐损失的构造与优化细节将在第~3.4 节中系统展开。
+
+\textbf{语言模型编解码器 \(\mathrm{Dec}_T\)：}
+语言模型编解码器 \(\mathrm{Dec}_T\) 作为本框架的推理与生成核心，
+基于跨模态对齐后的节点表征与任务指令建模条件分布 \(p(y\,|\,G,T,i)\)，
+从而输出节点类别标签及其自然语言解释。形式化地，\(\mathrm{Dec}_T\) 以预训练语言模型为基座，将对齐空间中的节点表示向量与任务提示拼接为统一的语言输入序列，并通过自回归解码机制生成对应的预测输出。在此过程中，\(\mathrm{Dec}_T\) 与 \(\mathrm{Enc}_T\) 共享参数，使结构信息能够以最小干预的方式注入语言模型主干，使其在保持原有语言理解与生成能力的同时具备对图结构敏感的推理能力。由于跨模态对齐阶段已将图结构嵌入到语言可解释的语义空间中，\(\mathrm{Dec}_T\) 在解码时无需额外的图侧模块即可完成节点分类、结构解释以及与任务相关的自然语言生成，
+为整个框架提供统一且可扩展的语言推理接口。
+
 
 \section{基于欧拉路径的图结构表征方式改进}
-\subsection{图到Token序列的无损编码设计}
+
+在传统 Graph--LLM 框架中，图结构通常通过启发式邻域展开或模板化文本描述线性化。
+此类方法虽便于直接接入语言模型，但往往难以同时保证拓扑信息的完整性与节点顺序的一致性，
+易引入结构冗余或信息丢失。
+为缓解上述问题，本文在 GraphGPT~\cite{Zhao2023GraphGPTGP} 思路基础上，
+构建一种基于（semi-）Eulerian 路径的图表征方案，
+在图侧显式建立可逆的图到序列映射，实现对子图拓扑的近似无损线性化编码。
+
+\subsection{图到 Token 序列的无损编码设计}
+
+图到 token 序列的核心目标是构造映射
+\(\Phi: \mathcal{G} \rightarrow \mathcal{V}^\ast\)，
+其中 \(\mathcal{G}\) 为有限图集合，\(\mathcal{V}\) 为有限词表，
+\(\mathcal{V}^\ast\) 为有限长度 token 序列集合。
+理想编码应满足三项性质：
+（1）\emph{无损可逆性}：存在逆映射
+\(\Psi: \mathcal{V}^\ast \rightarrow \mathcal{G}\)，
+使得 \(\Psi(\Phi(G)) \cong G\)（同构意义下）；
+（2）\emph{结构完整性}：序列中显式或隐式包含全部节点、边及其属性信息；
+（3）\emph{尺度适应性}：在统一框架下同时适配小规模分子图与超大规模网络。
+
+为此，本文采用分而治之的策略：
+对于中小规模图，直接基于（半）欧拉路径进行序列化；
+对于超大规模图，先通过子图采样将全图分解为若干局部子图，
+再结合节点身份编码与属性 token 化实现对全局结构的间接覆盖。
+在不引起歧义的前提下，下文统一以 \(G\) 表示待序列化的（子）图。
+整体过程形式化如算法~\ref{alg:graph_to_token} 所示。
+
+\begin{algorithm}[t]
+\caption{图到Token序列的改进编码算法}
+\label{alg:graph_to_token}
+\KwIn{带属性图 $G=(V,E,X,A)$}
+\KwOut{Token 序列 $s \in \mathcal{V}^\ast$}
+
+\textbf{Step 1: 连通性增强}\;
+检查 $G$ 是否连通；\;
+\If{$G$ 非连通}{
+  添加合成边 $E_{\mathrm{syn}}$ 连接所有连通分量，标记为 \texttt{[EDGE\_JUMP]} 及默认属性\;
+}
+$\tilde{G} \leftarrow (V, E \cup E_{\mathrm{syn}}, X, A)$\;
+
+\textbf{Step 2: 欧拉化预处理}\;
+\If{$\tilde{G}$ 非(半)欧拉图}{
+  通过 Eulerization 添加最少数量的边 $E_{\mathrm{dup}}$ 使其满足欧拉条件\;
+}
+$G^{\mathrm{eu}} \leftarrow (V, E \cup E_{\mathrm{syn}} \cup E_{\mathrm{dup}}, X, A)$\;
+
+\textbf{Step 3: (半)欧拉路径采样}\;
+计算 $G^{\mathrm{eu}}$ 上所有可行的(半)欧拉路径集合 $\mathcal{P}_{G^{\mathrm{eu}}}$，
+从中随机采样 $P\sim\mathcal{U}(\mathcal{P}_{G^{\mathrm{eu}}})$\;
+记 $P=(v_0,\dots,v_m)$，其中 $m=|E^{\mathrm{eu}}|$\;
+
+\textbf{Step 4: 节点重索引}\;
+令 $\pi(v)$ 为节点 $v$ 在 $P$ 中的首次出现位置；
+采样偏移量 $r\sim \mathcal{U}\{0,\dots,N-1\}$，其中 $N > \max|V|$\;
+循环重索引：$\pi_r(v) = (\pi(v)+r)\bmod N$\;
+
+\textbf{Step 5: 属性附着与序列构造}\;
+根据序列格式 $\textit{format} \in \{\text{short},\text{long},\text{prolonged}\}$ 构造 $s$：
+
+\Switch{format}{
+  \Case{short}{$s = (\pi_r(v_0),\dots,\pi_r(v_m))$;}
+  \Case{long}{$s = (\text{node\_id},\text{edge\_type},\text{node\_id},\dots)$;}
+  \Case{prolonged}{$s = (\text{node\_id},\text{edge\_type},\text{edge\_attrs},\text{node\_attrs},\dots)$;}
+}
+
+\Return{$s$}\;
+\end{algorithm}
+
+\subsubsection{基于（半）欧拉路径的图序列化}
+
+\textbf{欧拉化预处理与路径构造。}
+为确保存在覆盖所有边的（半）欧拉路径，
+首先对原始图 \(G\) 进行连通性与欧拉特性预处理。
+记 \(\tilde{G} = (V, \tilde{E}, X, A)\) 为连通化后的图，
+其中在不同连通分量之间添加合成边
+\(E_{\mathrm{syn}}\)，使得
+\(
+\tilde{E} = E \cup E_{\mathrm{syn}}
+\)
+对应连通图，
+合成边统一以特殊 token（如 \texttt{[EDGE\_JUMP]}）与默认属性标记。
+若 \(\tilde{G}\) 仍非（半）欧拉图，则进一步构造欧拉多重图 \(G^{\mathrm{eu}}\)，
+其公式如(3.8)所示：
+\begin{equation}
+    G^{\mathrm{eu}} = (V, E^{\mathrm{eu}}, X, A),
+\end{equation}
+其中
+\(E \subseteq E^{\mathrm{eu}}\)，
+通过最小边复制策略保证
+\(G^{\mathrm{eu}}\) 满足所有节点度数为偶数或恰有两个奇度节点的条件。
+在此基础上，存在一条（半）欧拉路径 $P$，如公式(3.9)所示：
+\begin{equation}
+    P = (v_0, e_1, v_1, \dots, e_m, v_m),
+\end{equation}
+使得每条边 \(e_i \in E^{\mathrm{eu}}\) 恰好被遍历一次，
+其中 \(m = |E^{\mathrm{eu}}|\)。
+对应的节点序列记为
+\(
+P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
+\)，
+长度为 \(m+1\)。
+在实际实现中，常以 \(m\) 近似表示节点序列长度，此时共有 \(m-1\) 条边与之对应。
+
+\textbf{节点重索引与循环偏移。}
+原始节点编号通常带有实现偏置，
+若直接用于 token 化，会导致结构 token 频率高度不均。
+为此，首先基于路径首次出现顺序定义重索引映射，计算公式如(3.10)所示：
+\begin{equation}
+    \pi: V \rightarrow \{0, 1, \dots, n-1\},
+\end{equation}
+其中 \(n = |V|\)，
+\(\pi(v)\) 表示节点 \(v\) 在 \(P^{\mathrm{node}}\) 中的首次出现位置。
+进一步，为缓解不同图尺度间的索引分布偏移，其公式如(3.11)所示
+引入循环重索引机制：
+\begin{equation}
+    \pi_r(v) = (\pi(v) + r) \bmod N,
+\end{equation}
+其中 \(r\) 为在预设区间内均匀采样的随机整数,
+\(N\) 为大于最大节点数的超参数。
+该设计一方面在训练过程中均匀激活不同索引 token，
+另一方面避免测试阶段出现“大编号节点在预训练中从未出现”的 OOD 情形。
+基于上述重索引，可得到仅含结构信息的节点序列，其公式如(3.12)所示：
+\begin{equation}
+    s^{\mathrm{struct}} = 
+    \big(\pi_r(v_0), \pi_r(v_1), \dots, \pi_r(v_{m-1})\big),
+    \quad s^{\mathrm{struct}} \in \mathcal{V}^m.
+\end{equation}
+
+\textbf{属性附着与序列长度控制。}
+在结构序列基础上，还需整合节点与边属性。
+记每条边携带 \(d_e\) 维离散或量化后的属性，
+每个节点携带 \(d_v\) 维属性。
+在最一般的“prolonged” 格式下，
+每对相邻节点 \((v_{i-1}, v_i)\) 被展开为：
+“节点索引 + 边类型 + $d_e$ 个边属性 token + $d_v$ 个节点属性 token”，
+对应每个“边步长”的 token 数量表示如(3.13)所示：
+\begin{equation}
+    \ell = 2 + d_e + d_v.
+\end{equation}
+由此可定义三类典型编码形式：
+\begin{align}
+    &\text{短格式（short）：} 
+    &&L_{\mathrm{short}} = m, \\
+    &\text{长格式（long）：} 
+    &&L_{\mathrm{long}} = 2(m-1) + 1, \\
+    &\text{扩展格式（prolonged）：} 
+    &&L_{\mathrm{pro}} = \ell (m-1) + 1,
+\end{align}
+其中 \(L_{\cdot}\) 为最终序列长度。
+本文在主要实验中采用接近 prolonged 的设定，
+以最大程度暴露节点与边的语义属性，
+同时通过上述长度公式显式控制不同图规模与属性维度下的最大序列长度，
+便于在显存和上下文窗口约束下进行配置。
+
+在上述构造下，图到序列的整体映射可以统一写为公式(3.17)：
+\begin{equation}
+    s = \Phi(G) = 
+    \Phi_{\mathrm{attr}}\!\big(P^{\mathrm{node}}, X, A; \pi_r, \text{format}\big),
+\end{equation}
+其中 \(\Phi_{\mathrm{attr}}\) 表示在固定欧拉路径与重索引策略下的属性附着算子。
+
+\textbf{无损可逆性与理论保证。}
+由于欧拉路径遍历了图中每一条边，
+且相邻结构 token 与边之间一一对应，
+在给定边方向与特殊边类型标记的前提下，
+可以从序列恢复出多重图
+\(
+\hat{G}^{\mathrm{eu}} = (V, \hat{E}^{\mathrm{eu}}, X, A)
+\)。
+进一步移除 Eulerization 引入的边复制与合成跳转边 \(E_{\mathrm{syn}}\)，
+即可得到与原图 \(G\) 同构的图。
+因此存在逆映射
+\(
+\Psi: \mathcal{V}^\ast \rightarrow \mathcal{G}
+\)，
+满足公式(3.18)：
+\begin{equation}
+    \Psi(\Phi(G)) \cong G,
+\end{equation}
+从而在同构意义下实现图到序列的无损可逆编码。
+这一理论性质为后续基于序列的生成式预训练与图重建任务提供了坚实基础。
+
+\subsubsection{大图适配：子图采样与局部序列化}
+
+对于节点与边数量高达数十亿规模的大图，
+在全图上直接执行欧拉化与路径搜索不仅计算和内存开销难以接受，
+得到的序列长度也往往远超 Transformer 的上下文窗口。
+因此，本文在大图场景下引入子图采样机制，
+先将全图拆解为若干尺寸可控的局部子图，再对每个子图独立进行欧拉路径序列化。
+
+记大图为 \(G^{\mathrm{big}}\)，
+采样算子为
+\(
+\mathcal{S}_\theta
+\)，
+其中 \(\theta\) 表示采样超参数（如 hop 数与每层邻居数等）。
+对一组中心节点或中心边 \(\{c_k\}_{k=1}^K\)，
+采样得到局部子图集合，其公式如(3.19)所示：
+\begin{equation}
+    H_k = \mathcal{S}_\theta(G^{\mathrm{big}}, c_k),
+    \quad k = 1, \dots, K.
+\end{equation}
+每个子图 \(H_k\) 通过上述欧拉路径编码获得局部序列，其公式如(3.20)所示：
+\begin{equation}
+    s_k = \Phi(H_k),
+    \quad |s_k| \leq L_{\max} \leq L_{\mathrm{ctx}},
+\end{equation}
+其中 \(L_{\mathrm{ctx}}\) 为 Transformer 的上下文窗口长度，
+\(L_{\max}\) 由采样参数与属性格式联合决定。
+在具体实现中，可采用 ShaDowKHop 等局部采样器，
+通过调整 hop 深度与邻居数，使采样子图既覆盖足够的局部结构上下文，
+又在序列长度与计算成本之间取得平衡。
+
+与简单地对超长序列进行硬截断相比，
+“子图采样 $\rightarrow$ 独立欧拉序列化”的方案具有三方面优势：
+（1）避免因截断导致的长程依赖和关键结构信息丢失；
+（2）显著降低单次欧拉化与前向传播的计算复杂度，使大图上的预训练在工程上可行；
+（3）在预训练与下游微调阶段保持数据格式与长度分布的一致性，
+有利于结构知识在不同任务与数据集之间的迁移与复用。
+
+综上，基于（半）欧拉路径的图到 token 序列化框架，
+在形式上给出了从图到序列的可逆映射 \(\Phi\) 与 \(\Psi\)，
+并通过序列长度上界分析与子图采样机制，
+实现了在不同图尺度上的统一、可控编码。
+在此基础上，下一小节将进一步介绍专用图结构编码器如何在 token 序列空间中提炼可迁移的结构语义表征。
+
+
 \subsection{图结构编码器设计与实现}
+
 \section{图结构表征和文本特征的损失函数改进}
 \subsection{基于InfoNCE损失的全局表征对齐}
 \subsection{面向子结构的局部表征对齐机制}
