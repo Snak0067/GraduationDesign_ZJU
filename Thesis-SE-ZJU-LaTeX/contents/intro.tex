@@ -122,11 +122,11 @@ Ma 等人\cite{Ma2025SimplifyingGT}提出的 Simplifying Graph Transformers 则�
 实际应用中往往需要借助局部注意力或稀疏化策略在表达力与效率之间折中；
 二是结构与位置编码的设计高度依赖任务与图分布，不同工作采用的偏置方式差异较大，
 缺乏统一的理论框架与稳健的跨任务迁移能力；三是大多数方法仍主要针对单一模态图数据，
-如何在统一架构下同时处理图结构与自然语言、视觉等模态，使图 Transformer 成为真正的图多模态基础模型，仍是当前研究的前沿方向。
+如何在统一架构下同时处理图结构与自然语言、视觉等模态，使图 Transformer 成为真正的图多模态基座模型，仍是当前研究的前沿方向。
 
-\subsection{图基础模型}
-受到基础模型（Foundation Models）在 自然语言处理\cite{Lin2021ASO}与计算机视觉中\cite{Han2020ASO}方面的成功的启发，
-图学习最近进入了图基础模型（Graph Foundation Models,GFMs）\cite{wangGraphFoundationModels2025}时代。
+\subsection{图结构基座模型}
+受到基座模型（Foundation Models）在 自然语言处理\cite{Lin2021ASO}与计算机视觉中\cite{Han2020ASO}方面的成功的启发，
+图学习最近进入了图基座模型（Graph Foundation Models,GFMs）\cite{wangGraphFoundationModels2025}时代。
 这些模型\cite{Wang2024GFTGF,Shoghi2023FromMT,Kong2024GOFAAG}使用自监督目标\cite{Liu2021GraphSL}在大规模图上进行了预训练，
 使它们能够学习跨任务和跨域转移的通用表示。
 GFMs整合了结构依赖性和语义内容，表现出很强的零样本和少样本泛化。通过将模型训练与特定任务解耦， GFMs减少了对标记数据和特定领域启发式方法的依赖，使该领域更接近通用图智能。
@@ -134,11 +134,11 @@ GFMs整合了结构依赖性和语义内容，表现出很强的零样本和少�
 \begin{figure}[htbp]
     \centering  % 学位论文规定图表皆水平居中于版心 在 zjuthesis.cls 搜「版心设置」
     \includegraphics[width = .8\linewidth]{1_Intro/TheWorkflowOfGraphFoundationModels.png} % 设定图片宽度相对于版心宽度，图片文件资源名
-    \caption{图基础模型的工作流程\cite{wangGraphFoundationModels2025}} % 图的题注
+    \caption{图基座模型的工作流程\cite{wangGraphFoundationModels2025}} % 图的题注
     \label{fig:TheWorkflowOfGraphFoundationModels} % 与 autoref 关联，设定交叉引用和显示「图x.x」
 \end{figure}
 
-\subsubsection{基于图神经网络的图基础模型}
+\subsubsection{基于图神经网络的图结构基座模型}
 
 以图神经网络（GNN）为主干的架构凭借其对非欧氏空间的原生建模能力，构成了当前最成熟的范式。
 此类模型通过大规模自监督预训练后轻量微调的范式，平衡结构归纳偏置与跨任务泛化能力，为图表示学习提供统一解决方案。
@@ -161,7 +161,7 @@ GraphMAE系列\cite{Hou2022GraphMAESM} 通过 “掩码节点特征重建” 替
 。面向分子图的 GROVER\cite{Rong2020GROVERSM} 则结合多粒度子图上下文预测与化学模体（motif）预测，将领域先验融入图 Transformer 架构，
 在分子性质预测任务中取得显著优势。
 
-在下游适配方式上，图提示学习（graph prompting）已成为提升 GNN 基础模型复用效率的关键方向。
+在下游适配方式上，图提示学习（graph prompting）已成为提升 GNN 基座模型复用效率的关键方向。
 Liu等人\cite{Liu2023GraphPromptUP} 通过在输入特征层或隐藏层注入可学习提示向量，将任务信息与结构表示绑定，冻结大部分 GNN 参数即可适配多任务，
 大幅降低微调成本。Yu等人\cite{Yu2024NonHomophilicGP} 提出基于原型（prototype）的图提示策略，通过在表示空间学习任务原型指导 GNN 适配，在少样本场景中性能提升显著。
 针对异质图与时序图，CPT-HG\cite{Jiang2021ContrastivePO}、MultiGPrompt\cite{Yu2023MultiGPromptFM} 
@@ -171,7 +171,7 @@ Liu等人\cite{Liu2023GraphPromptUP} 通过在输入特征层或隐藏层注入�
 但该技术路线仍有局限性：一方面，其对节点或边携带的文本等丰富语义信息利用不足，
 难以整合外部知识；另一方面，模型表征空间与大规模语言模型（LLMs）缺乏显式对齐机制，当任务需同时依赖复杂拓扑关系与高层语义时，其表达能力仍存在瓶颈。
 
-\subsubsection{基于大语言模型的图基础模型}
+\subsubsection{基于大语言模型的图结构基座模型}
 
 近年来，一类以大语言模型作为主干、通过图–语言协同训练获得统一图表征的 Graph-LLMs 逐渐形成。
 典型做法是先将图结构转换为文本或结构化提示，再以 LLM 作为唯一的推理与决策核心，通过指令微调或自监督对齐获得跨任务的图推理能力。
@@ -191,9 +191,71 @@ Ye等人\cite{Ye2023LanguageIA} 进一步通过多任务指令统一不同图数
 通过任务描述、锚点文本、拓扑上下文与标注示例四元组件，使通用LLM在低资源与域外任务中超越专用图模型。
 Li等人\cite{Li2025AreLL}显式整合查询节点与邻居上下文，将图结构嵌入提示作为内在特征源，大幅提升关系依赖建模能力。然而，示范选择质量对性能影响显著，且在节点依赖复杂的图中构造高质量示范仍具挑战性。
 
-总体来看，以 LLM 为主干的图基础模型取得了重要进展，初步展示了单一 LLM 统一多图任务、多域图数据的潜力。
+总体来看，以 LLM 为主干的图基座模型取得了重要进展，初步展示了单一 LLM 统一多图任务、多域图数据的潜力。
 然而，它们普遍依赖图到文本的序列化过程，图结构在进入 LLM 之前已被压缩或重排；缺乏针对多层表示的细粒度结构约束，
 使得长程依赖、环结构与桥接模式等关键拓扑在语义空间中的保真刻画仍不充分。这些局限也正为后续工作提供了改进空间。
+
+\subsection{图学习典型任务}
+图机器学习围绕不同粒度的预测与推理需求，形成了较为统一的任务谱系，
+典型代表包括节点分类、链接预测、图分类以及近年来兴起的
+图推理任务等\cite{Wu2019ACS,Hu2020OpenGB}。
+在这一体系中，节点分类与链接预测分别刻画节点级与边级的判别能力，
+图分类面向图级语义理解，
+而图推理则进一步要求模型在复杂图结构上执行多跳推断、
+组合优化与逻辑演绎\cite{Xia2021GraphLA,Zhou2018GraphNN}。
+本节重点介绍与本文工作最紧密相关的两类任务：节点分类任务与图推理任务。
+
+\subsubsection{节点分类任务}
+节点分类（node classification）是图学习中最经典、应用最广的节点级任务之一，
+其目标是在给定图结构及部分节点标签的条件下，
+为其余节点预测离散类别标签\cite{Wu2019ACS,Chikwendu2023ACS}。
+在半监督设定下，模型需利用有限标注节点和大规模未标注节点，
+通过图结构传播与特征聚合学习节点表征；在监督或归纳设定中，
+则进一步强调在新图或新子图上的泛化能力\cite{Wu2019ACS}。
+
+早期研究多基于 Cora\cite{McCallum2000AutomatingTC}、
+Citeseer\cite{Giles1998CiteSeerAA}、
+Pubmed\cite{Sen2008CollectiveCI} 等中小规模引文网络，
+在固定划分下比较不同图神经网络（Graph Neural Networks, GNN）架构的
+精度表现\cite{Ma2025SimplifyingGT}。
+随着应用扩展至电商推荐、社交网络、蛋白互作等大规模真实图场景，
+Open Graph Benchmark（OGB）提出了 ogbn-arxiv、ogbn-products、ogbn-proteins 
+等一系列大规模节点分类基准，
+用于系统评测不同模型在同质图与异质图上的性能与可扩展性\cite{Hu2020OpenGB}。
+近期节点分类综述进一步从“方法演进与挑战”的视角，
+梳理了从传统图正则化方法到 GNN、再到图 Transformer 的整体发展脉络，
+并总结了标签稀缺、类别不均衡等实际场景中的关键难题\cite{Chen2019GraphRL}。
+
+因此，节点分类一方面是评估图基座模型节点级表征质量的标准任务，
+另一方面也为对比不同图–语言对齐策略提供了
+成熟、可量化的实验平台。
+
+\subsubsection{图推理任务}
+图推理（Graph Reasoning）任务关注模型在图结构上执行高阶推断、
+组合优化与逻辑演绎的能力，
+是近年来图学习与大模型研究的重要前沿方向之一
+\cite{Zhang2021NeuralSA,Liu2024NeuralSymbolicRO}。
+与主要关注局部标签判别的节点分类、链接预测不同，
+图推理通常要求模型在复杂结构上综合利用多跳依赖、全局约束及先验规则，
+其典型形式大致可分为以下几类。
+
+其一是基于图的组合优化与算法推理任务，
+如最短路径、连通性判断、旅行商问题等。
+相关工作利用神经网络和强化学习框架近似求解或模仿传统图算法，
+在合成图上系统评估模型的“神经算法推理”能力\cite{Bello2016NeuralCO}。
+其二是知识图谱与大规模关系图上的推理任务，包括多跳链接预测、
+复杂逻辑查询以及规则诱导等。神经、符号以及神经–符号混合方法在
+知识图推理综述中得到系统梳理，展示了从可解释的规则推理到可扩展的神经推理，
+再到二者融合的发展路径\cite{Zhang2021NeuralSA,Liu2024NeuralSymbolicRO}。
+其三是近年来兴起的图–语言大模型（Graph–LLM）中的图推理基准：
+代表性工作 G1 \cite{Guo2025G1TL}展示了通过在大量合成的图论任务上进行 RL 微调，
+可以显著提升 LLM 的图推理性能，
+在节点分类、图结构问答及图属性预测等任务上统一评测图推理与自然语言推理能力。 
+
+综上，节点分类任务为评估图基座模型的节点级表征质量提供了成熟、可比的基准，
+而图推理任务则从组合优化、知识推理和图–语言推理等多个维度刻画模型
+在复杂图结构上的高阶推理能力。二者共同构成本文后续方法设计与实验评估的核心任务场景。
+
 
 \subsection{图结构-语义文本跨模态对齐}
 
@@ -226,7 +288,7 @@ Sun等人\cite{Sun2023LargeLM} 则反向利用 LLM 评估节点对语义相似�
 强化学习（Reinforcement Learning, RL）为图结构理解与推理提供了突破传统监督学习范式的重要途径。
 与依赖静态标注数据的图神经网络（GNN）相比，RL通过智能体与环境的交互及奖励信号优化策略，
 使模型能够在复杂拓扑空间中主动探索、反复试错，从而学习面向目标任务的结构感知决策规则。
-这一特性为图基础模型（Graph Foundation Models, GFMs）在跨任务、跨域场景下构建可迁移的图推理能力奠定了方法论基础。  
+这一特性为图基座模型（Graph Foundation Models, GFMs）在跨任务、跨域场景下构建可迁移的图推理能力奠定了方法论基础。  
 
 早期研究主要将RL应用于图上的组合优化任务。Bello等人\cite{Bello2016NeuralCO}提出的神经组合优化（Neural Combinatorial Optimization, NCO）框架，将旅行商问题等经典任务建模为序列决策过程，结合指针网络与策略梯度方法，实现了无需人工启发式的图结构求解策略学习。Dai等人\cite{Khalil2017LearningCO}进一步将GNN集成至策略网络，通过图结构编码和策略梯度优化，在最大割、最小顶点覆盖等任务上显著提升了求解质量与泛化性能。这些工作虽验证了RL在图决策中的有效性，但其任务特定性限制了跨领域迁移能力。
 
