@@ -1,505 +1,411 @@
 %!TEX root = ../main.tex
 
-\chapter{学位论文排版元素}
+\chapter{结合强化学习微调的图推理技术}
 
-通过阅读上一章，
-相信您已基本配置完成编辑环境，
-以及如何正确编写各级章节和段落，
-了解容易引起编译出错的逃逸字符。
+现有图大语言模型在复杂图推理任务上仍面临两大瓶颈：其一，传统监督微调范式高度依赖高质量人工标注，模型往往倾向于记忆任务特定“捷径”，而非抽取可迁移的图结构推理规律，导致跨任务与跨领域泛化性能显著衰减；其二，缺乏可规模化、自动化的训练信号，真实图数据标注成本高且任务形态单一，难以支撑模型对通用图算法能力的系统性学习与评估。
 
-如果您仔细阅读过源码，
-您应该已经懂得使用命令\texttt{$\backslash$begin\{xxxx\}}开始一段新的布局环境。
-现在将稍系统地介绍计算机类学位论文中的排版元素，及其编写方法。
-本章主要介绍以下排版元素：
-\begin{itemize}
-    \item 列表环境（包括有序、无序、定义三种列表）
-    \item 插图和表格
-    \item 代码环境
-    \item 数学和算法环境
-\end{itemize}
+为突破上述局限，本章在前文构建的图基座模型之上，借鉴 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR} 与 G1\cite{Guo2025G1TL} 等工作的思想，提出一种基于可验证奖励的图推理强化学习框架。整体方法分为两个阶段：思维链冷启动微调与基于 GRPO 的可验证强化学习微调。第一阶段，利用图算法验证器（如 NetworkX）在合成图论任务与真实图数据集的混合样本上自动筛选高置信度推理链，构建大规模 CoT 监督数据集；在此基础上，冻结图欧拉路径编码器（GET）与跨模态投影层，仅微调大语言模型解码器，以注入基本的链式推理能力并稳定初始策略。第二阶段，构建无需人工偏好的自动奖励机制，设计融合答案正确性、路径拓扑一致性与约束满足度的复合可验证奖励函数，替代传统基于人类偏好的强化学习信号；随后采用组式策略优化（GRPO）对模型推理策略进行迭代更新，优先保留高奖励轨迹对应的推理模式，既缓解了经典策略梯度训练的不稳定性，又显式引导模型探索符合图论规则的推理路径，从而显著提升生成推理链的可验证性与逻辑自洽性。
 
-本章尽量覆盖论文写作中的大部分场景，但不面面俱到。
-如有特殊需求，请仔细阅读相关宏包手册或求助于国内外TeX社区及问答网站。
+综上，本章在图基座模型的基础上系统性地强化其图推理能力，使模型从面向垂直任务的判别式预测扩展到具备通用图算法能力的生成式推理范式，缓解了现有 Graph-LLMs 推理能力弱、泛化性差的核心问题，为构建可解释、高可靠的通用图推理大模型提供了关键技术支撑。
 
-\section{列表环境}
+\section{概述}
 
-列表环境有三种，
-类似与HTML的\texttt{<ol>}，
-\texttt{<ul>}，\texttt{<dl>}
-三个标签。
-以下是一个定义列表环境：
-\begin{description}
-    \item[有序列表] enumerate 默认从阿拉伯数字1开始编号\footnote{如需更改请搜索“重定义列表”}
-    \item[无序列表] itemize 默认圆点标记，尽量少用
-    \item[定义列表] description 语义上用于一系列简短解释
-\end{description}
+本章在第~2 章构建的图基座模型之上，聚焦于图推理能力的强化学习式后训练过程。
+聚焦图推理任务的能力增强，其核心目标是学习一个条件策略生成器 \(\pi_\theta\)，实现从图 - 查询输入到 “推理链 - 答案” 输出的映射。
 
-列表可以嵌套，比如：
+\textbf{输入：}
+给定文本属性图 \(G=(V,E,A,T)\)（符号定义同第 2 章，
+其中 $V$ 为节点集合，$E$ 为边集合，\(A\in\{0,1\}^{N\times N}\) 为邻接矩阵，
+\(T=\{t_i\}_{i=1}^N\) 为节点文本属性集合），
+以及图推理类自然语言查询 q（如最短路径查询、连通分量判定等）；
+同时输入前文预训练的图编码器 \(Enc_G\)、
+跨模态投影层 \(f_{proj}:\mathbb{R}^{d_g}\to\mathbb{R}^{d_\ell}\) 与
+冻结的大语言模型解码器 \(Dec_T\) 构成的基座模型参数。
+
+\textbf{输出：}
+模型输出包含两部分的序列 \(y=(c,a)\)：
+链式推理过程 \(c=(c_1,c_2,\dots,c_T)\)，
+其中每个 \(c_t\) 为一步图结构分析或逻辑推导的自然语言描述；
+最终答案 a，其形式随任务类型变化（可为数值、节点 / 边集合、布尔值等），
+且需满足图论规则与查询约束。
+
+围绕上述目标，本章内容组织如下：
+第~4.2 节首先从监督学习角度出发，在固定图侧模块的约束下，
+基于 \(\mathcal{D}_{\mathrm{CoT}}\) 对解码器进行图推理导向的冷启动微调，
+其训练目标沿用式~(\ref{eq:sft_loss}) 所定义的条件语言建模损失；
+第~4.3 节在此基础上系统介绍基于 GRPO 的可验证强化学习框架，
+包括奖励设计、策略目标与训练策略，
+并与式~(\ref{eq:reward_function})–~(\ref{eq:rl_loss}) 中
+的通用策略梯度目标建立对应关系；第~4.4 节详细说明思维链图推理数据集的构建过程，
+包括合成图任务设计、自动 CoT 生成与过滤策略；
+第~4.5 节给出实验设置与结果分析，
+评估所提出方法在图推理与节点分类任务上的性能提升与泛化特性；
+第~4.6 节对本章工作进行总结。
+
+
+
+\section{图推理导向的监督式冷启动微调}
+\label{sec:cot_sft}
+如第~\ref{sec:problem_graph_reasoning} 节所述，图推理任务被形式化为在给定图–文本输入 \((G,q)\) 的条件下，学习生成推理链与答案的条件语言模型
+\(
+p_\theta(y \mid G,q)
+\)，其中 \(y = (c,a)\) 由自然语言思维链 \(c\) 与最终答案片段 \(a\) 组成。
+在强化学习（RL）驱动的图推理能力增强流程中，
+初始策略的质量直接决定了后续 RL 训练的样本效率与最终性能上限。
+直接对原始图基座模型开展 RL 训练，易因初始推理策略的随机性与不规范性导致奖励信号稀疏、
+训练过程震荡，甚至出现策略退化\cite{DeepSeekAI2025DeepSeekR1IR}。
+借鉴 DeepSeek-R1 的冷启动范式与 G1 的思维链监督微调（CoT-SFT）方案， 
+本研究先通过图推理导向的监督式冷启动微调，
+为基座模型注入结构化的图推理先验，使其生成的推理链满足图论规则约束、具备可追溯的逻辑链条，
+为后续 RL 阶段奠定稳定且高性能的初始策略。
+本阶段的核心目标是：在固定图结构编码器与跨模态对齐模块的前提下，
+仅优化语言模型解码器参数，学习 “图结构 - 查询 - 思维链 - 答案” 的映射关系，
+其形式化目标与公式~(\ref{eq:sft_loss})保持一致，同时通过精细化的数据集构造与训练策略，
+确保微调后模型兼具推理逻辑性与语言流畅性。
+
+\subsection{思维链合成数据集构建}
+\label{subsec:cot_dataset}
+
+高质量的监督数据是冷启动微调的前提。本文构建的图推理思维链数据集
+\(\mathcal{D}_{\text{CoT}}\)
+融合了图论任务与真实图推理任务两类样本，
+并通过教师模型生成、规则验证器过滤、人工抽检的三级筛选流程，
+在控制数据规模的同时最大程度保证推理链的正确性与逻辑一致性。
+整体上，数据构建遵循基于拒绝采样的范式，
+以 Qwen2.5-32B-Instruct \cite{Yang2024Qwen25TR}作为教师模型生成候选推理–答案序列，
+再经多维度可验证规则筛选得到最终监督样本。
+
+\subsubsection{合成图论任务样本构建}
+
+本文在现有基准数据集基础上，\emph{参照} Guo 等人\cite{Guo2025G1TL} 提出的图推理任务设计与
+难度分层范式，
+补充构建了一套中等规模的合成图论任务数据集，用于思维链监督微调。
+
+形式化地，记第 \(t\) 类图论任务对应的参数化任务分布为 \(\mathcal{G}_t\)。
+对于每一类任务，本文从 \(\mathcal{G}_t\) 中随机采样
+\(
+N_t = 200
+\)
+个图实例 \(G \sim \mathcal{G}_t\)。
+在图生成过程中，我们首先从若干真实大图
+（如 Network Repository\cite{Rossi2015TheND} 中的网络）中选取种子图，
+随后在种子图上采用带重启的随机游走策略下采样连通子图，
+将子图规模约束在 \(5\!\sim\!35\) 个节点，以兼顾拓扑多样性与大语言模型的上下文窗口限制。
+对每个采样得到的子图 \(G\)，按照第~\ref{sec:graph2token} 节的欧拉路径编码流程执行半欧拉序列化，
+获得图结构编码\(s = \Phi(G)\)。
+
+在构造自然语言查询时，针对每一类任务设计一组中文模板，
+将任务类型、目标节点（或节点集合）以及必要的约束条件参数化注入模板中，
+从而生成形式统一但实例多样的查询 \(q\)（例如“请给出图中节点 1 到节点 5 的最短路径并说明理由”、
+“请判断该图是否为欧拉图并说明原因”等）。
+随后，利用 NetworkX 等图算法库对每个图–任务对 \((G,q)\) 精确计算真值答案 \(a^\star\)，
+从而得到本文自建的合成任务初始样本池，其数学形式如公式~(\ref{eq:generate_dataset50k}) 所示：
+\begin{equation}
+  \mathcal{D}_{\text{synth}}^{(0)}
+  =
+  \big\{ (G, q, s, a^\star) \big\},
+  \label{eq:generate_dataset50k}
+\end{equation}
+其中样本总规模约为
+\(
+\sum_{t} N_t = 10{,}000
+\)
+个实例。
+
+参考 G1 中对任务难度的划分\cite{Guo2025G1TL}，本文在自建数据集中对 50 类任务进行难度标注，
+并在样本构建时保持与其近似的任务占比结构，具体如下：
 \begin{enumerate}
-	\item 第一级列表
-	\item 第一级列表
-	\begin{enumerate}
-		\item 第二级列表
-		\item 第二级列表
-        \begin{itemize}
-            \item 第三级列表
-            \item 第三级列表
-		\end{itemize}
-		\item 第二级列表
-		\item 第二级列表
-	\end{enumerate}
+  \item \textit{Easy 级任务}（约占全部任务类型的 $29.16\%$）：
+  主要涵盖基础图属性与线性时间复杂度任务，例如节点计数、边计数、
+  度数与平均度数计算、邻居查询、广度/深度优先遍历、是否存在环、
+  最小生成树、边存在性与正则性判断（Edge Existence, Is Regular）等。
+  这些任务主要考察模型对局部结构与基本图概念的掌握。
+
+  \item \textit{Medium 级任务}（约占 $22.91\%$）：
+  包括多项式时间复杂度、需要综合局部结构信息的任务，例如聚类系数与连通分量数计算、
+  二分图最大匹配与最小边覆盖、局部连通性与资源分配指数、
+  Jaccard 系数、是否欧拉图与是否二分图判定以及度中心性等。
+  此类任务要求模型在多个局部结构之间进行多跳推理，对图结构表征和组合能力提出中等强度要求。
+
+  \item \textit{Hard 级任务}（约占 $33.33\%$）：
+  涉及更为复杂的图算法与全局结构度量，例如最短路径、
+  多种中心性指标、图直径与半径、
+  图中心与周边节点、三角形数量、平均邻居度以及桥边检测等。
+  这些任务依赖于长程依赖建模和全局结构一致性，对图推理能力提出更高要求。
+
+  \item \textit{Challenging 级任务}（约占 $14.58\%$）：
+  主要覆盖 NP-hard 组合优化类问题及复杂全局指标，
+  例如最大独立集、最小顶点覆盖、最大流、Wiener 指数、哈密顿路径判定以及图同构映射等。
+  这一等级在计算复杂性上最为困难，用于评估模型在极端难度下的推理上限。
 \end{enumerate}
 
-\section{插图环境和浮动体}
-
-相信您在上一章的探索学习中已经基本掌握了插入图片的方法，
-但可能仍存疑虑。
-现在先简单介绍浮动体的概念，
-以助您理解插图环境的布局规则，
-最后再介绍子图的排布以应对您更高的排版需求。
-% 关于绘图，本文将在后续章节讲述
-关于图的绘制，本文将在\ref{how-to-plot} 继续讲述。 % 活用ref引用，让评阅老师随处移动
-
-当一个图片或表格太大在当前页面无法继续排版时，
-一种简单的解决方案，
-即是新开一页排版（Word 默认模式），
-前页可能留下大段空白，十分不美观。
-\LaTeX 的默认解决方案是把它们“浮动”到下一页，
-与此同时将后续正文文本填充到插入点后。
-
-插图和表格在\LaTeX 排版中默认为一个浮动体，
-当排版引擎试图放置一个浮动体时，它将遵循以下规则：
-\begin{enumerate}
-    \item 浮动体的布局大小不得超过版心\footnote{版心是指排版文字和图表的区域，一般在页面的中心。——百度百科}，否则不能通过编译(Overfull Page Error)
-    \item 浮动体只能向后浮动，无法向前浮动
-    \item 浮动体默认按照 h $\to$ t $\to$ b $\to$ p 规则布局
-    \begin{description}
-        \item[h] 排布在当前位置，如果本页所剩空间不够，忽略，检查规则 t
-        \item[t] 浮动到下一页顶部
-        \item[b] 浮动到下一页底部（脚注之下）
-        \item[p] 浮动到一个允许出现浮动体的页面
-        \item[!] 忽略浮动体放置的大多数内部参数\footnote{在下也不太懂}
-    \end{description}
-    \item 设置 htbp 参数的顺序不会影响默认的规则顺序
-\end{enumerate}
-在实践中，一般选用浮动规则[htbp], [tbp], [htp], [tp] 来完成浮动体布局。
-请不要使用单一参数布局，这样极有可能出现难解的浮动问题。
-不适当的浮动规则参数将导致浮动对象被放进一个队列中等待布局，
-如果队列中浮动对象超过 18 个，编译时报Too Many Unprocessed Floats错误。
-当需要在一页中排版的图片较多时，
-您可以通过\texttt{$\backslash$clearpage}命令强制在此处排版完所有浮动体
-后在排版其他内容。关于清除浮动等复杂主题，此处不再展开。
-
-一般实践中，插图尺寸不宜超过版心一半，插图也不宜过密。
-另外，可以在论文内容稳定后，
-通过前置插图代码，
-强行“向前浮动”，保证插图和引用处的距离不至于太远。
-% 破坏语义，不宜滥用
-
-关于本模板对浮动体的设置，参看\texttt{zjuthesis.cls}，
-搜索关键字“浮动体”找到对应配置。
-图片引用路径在\texttt{zjuthesis.cls}里定义的\texttt{graphicspath}里，
-默认情况下，\texttt{$\backslash$includegraphics}命令从论文源码根目录搜索，
-如果在根目录里找到文件，则不再继续往定义引用路径搜索，
-当引擎无法找到您指定的图片资源时，会导致编译错误。
-注意，引用的文件名包括文件后缀。
-
-% 现在你可以随意更动此插图代码的位置来感受一下浮动体布局的规则
-\begin{figure}[htbp]
-	\centering
-	\begin{subfigure}[b]{.45\textwidth}  % 注意此处的尺寸控制
-		\centering
-		\includegraphics[width = \textwidth]{xuejian.jpg}
-		\caption{仙三}\label{fig:subfig-samp1}
-	\end{subfigure}
-	\begin{subfigure}[b]{.45\textwidth}
-		\centering
-		\includegraphics[width = \textwidth]{wenhui.jpg}
-		\caption{仙三外}\label{fig:subfig-samp2}
-	\end{subfigure}
-	\begin{subfigure}[b]{.45\textwidth}
-		\centering
-		\includegraphics[width = \textwidth]{lingsha.jpg}
-		\caption{仙四}\label{fig:subfig-samp3}
-	\end{subfigure}
-	\caption{仙剑白学传}\label{fig:subfig-samp}
-\end{figure}
-
-接下来描述子图的编写，
-在实际论文撰写过程中，
-经常需要比较几组实验数据或场景。
-此时，合乎语义的做法是为不同的组设置子图，
-而不是分别设图。
-
-多个子图组成一个单独的浮动体布局，
-共用一个总图题和总引用，并可以有各自单独的子图题和引用。
-本模板使用subcaption 宏包处理子图排版，如\autoref{fig:subfig-samp} 所示
-论文中不可像本文一般，
-平白无故地出现与行文毫无关联的图例，
-而且，必须有适当的文字内容对图例做出解释。
-比如，比较分析从\autoref{fig:subfig-samp1} 到\autoref{fig:subfig-samp3}
-仙剑系列在白学梗方面的运用变迁。\footnote{往后数代仍有类似场景 -\_-\# （顔文字書込禁止!）}
-
-当准备插图资源时，应该尽可能保证插图清晰，背景透明。
-图中文字大小应与文中接近，不小于脚注文字大小，不大于正文段落文字大小，
-框线宽度不大于2px。
-
-如果您曾关注过图片的格式，
-应该知道图片在计算机中一般分为矢量图（\autoref{fig:vector}）和位图（\autoref{fig:raster}）两种类型。
-通俗地说，矢量图通过几何属性存储图片信息，
-所以能在缩放时保持图形的几何属性。
-而位图按像素点存储图片信息，在缩放时必然会丢失信息。
-对于学位论文里的图例，请尽量使用矢量图，
-以给评阅老师或后人精确地参考和还原实验。
-常用的矢量图格式有eps, pdf, svg 和 Adobe 系列的文件格式。
-其中\LaTeX 格式可以直接引用eps 和 pdf 格式的图片。
-
-\begin{figure}[htbp]
-	\centering
-	\begin{subfigure}[b]{.45\textwidth}
-		\centering
-		\includegraphics[width = \textwidth]{vector.pdf}
-		\caption{矢量图}\label{fig:vector}
-	\end{subfigure}
-	\begin{subfigure}[b]{.45\textwidth}
-		\centering
-		\includegraphics[width = \textwidth]{raster.png}
-		\caption{位图}\label{fig:raster}
-	\end{subfigure}
-	\caption{Google Logo 的矢量图和位图比较}\label{fig:vector-raster}
-\end{figure}
+综上，本文在任务定义与难度分层上参考 G1 的设计，但在图采样策略、查询模板、图到 Token 编码以及真值计算等环节完全重新实现，构建了规模为 \(5\)k、覆盖 50 类图论任务的自建合成图推理数据集，为后续思维链生成与强化学习训练提供了可控且结构多样的基础数据。
 
 
-\section{表格}
-表格与插图一样，也是浮动体单位。
-在\LaTeX 中，表格的编写成本比较高，
-极易引发编译错误。
-初期建议同学们直接复制本模板表格进行修改。
-对于只有两列的表格，建议改用列表环境完成排版。
-本模板使用tabu排版表格，
-使用longtabu排版超长表格。
-学术论文多用线条简洁的三线表，
-所谓三线就是 toprule, midrule和bottomrule 。
-如\autoref{tab:tabu_test_1} 是对tabu宏包的tabu表格环境测试。
-\begin{table}[htbp]
-	\centering
-	\caption{这是一个用tabu环境的测试用的表格}\label{tab:tabu_test_1}
-    \begin{tabu}{lrr} % lrr 表示 左对齐 右对齐 右对齐
-    %\begin{tabu}{|l|r|r|} % 加上竖线看看
-
-    \toprule % 软件学院论文模板规定表头必须加粗
-    \textbf{行星}     & \textbf{赤道半径}km & \textbf{公转周期}d \\
-    \midrule
-    水星     & 2.439  & 87.9 \\
-    金星     & 6.1    & 224.682 \\
-    地球     & 6378.14 & 365.24 \\
-    \bottomrule
-    \end{tabu}%
-\end{table}
-
-\autoref{tab:tabu_test_2} 对tabu to表格的x列模式进行测试。在表格导言区中设置为X[1]X[2]X[2]，表示这三列表格的列宽比值为1:2:2，总的表格宽度由tabu to环境设置，这里设置为0.6\textbackslash linewidth。相比于tabular环境，tabu环境的列宽设置方便许多。
-\begin{table}[htbp]
-	\centering
-	\caption{tabu环境测试表格---X列模式}\label{tab:tabu_test_2}
-    \begin{tabu} to 0.6\linewidth{X[1]X[2]X[2]}
-    \toprule
-    \textbf{行星}     & \textbf{赤道半径}km & \textbf{公转周期}d \\  % 为了表格排版的美观 表头建议加粗
-    \midrule
-    水星     & 2.439  & 87.9 \\
-    金星     & 6.1    & 224.682 \\
-    地球     & 6378.14 & 365.24 \\
-    \bottomrule
-    \end{tabu}%
-\end{table}
-
-如\autoref{tab:tabu_test_3}是longtabu环境测试表格。
-longtabu环境不能用在table浮动体环境中。
-根据GB/T 7713.1-2006规定：如果某个表需要转页接排，
-在随后的各页上应重复表的编号。
-编号后跟标题（可省略）和“（续）”， % 表：「我要续…… +1
-置于表上方。
-续表应重复表头。
-
-特别需要注意的是，
-longtabu是基于longtable宏包开发的，
-所以在zjuthesis.cls文件中已经插入了longtable宏包。
-longtable环境的所有功能都可以在longtabu中使用，
-如\textbackslash endhead，
-\textbackslash endfirsthead，
-\textbackslash endfoot，
-\textbackslash endlastfoot，
-和\textbackslash caption等。
-具体用法请参见longtable和tabu宏包的相应文档。
-
-\begin{longtabu}{lccc}
-\caption{材料弹性模量及泊松比}\label{tab:tabu_test_3}\\
-\toprule
-名  称   & 弹性模量E/Gpa & 切变模量G/Gpa & 泊松比$\mu$ \\
-\midrule%
-\endfirsthead
-\caption{材料弹性模量及泊松比（续）}\\
-\toprule
-名  称   & 弹性模量E/Gpa & 切变模量G/Gpa & 泊松比$\mu$ \\
-\midrule%
-\endhead
-\bottomrule%
-\endfoot
-镍铬钢、合金钢 & 206    & 79.38  & 0.3 \\
-碳　钢    &  196～206 & 79     & 0.3 \\
-铸　钢    &  172～202 &        & 0.3 \\
-球墨铸铁   &  140～154 &  73～76 & 0.3 \\
-灰铸铁、白口铸铁 &  113～157 & 44     &  0.23～0.27 \\
-冷拔纯铜   & 127    & 48     &   \\
-轧制磷青铜  & 113    & 41     &  0.32～0.35 \\
-轧制纯铜   & 108    & 39     &  0.31～0.34 \\
-轧制锰青铜  & 108    & 39     & 0.35 \\
-铸铝青铜   & 103    & 41     & 0.3 \\
-冷拔黄铜   &  89～97 &  34～36 &  0.32～0.42 \\
-轧制锌    & 82     & 31     & 0.27 \\
-硬铝合金   & 70     & 26     & 0.3 \\
-轧制铝    & 68     &  25～26 &  0.32～0.36 \\
-铅      & 17     & 7      & 0.42 \\
-玻璃     & 55     & 22     & 0.25 \\
-混凝土    &  14～39 &  439～15.7 &  0.1～0.18 \\
-纵纹木材   &  9.8～12 & 0.5    &   \\
-横纹木材   &  0.5～0.98 &  0.44～0.64 &   \\
-橡胶     & 0.00784 &        & 0.47 \\
-电木     &  1.96～2.94 &  0.69～2.06 &  0.35～0.38 \\
-赛璐珞    &  1.71～1.89 &  0.69～0.98 & 0.4 \\
-可锻铸铁   & 152    &        &  \\
-拔制铝线   & 69     &        &  \\
-大理石    & 55     &        &  \\
-花岗石    & 48     &        &  \\
-石灰石    & 41     &        &  \\
-尼龙1010 & 1.07   &        &  \\
-夹布酚醛塑料 &  4～8.8 &        &  \\
-石棉酚醛塑料 & 1.3    &        &  \\
-高压聚乙烯  &  0.15～0.25 &        &  \\
-低压聚乙烯  &  0.49～0.78 &        &  \\
-聚丙烯    &  1.32～1.42 &        &  \\
-硬聚氯乙烯  &  3.14～3.92 &        &  \\
-聚四氟乙烯  &  1.14～1.42 &        &  \\
-\end{longtabu}%
-
-
-\section{代码段}
-
-原则上，论文中应尽可能少的出现工程代码。
-如果您必须引用一小段代码，
-可以使用\texttt{lstlisting}设置代码环境。
-本模板的代码环境默认配置在\texttt{zjuthesis.cls}，
-您可以搜索关键字“代码”找到配置。
-
-本模板不鼓励引用大段代码，
-所以默认情况下不为代码环境开启行号功能。
-观察\autoref{code:samp-code}，结合前述图表设置，
-试图理解代码环境的编写。
-
-\begin{lstlisting}[language=C++,numbers=left, numberstyle=\tiny,label=code:samp-code, caption=一段Chromium的源代码]
-// Start tasks to take all the threads and block them.
-  const int kNumBlockTasks = static_cast<int>(kNumWorkerThreads);
-  for (int i = 0; i < kNumBlockTasks; ++i) {
-    EXPECT_TRUE(pool()->PostWorkerTask(
-        FROM_HERE,
-        base::Bind(&TestTracker::BlockTask, tracker(), i, &blocker)));
-  }
-  tracker()->WaitUntilTasksBlocked(kNumWorkerThreads);
-
-  // Setup to open the floodgates from within Shutdown().
-  SetWillWaitForShutdownCallback(
-      base::Bind(&TestTracker::PostBlockingTaskThenUnblockThreads,
-                 scoped_refptr<TestTracker>(tracker()), pool(), &blocker,
-                 kNumWorkerThreads));
-  pool()->Shutdown(kNumWorkerThreads + 1);
-
-  // Ensure that the correct number of tasks actually got run.
-  tracker()->WaitUntilTasksComplete(static_cast<size_t>(kNumWorkerThreads + 1));
-  tracker()->ClearCompleteSequence();
-\end{lstlisting}
-
-引用一两行代码，可以直接使用\texttt{verbatim}环境完成。
-注意，此环境不会采取任何主动断行策略。
-\begin{verbatim}
-Error: Command failed: /bin/sh -c rsync -arvq --exclude cache
---exclude .git 
-\end{verbatim}
-
-\section{数学和算法环境}
-
-\TeX 模板引擎创立之初就是为了更美观地排版数学公式。
-在理工科的学位论文中，数学符号和数学公式必不可少
-\footnote{至于定理、引理和推论等纯理科环境，本模板未作任何设定，不讨论。}。
-在本模板中，数学环境由amsmath和amssymb宏包支持。
-（即便没有使用公式，您应该也希望看到$a_1$, $a_2$, $C_n^m$而不是a1, a2, Cnm 吧？）
-
-简单的行内公式，
-直接在源码处编写\texttt{\$...\$}内的公式即可，
-不熟习\LaTeX 公式编写的同学，
-可以使用可视化的公式编辑器产生\LaTeX 代码，
-这里推荐使用Daum Equation Editor完成复杂公式编辑的工作。
-
-对于单行公式，可以使用\texttt{\$\$...\$\$}创建。
-$$Y=\sum_{k=1}^n X_k$$
-如果需要设定交叉引用，推荐align环境创建，如\eqref{eq:samp}所示。
-\begin{align}\label{eq:samp}
-    f(x) & = 2(x + 1)^{2} - 1\\                  % & 用来对齐等号
-		 & = 2(x^{2} + 2x +1)-1\\
-		 & = 2x^{2} + 4x + 1
-\end{align}
-
-%一个矩阵
-%$$\begin{bmatrix}
-%1&2&3&4\\
-%5&6&7&8\\
-%9&10&11&12
-%\end{bmatrix}$$
-
-计算机类的学位论文
-一般少不了对研究算法的描述。
-本模板选用algorithmi2e宏包排版算法环境。
-详细指令使用方式参见宏包使用手册
-\footnote{一般有需求排布复杂算法的同学应该有一定的科研经历}。
-如\autoref{algo:duplicate2}
-
-\begin{algorithm}
-\DontPrintSemicolon
-\KwIn{A sequence of integers $\langle a_1, a_2, \ldots, a_n \rangle$}
-\KwOut{The index of first location with the same value as in a previous location in the sequence}
-$location \gets 0$\;
-$i \gets 2$\;
-\While{$i \leq n \land location = 0$} {
-  $j \gets 1$\;
-  \While{$j < i \land location = 0$} {
-    % The "l" before the If makes it so it does not expand to a second line
-    \lIf{$a_i = a_j$} {
-      $location \gets i$\;
-    }
-    \lElse{
-      $j \gets j + 1$\;
-    }
-  }
-  $i \gets i + 1$\;
-}
-\Return{location}\;
-\caption{{\sc FindDuplicate2}}
-\label{algo:duplicate2}
-\end{algorithm}
-
-\section{绘图}\label{how-to-plot}
-
-一图胜千言，经过同学们辛苦的实验积累下的数据，
-相比于冗长的文字描述，
-绘图呈现的信息结构将更具可读性。
-使用强大的TikZ宏包，可以绘制各式各样的图例，
-比如在\ref{dirtree} 的目录结构图就是使用TikZ宏包绘制完成。
-通过绘图宏包得到的是矢量图，
-经过缩放后仍能精确地指导打印。
-遗憾的是，
-由于使用TikZ宏包绘制图例的方法艰深繁杂，
-非长期钻研学术者实不可速取。
-
-% 这里删掉了一大段TikZ宏包的使用
-% 太复杂了  如果不是跟老师搞学术的话真的算了
-
-含有大量数据的统计图，
-从事数据分析工作的同学可自行使用python或R语言完成绘制，
-确保输出eps或pdf格式图形，使用插图环境引入即可。
-
-对于一般的流程图，本模板推荐使用graphviz绘图工具绘制。
-相对于TikZ，graphviz已经足够适合人类掌握了。
-如果坚持使用可视化工具完成此类图例的绘制，
-本文推荐一个在线绘图工具\texttt{https://www.draw.io}\footnote{请保证科学上网。}，
-该工具可以绘制流程图、UML图、实体关系图。
-另外它还支持 Dropbox 同步及输出 pdf，
-通过同步论文的图片引用目录，
-可以最高效的完成绘图和插图的工作。
-
-无论用何种工具完成，
-时间精力成本都不会太低。
-请妥善规划您的论文撰写时间，
-确保顺利毕业。
-
-\section{关于参考文献}
-
-硕士学位论文的参考文献，
-请严格按照导师和学院规定，
-注重引文质量，万不可滥引。
-
-参考文献参照国家标准《GB/T 7714-2005: 文后参考文献著录规则》
-\footnote{此标准规定的学位论文引用格式并无指定需列出是“硕士学位论文”还是“博士学位论文”}，
-样式文件由南京大学胡海星提供。
-\begin{verbatim}
-http://haixing-hu.github.io/nju-thesis/
-\end{verbatim}
-
-学校规定，参考文献采用顺序编码制，
-即引文处采用序号标注，参考文献表按引文序号顺序列出。
-参考文献的排版需要引入同学们自己的文献数据库，
-南京大学胡海星提供了一个样例数据库，见其代码仓库内\texttt{references/test.bib}。
-通过各式文献管理工具（如Zotero)，您可以在论文早期工作时逐渐积累文献数据库。
-通过Google学术查找一篇文献时，如\autoref{fig:gscholar} 所示，点击cite，
-选择BibTeX，即可得到本文献的Bib格式的各项字段。
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\textwidth]{gscholar.png}
-    \caption{使用Google学术查找引文的BibTeX字段}
-    \label{fig:gscholar}
-\end{figure}
-
-由Google学术提供的文献类型和字段有可能不满足胡海星前辈的设定，
-注意调整。
-以下是常用的文献类型：
-\begin{description}
-    \item[期刊]          \texttt{@article}
-    \item[专著]          \texttt{@book, @inbook}
-    \item[译著]          \texttt{@Book, @inBook}
-    \item[会议论文集]    \texttt{@proceeding, @inproceeding}
-    \item[手册]          \texttt{@manual}
-    \item[网页]          \texttt{@webpage, @online}
-\end{description}
+\subsubsection{真实图推理任务样本构建}
+为提高在真实场景下的迁移能力，进一步从 Cora、PubMed、OGB-Arxiv 等典型文本属性图中构造真实图推理任务。
+针对每张图，选取若干种节点级或子图级查询，
+包括节点连通性判别、多跳邻居检索、局部子图同构判定、学科子领域覆盖度估计等，
+共采样约 \(10,000\) 个实例。
+以下是从各个数据集上构建真实图推理数据的细节：
 
 \begin{itemize}
-    \item 比如这是一篇中文期刊\cite{lixiaodong1999}
-    \item 这是几篇英文期刊\cite{christine1998, kanamori1998}
-    \item 一本中文书\cite{zh-book-1}
-    \item 一本中文译著\cite{anwen1988b}
-    \item 一本英文书\cite{lamport1994latex, takeuti1973}
-    \item 一篇中文inproceeding\cite{nonlinear1996}
-    \item 中文proceeding\cite{a2-1}
-    \item 英文proceeding\cite{a2-2}
-    \item 中文inproceeding\cite{aczel1998}
-    \item 一篇学位论文\cite{a4-1} 
-    \item 其他资料：手册\cite{ipad}报纸\cite{renminribao}网页\cite{dubash2010}
+\item \textit{Cora学术引用网络}：构建基于引文结构的推理任务，
+如"论文A引用链中第3跳的节点类别是什么？"、"节点B与C是否在5跳内可达？"等。
+从Cora的2,708个节点中，使用ShaDowKHop采样策略获取局部子图，
+确保每个样本包含完整的k-hop邻域信息，共采集2,000个样本
+\item \textit{PubMed生物医学网络}：设计语义驱动的结构检索任务，
+如"给定疾病类型D，找出与其在3跳内相连且描述包含关键词K的所有论文节点"。
+此类任务要求模型同时理解节点文本语义与结构关系，共采集3,500个样本。
+
+\item \textit{OGB-Arxiv大规模学术图}：构建子图同构判定任务，
+如"目标子图（描述为H）是否与查询节点v的3-hop邻域同构？"，此类任务测试模型对局部结构模式的识别能力。从169K节点中随机选择800个中心节点，
+对每个节点生成6种不同同构判定查询，共4,500样本。
 \end{itemize}
 
-在论文中设置了一个错误或丢失的引用不会引起编译错误，
-引擎会在引用标记中设一个问号。
-手动编译论文的顺序一般为：
-\begin{verbatim}
-xelatex main
-bibtex main  // 生成参考文献
-xelatex main
-xelatex main
-\end{verbatim}
-而latexmk 自动化地执行了这些步骤，所以编译时间才需要20余秒之久。
+所有真实图任务样本均经过欧拉路径编码，保留原始文本属性。
+在拒绝采样和任务均衡重采样之后，
+本文将合成任务与真实任务按约 \(4:1\) 的比例混合，
+得到规模约为
+\(
+|\mathcal{D}_{\text{CoT}}|\approx 2.0\times 10^4
+\)
+的思维链冷启动数据集，
+其最终样本格式统一为三元组
+\(
+(G, q, y^\star)
+\)，其中
+\(
+y^\star = (c^\star,a^\star)
+\) 为标注目标输出，
+\(c^\star\) 为符合图论逻辑的自然语言推理链，
+\(a^\star\) 为与图算法真值一致的精确答案。
+
+\subsubsection{基于拒绝采样的思维链生成}
+\label{subsubsec:rejection_cot}
+
+为获得高质量的思维链标注，
+本文采用类似 G1\cite{Guo2025G1TL} 与 
+DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR} 的教师模型采样及规则过滤的
+拒绝采样策略自动生成 \(y^\star\)。
+
+\textbf{教师模型与提示模板。}
+选用 Qwen2.5-32B-Instruct 作为教师模型 \(\pi_{\text{teach}}\)，
+其具备较强的通用推理与代码理解能力。
+对于每个图–问题对 \((G,q)\)，首先将图结构编码 \(s = \Phi(G)\) 与
+自然语言查询 \(q\) 拼接为统一的中文提示模板\(\text{Prompt}(G,q)\)：
+% “给定图的结构编码s和查询q，
+% 请先分步推导图推理过程，再给出最终答案。推理过程需严格遵循图论规则，
+% 最终答案用\{\}包裹。”
+\begin{prompt}{System Prompt}
+你是一位图论专家，擅长通过结构化步骤解决图推理问题。请严格遵循以下流程：
+1) 解析图结构；2) 逐步推导；3) 验证中间结果；4) 给出最终答案。
+\end{prompt}
+
+\begin{prompt}{Task Prompt}
+图结构编码：$\langle s \rangle$。查询：$\langle q \rangle$。\\[0.3em]
+推导过程需符合图论规则，每步推理必须基于图结构特征，
+最终答案请用$\boxed{}$包起来。
+\end{prompt}
+该模板明确要求模型先解析欧拉路径编码的结构特征，再分步推导，
+最后将答案标准化输出，显著提升生成推理链的结构一致性。
+
+随后对候选序列进行采样。对于每个图–问题对 \((G,q)\)，采样策略如下：
+
+（1）设置采样参数：温度系数\(T=1.0\)（平衡探索与利用），
+Top-p阈值0.95（保留高概率token），
+最大生成长度\(L_{\max}\)为图节点数的3倍，以此确保充分推理；
+（2）采样$K=8$条独立候选序列$\{y_k\}_{k=1}^8$，
+每条序列$y_k=(c_k,a_k)$包含推理链$c_k$和答案$a_k$；
+（3）对序列进行基础清洗：移除未闭合的$\boxed{}$标签、截断重复循环、
+过滤包含幻觉内容的序列（如虚构节点ID）。
+
+\textbf{多维度规则验证器。}
+为过滤无效或逻辑错误的候选，
+针对不同任务类型设计规则验证器
+\(
+\mathcal{V}(G,q,y^{(k)})
+\),
+其输出可以是二元判定或 \([0,1]\) 区间的置信度得分。
+本文采用“硬约束 + 软得分”的组合形式：
+首先利用硬规则剔除结构明显错误的候选，
+再基于可验证奖励函数 \(\mathcal{R}(G,q,y)\)
+(公式~(\ref{eq:reward_function}))对剩余候选排序。
+
+具体而言，验证逻辑按任务类型划分为三类：
+
+\begin{itemize}
+  \item \textit{数值型任务验证}（占比35.7\%）：针对节点数、图半径、聚类系数等任务，
+  实现高精度数值校验模块。
+  解析候选答案 \(a^{(k)}\) 中的数值 \(\hat{v}^{(k)}\)，
+  与 NetworkX 计算的真值 \(v^\star\) 比较，一方面考虑整数完全一致；
+  另一方面允许部分等价形式，
+  支持分数-小数等价转换，例如 $\frac{1}{2}$  和0.5视为等价。
+  处理浮点误差，误差阈值\(\epsilon=10^{-6}\)，并处理单位一致性（如"5个节点"与"5"视为一致）。
+  记验证结果为
+  \(
+  \mathcal{V}_{\text{num}}(G,q,y^{(k)})\in\{0,1\}
+  \)。
+
+  \item \textit{集合型任务验证}（占比28.4\%）：
+  针对公共邻居、最大独立集等集合答案，
+  解析生成集合 \(\hat{S}^{(k)}\) 与真值集合 \(S^\star\)，
+  核心指标是计算 Jaccard 系数，如公式~(\ref{eq:jaccard})所示：
+  \begin{equation}
+    \mathrm{Jacc}\!\left(S^\star,\hat{S}^{(k)}\right)
+    =
+    \frac{\big|S^\star \cap \hat{S}^{(k)}\big|}
+         {\big|S^\star \cup \hat{S}^{(k)}\big|}.
+    \label{eq:jaccard}
+  \end{equation}
+  当
+  \(
+  \mathrm{Jacc}(S^\star,\hat{S}^{(k)}) = 1
+  \)
+  时视为完全匹配，\(\mathcal{V}_{\text{set}}=1\)；否则记为 \(0\)。
+此外，对顺序敏感任务（如排序列表），
+引入Levenshtein距离验证序列顺序；对部分匹配任务（如近似最大独立集），
+设计动态阈值$J\geq0.95$作为软性标准。
+  \item \textit{路径/结构型任务验证}（占比35.9\%）：实现图论验证器库，包含：
+\begin{itemize}
+    \item \textit{路径合法性验证}：检查路径连通性（路径中相邻节点必须有边连接）、无重复节点访问（除欧拉回路外）、起点终点正确性。
+    \item \textit{最优性验证}：对最短路径等优化任务，调用NetworkX的Dijkstra算法获取全局最优解，比较生成路径长度是否等于最短距离。
+    \item \textit{结构完整性验证}：对子图同构、桥边检测等任务，通过图同构算法（VF2）或边割检测验证结构等价性。
+\end{itemize}
+\end{itemize}
+
+将上述验证结果整合为整体可验证奖励
+\(
+\mathcal{R}(G,q,y^{(k)})
+\)
+（具体定义见式~(\ref{eq:reward_function})），再结合对推理链长度、格式完整性（必须显式包含“Reasoning:”与“Final Answer:”段落）等启发式约束，
+得到最终的接受判定，如公式~(\ref{eq:accept_rule})所示：
+\begin{equation}
+  \mathcal{A}(G,q,y^{(k)})
+  =
+  \mathbb{I}\!\Big[
+    \mathcal{R}(G,q,y^{(k)}) \ge \tau_{\mathrm{CoT}}
+  \Big],
+  \label{eq:accept_rule}
+\end{equation}
+其中 \(\tau_{\mathrm{CoT}}\) 为经验设定的阈值，
+\(\mathbb{I}[\cdot]\) 为指示函数。
+
+\textbf{拒绝采样与样本选取。}
+对每个 \((G,q)\) 实例，首先从 \(K\) 条候选中选出所有满足
+\(
+\mathcal{A}(G,q,y^{(k)}) = 1
+\)
+的有效集合
+\(
+\mathcal{Y}_{\text{valid}}(G,q)
+\)。
+若
+\(
+|\mathcal{Y}_{\text{valid}}(G,q)| = 0
+\)，则重复采样过程直至获得至少一条有效序列或达到最大尝试次数。
+当存在多个有效候选时，按照奖励得分选取奖励最高的那条作为最终监督标签，
+起计算过程如公式~(\ref{eq:best_of_n})所示：
+\begin{equation}
+  y^\star(G,q)
+  =
+  \arg\max_{y^{(k)} \in \mathcal{Y}_{\text{valid}}(G,q)}
+  \mathcal{R}(G,q,y^{(k)}).
+  \label{eq:best_of_n}
+\end{equation}
+最终得到的思维链监督数据集可写为公式~(\ref{eq:cot_dataset_def})：
+\begin{equation}
+  \mathcal{D}_{\text{CoT}}
+  =
+  \Big\{
+    \big(G_i, q_i, y_i^\star\big)
+  \Big\}_{i=1}^{N_{\text{CoT}}},
+  \qquad
+  N_{\text{CoT}} \approx 4.8\times 10^4.
+  \label{eq:cot_dataset_def}
+\end{equation}
+
+\textbf{人工抽检与语义质量控制。}
+验证流程采用级联过滤策略：
+\begin{itemize}
+\item \textit{一级过滤}：应用规则验证器\(
+  \mathcal{V}_{\text{num}}(G,q,y^{(k)})
+  \)对每条候选序列输出二元判定（有效/无效）或置信度得分。
+\item \textit{二级筛选}：仅保留验证器判定为"有效"的序列；若有效序列数为0，则调整采样参数（$T\leftarrow T-0.2$）重新生成；若有效序列数超过1，按生成概率排序选取最高置信度序列。
+
+\item \textit{三级人工抽检}：对最终选取的序列进行10\%比例的人工抽检，制定严格质量标准：
+\begin{itemize}
+    \item \textit{逻辑一致性}：检查推理步骤是否自洽，是否存在矛盾（如先声明"节点无邻居"，后又使用该邻居计算度数）
+    \item \textit{结构合理性}：验证中间推理是否符合图论基本原理（如三角不等式、连通性约束等）
+    \item \textit{表述清晰度}：过滤表述冗余、语义模糊的推理链，强制要求关键步骤包含图结构特征引用
+\end{itemize}
+\end{itemize}
+
+抽检不合格样本被替换为次高置信度有效序列，或标记为难样本进行重点分析。
+对于存在严重冗余或逻辑问题的样本予以剔除或人工修正，
+从而提升数据集整体的语义质量与可读性。
+
+综上，本文基于拒绝采样范式，在图算法可验证器的支撑下构建了一个规模可观、结构可验证且语义高质量的图推理思维链数据集 \(\mathcal{D}_{\text{CoT}}\)，为后续冷启动微调与基于 GRPO 的强化学习提供了坚实的数据基础。
+
+
+\subsection{图推理导向的 CoT-SFT 目标}
+
+在获得思维链监督数据集 \(\mathcal{D}_{\mathrm{CoT}}\) 后，本文将前文构建的图基座模型视作条件语言模型，对其解码器进行标准的自回归监督微调。
+为与第~\ref{sec:graph_llm_inference} 节中的推理模板保持一致，每个训练样本的输入被构造为统一的提示序列
+\[
+x_i = P_{\mathrm{sys}} \oplus P_{\mathrm{task}}(t_i) \oplus \mathrm{EncGraph}(G_i) \oplus q_i,
+\]
+其中 \(P_{\mathrm{sys}}\) 为固定系统提示，\(P_{\mathrm{task}}(t_i)\) 为标明任务类型的自然语言前缀，\(\mathrm{EncGraph}(\cdot)\) 表示将图 \(G_i\) 欧拉化并经图编码器 \(\mathrm{Enc}_G\) 与跨模态投影层映射到语言嵌入空间的过程（见第~\ref{sec:graph2token} 节与式~(\ref{eq:cond_repr})), \(\oplus\) 表示在序列维度上的拼接。
+对应的输出目标序列为
+\[
+y_i = \mathrm{format}\big(c_i,a_i\big),
+\]
+即包含 “\texttt{Reasoning:}” 段落与 “\texttt{Final Answer:}” 段落的完整推理文本。
+
+在训练过程中，图欧拉路径编码器 \(\mathrm{Enc}_G\)、文本特征编码器 \(\mathrm{Enc}_T\) 以及跨模态对齐模块参数均保持冻结，仅更新语言模型解码器 \(\mathrm{Dec}_T\) 及其上附加的轻量适配层（如 LoRA/MLP 投影层）。
+记可训练参数集合为 \(\theta_{\mathrm{CoT}}\)，则 CoT-SFT 的训练目标为最小化负对数似然损失：
+\begin{equation}
+  \mathcal{L}_{\mathrm{CoT\text{-}SFT}}(\theta_{\mathrm{CoT}})
+  =
+  - \mathbb{E}_{(x,y)\sim\mathcal{D}_{\mathrm{CoT}}}
+  \sum_{t=1}^{|y|}
+  \log p_{\theta_{\mathrm{CoT}}}\big(y_t \mid x, y_{<t}\big),
+  \label{eq:cot_sft_loss}
+\end{equation}
+其中 \(y_t\) 表示输出序列在位置 \(t\) 的目标 Token，\(y_{<t}\) 为其之前的前缀。
+式~\eqref{eq:cot_sft_loss} 本质上是条件语言建模目标，但在训练样本中显式包含完整推理链，使模型在保持原有语言知识的同时，对图论任务学习到“先推理后作答”的生成模式。
+
+\subsection{实现细节与训练配置}
+
+为了保证冷启动微调既能有效提升图推理能力，又不过度破坏预训练语言模型的通用知识，本文在实现上采用了一系列稳健的训练策略：
+
+\begin{itemize}
+  \item \textbf{数据混合与采样策略。}
+  \(\mathcal{D}_{\mathrm{CoT}}\) 由多种图论任务构成，包括易解的局部结构性质（如节点度、连通性判断）以及更复杂的全局图属性（如最短路径、图直径、最小割等），并覆盖不同规模与拓扑模式的图实例。
+  训练时对不同任务进行均匀采样，使模型在冷启动阶段即可接触到多样化的图推理模式，而不会过度偏向少数简单任务。
+
+  \item \textbf{参数冻结与低秩适配。}
+  图欧拉路径编码器 \(\mathrm{Enc}_G\)、文本编码器 \(\mathrm{Enc}_T\) 以及跨模态对齐投影层在整个 CoT-SFT 阶段保持冻结，确保此前通过对比学习获得的图–文对齐关系不被破坏。
+  在语言模型主干 \(\mathrm{Dec}_T\) 内，仅在注意力投影和前馈网络中插入低秩适配模块进行更新，从而在有限算力预算下实现策略的快速重塑。
+
+  \item \textbf{优化超参数与稳定性。}
+  训练使用 AdamW 优化器，采用较小学习率和线性预热–余弦退火日程，结合梯度裁剪与混合精度（FP16/BF16）以稳定训练过程。
+  每个样本的最大序列长度被限制在预训练模型上下文窗口内，超长思维链在保证答案完整的前提下进行尾部截断。
+\end{itemize}
+
+通过上述冷启动微调过程，本文在不引入额外人工标注的前提下，使图基座模型获得一套稳定的图推理初始策略：一方面，模型学会在统一的图–文提示格式下生成具有清晰步骤的思维链；另一方面，在面对合成与真实图任务时，其答案质量与可验证性均显著优于原始指令模型。
+这一阶段训练得到的参数 \(\theta_{\mathrm{CoT}}^\ast\) 将作为后续 GRPO 强化学习阶段的初始化，为基于可验证奖励的策略优化提供良好的起点。
 
 
 
+\section{基于 GRPO 的可验证奖励设计与强化学习框架 }
+\subsection{规则可验证奖励设计}
+\subsection{GRPO训练目标与基模约束}
+\subsection{强化学习训练流程与实施细节}
 
-
-
-
+\section{实验测评与分析}
+\subsection{实验目标与配置}
+\subsection{图推理任务基准对比实验}
+\subsection{节点分类任务迁移对比实验}
+\subsection{消融实验}
 \section{本章小结}
-
-本章划分节比较多，正式行文中请尽量避免。
-
-传播智识，单单借助文字的力量是无力的，
-即使是日常博客文章，列表、插图、表格、代码都少不了。
-何况是一篇用于申请硕士学位的论文呢？
-
-一篇学位论文集长期的科研工程实践智慧于寥寥数万字。
-如何合理规划论文语义和排版元素，
-让即便不熟习此领域的后人能在短时间内消化，
-得以继续开物前民，
-是一个值得反复求索的话题。
-

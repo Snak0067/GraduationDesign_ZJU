@@ -2,6 +2,24 @@
 % !TEX builder = LATEXMK
 % !TEX program = xelatex
 \documentclass[master,oneside,AutoFakeBold]{zjuthesis} % 如果你的论文不满80页，还是单面印刷吧
+% 导言区
+\usepackage[most]{tcolorbox}
+
+% 全局样式
+\tcbset{
+  promptbox/.style={
+    colback=gray!5,      % 背景色
+    colframe=gray!60,    % 边框色
+    boxrule=0.4pt,
+    arc=2pt,             % 圆角
+    left=6pt,right=6pt,top=4pt,bottom=4pt,
+    before skip=8pt,after skip=8pt,
+    fonttitle=\bfseries, % 标题加粗
+  }
+}
+
+% 带标题的 prompt 环境：用法 \begin{prompt}{System Prompt} ... \end{prompt}
+\newtcolorbox{prompt}[1]{promptbox,title={#1}}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 开始填写前置部分使用的变量
@@ -90,6 +108,7 @@
 \include{contents/chapter2} % 相关工作
 \include{contents/chapter3} % 第三章：改进点1
 \include{contents/chapter4} % 第四章：改进点2
+\include{contents/example} % 第四章：改进点2
 \include{contents/sum}  % 总结和展望
 
 % 结尾部分排版

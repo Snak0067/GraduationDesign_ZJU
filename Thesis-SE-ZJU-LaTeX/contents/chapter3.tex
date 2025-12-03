@@ -70,7 +70,7 @@
 在图侧显式建立可逆的图到序列映射，实现对子图拓扑的近似无损线性化编码。
 
 \subsection{图到 Token 序列的无损编码设计}
-
+\label{sec:graph2token}
 图到 token 序列的核心目标是构造映射
 \(\Phi: \mathcal{G} \rightarrow \mathcal{V}^\ast\)，
 其中 \(\mathcal{G}\) 为有限图集合，\(\mathcal{V}\) 为有限词表，
@@ -144,17 +144,19 @@ $G^{\mathrm{eu}} \leftarrow (V, E \cup E_{\mathrm{syn}} \cup E_{\mathrm{dup}}, X
 对应连通图，
 合成边统一以特殊 token（如 \texttt{[EDGE\_JUMP]}）与默认属性标记。
 若 \(\tilde{G}\) 仍非（半）欧拉图，则进一步构造欧拉多重图 \(G^{\mathrm{eu}}\)，
-其公式如(3.8)所示：
+其公式如~(\ref{eulerized-graph})所示：
 \begin{equation}
     G^{\mathrm{eu}} = (V, E^{\mathrm{eu}}, X, A),
+    \label{eulerized-graph}
 \end{equation}
 其中
 \(E \subseteq E^{\mathrm{eu}}\)，
 通过最小边复制策略保证
 \(G^{\mathrm{eu}}\) 满足所有节点度数为偶数或恰有两个奇度节点的条件。
-在此基础上，存在一条（半）欧拉路径 $P$，如公式(3.9)所示：
+在此基础上，存在一条（半）欧拉路径 $P$，如公式(\ref{elua_path})所示：
 \begin{equation}
     P = (v_0, e_1, v_1, \dots, e_m, v_m),
+    \label{elua_path}
 \end{equation}
 使得每条边 \(e_i \in E^{\mathrm{eu}}\) 恰好被遍历一次，
 其中 \(m = |E^{\mathrm{eu}}|\)。
@@ -168,26 +170,29 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 \textbf{节点重索引与循环偏移。}
 原始节点编号通常带有实现偏置，
 若直接用于 token 化，会导致结构 token 频率高度不均。
-为此，首先基于路径首次出现顺序定义重索引映射，计算公式如(3.10)所示：
+为此，首先基于路径首次出现顺序定义重索引映射，计算公式如~(\ref{eq:reindex})所示：
 \begin{equation}
     \pi: V \rightarrow \{0, 1, \dots, n-1\},
+    \label{eq:reindex}
 \end{equation}
 其中 \(n = |V|\)，
 \(\pi(v)\) 表示节点 \(v\) 在 \(P^{\mathrm{node}}\) 中的首次出现位置。
-进一步，为缓解不同图尺度间的索引分布偏移，其公式如(3.11)所示
+进一步，为缓解不同图尺度间的索引分布偏移，其公式如~(\ref{eq:cycle-reindex})所示
 引入循环重索引机制：
 \begin{equation}
     \pi_r(v) = (\pi(v) + r) \bmod N,
+    \label{eq:cycle-reindex}
 \end{equation}
 其中 \(r\) 为在预设区间内均匀采样的随机整数,
 \(N\) 为大于最大节点数的超参数。
 该设计一方面在训练过程中均匀激活不同索引 token，
 另一方面避免测试阶段出现“大编号节点在预训练中从未出现”的 OOD 情形。
-基于上述重索引，可得到仅含结构信息的节点序列，其公式如(3.12)所示：
+基于上述重索引，可得到仅含结构信息的节点序列，其公式如~(\ref{eq:struct-seq})所示：
 \begin{equation}
     s^{\mathrm{struct}} = 
     \big(\pi_r(v_0), \pi_r(v_1), \dots, \pi_r(v_{m-1})\big),
     \quad s^{\mathrm{struct}} \in \mathcal{V}^m.
+    \label{eq:struct-seq}
 \end{equation}
 
 \textbf{属性附着与序列长度控制。}
@@ -197,9 +202,10 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 在最一般的“prolonged” 格式下，
 每对相邻节点 \((v_{i-1}, v_i)\) 被展开为：
 “节点索引 + 边类型 + $d_e$ 个边属性 token + $d_v$ 个节点属性 token”，
-对应每个“边步长”的 token 数量表示如(3.13)所示：
+对应每个“边步长”的 token 数量表示如~(\ref{eq:edge-token-length})所示：
 \begin{equation}
     \ell = 2 + d_e + d_v.
+    \label{eq:edge-token-length}
 \end{equation}
 由此可定义三类典型编码形式：
 \begin{align}
@@ -216,10 +222,11 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 同时通过上述长度公式显式控制不同图规模与属性维度下的最大序列长度，
 便于在显存和上下文窗口约束下进行配置。
 
-在上述构造下，图到序列的整体映射可以统一写为公式(3.17)：
+在上述构造下，图到序列的整体映射可以统一写为公式~(\ref{eq:graph-to-seq})：
 \begin{equation}
     s = \Phi(G) = 
     \Phi_{\mathrm{attr}}\!\big(P^{\mathrm{node}}, X, A; \pi_r, \text{format}\big),
+    \label{eq:graph-to-seq}
 \end{equation}
 其中 \(\Phi_{\mathrm{attr}}\) 表示在固定欧拉路径与重索引策略下的属性附着算子。
 
@@ -237,11 +244,12 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 \(
 \Psi: \mathcal{V}^\ast \rightarrow \mathcal{G}
 \)，
-满足公式(3.18)：
+满足公~(\ref{eq:invertible})：
 \begin{equation}
     \Psi(\Phi(G)) \cong G,
+    \label{eq:invertible}
 \end{equation}
-从而在同构意义下实现图到序列的无损可逆编码。
+从而在同构意义下实现图到序列的编码。
 这一理论性质为后续基于序列的生成式预训练与图重建任务提供了坚实基础。
 
 \subsubsection{大图适配：子图采样与局部序列化}
@@ -259,15 +267,17 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 \)，
 其中 \(\theta\) 表示采样超参数（如 hop 数与每层邻居数等）。
 对一组中心节点或中心边 \(\{c_k\}_{k=1}^K\)，
-采样得到局部子图集合，其公式如(3.19)所示：
+采样得到局部子图集合，其公式如~(\ref{eq:subgraph-sampling})所示：
 \begin{equation}
     H_k = \mathcal{S}_\theta(G^{\mathrm{big}}, c_k),
     \quad k = 1, \dots, K.
+    \label{eq:subgraph-sampling}
 \end{equation}
-每个子图 \(H_k\) 通过上述欧拉路径编码获得局部序列，其公式如(3.20)所示：
+每个子图 \(H_k\) 通过上述欧拉路径编码获得局部序列，其公式如~(\ref{eq:subgraph-seq})所示：
 \begin{equation}
     s_k = \Phi(H_k),
     \quad |s_k| \leq L_{\max} \leq L_{\mathrm{ctx}},
+    \label{eq:subgraph-seq}
 \end{equation}
 其中 \(L_{\mathrm{ctx}}\) 为 Transformer 的上下文窗口长度，
 \(L_{\max}\) 由采样参数与属性格式联合决定。
@@ -310,13 +320,14 @@ $h_v^{\mathrm{struc}} \in \mathbb{R}^{d_g}$。
 首先通过上一小节的无损编码过程得到离散序列
 $s = \Phi(G) = (w_1,\dots,w_L)$，
 其中 $w_i \in \mathcal{V}$、$L \leq L_{\mathrm{ctx}}$。
-图结构编码器的输入表示由三部分线性叠加得到，形式如式(3.21) 所示：
+图结构编码器的输入表示由三部分线性叠加得到，形式如式~(\ref{eq:enc-input}) 所示：
 \begin{equation}
   X^{(0)}_i
   = E_{\mathrm{tok}}(w_i)
   + E_{\mathrm{pos}}(i)
   + E_{\mathrm{type}}(w_i),
   \quad i = 1,\dots,L,
+  \label{eq:enc-input}
 \end{equation}
 其中 $E_{\mathrm{tok}}:\mathcal{V}\rightarrow\mathbb{R}^{d_g}$ 为 token 嵌入矩阵，
 $E_{\mathrm{pos}}:\{1,\dots,L_{\mathrm{ctx}}\}\rightarrow\mathbb{R}^{d_g}$ 为可学习位置编码，
@@ -330,14 +341,17 @@ $X^{(0)} = (X^{(0)}_1,\dots,X^{(0)}_L)\in\mathbb{R}^{L\times d_g}$。
 采用预归一化（pre-norm）残差结构。
 记第 $l$ 层输入隐藏状态为
 $H^{(l-1)}\in\mathbb{R}^{L\times d_g}$，
-输出为 $H^{(l)}$，则其更新过程如式(3.22)–(3.23) 所示：
+输出为 $H^{(l)}$，则其更新过程如式~(\ref{eq:enc-update-1})–~(\ref{eq:enc-update-2}) 所示：
 \begin{align}
   \tilde{H}^{(l)}
   &= H^{(l-1)}
-     + \mathrm{MSA}^{(l)}\big(\mathrm{LN}_1^{(l)}(H^{(l-1)}); M\big), \\
+     + \mathrm{MSA}^{(l)}\big(\mathrm{LN}_1^{(l)}(H^{(l-1)}); M\big), 
+    \label{eq:enc-update-1}
+     \\
   H^{(l)}
   &= \tilde{H}^{(l)}
      + \mathrm{FFN}^{(l)}\big(\mathrm{LN}_2^{(l)}(\tilde{H}^{(l)})\big),
+    \label{eq:enc-update-2}
 \end{align}
 其中 $\mathrm{LN}_1^{(l)}$ 与 $\mathrm{LN}_2^{(l)}$ 为层归一化算子，
 $\mathrm{MSA}^{(l)}$ 为多头自注意力模块，
@@ -349,13 +363,14 @@ $\mathrm{FFN}^{(l)}$ 为逐 token 的前馈网络。
 更适合 SMTP 式掩码预测与结构表征学习。
 
 多头自注意力采用标准形式。
-记第 $l$ 层第 $h$ 个注意力头的查询、键、值矩阵由公式(3.24)所示：
+记第 $l$ 层第 $h$ 个注意力头的查询、键、值矩阵由公式~(\ref{eq:attn-qkv})所示：
 \begin{align}
   Q_h &= H^{(l-1)} W^{(l)}_{Q,h},\quad
   K_h = H^{(l-1)} W^{(l)}_{K,h},\quad
   V_h = H^{(l-1)} W^{(l)}_{V,h},
+  \label{eq:attn-qkv}
 \end{align}
-则对应的注意力输出为公式(3.25)：
+则对应的注意力输出为公式(\ref{eq:attn})：
 \begin{equation}
   \mathrm{Attn}_h(H^{(l-1)})
   = \mathrm{Softmax}\!\left(
@@ -366,19 +381,21 @@ $\mathrm{FFN}^{(l)}$ 为逐 token 的前馈网络。
 $W^{(l)}_{Q,h}, W^{(l)}_{K,h}, W^{(l)}_{V,h}\in\mathbb{R}^{d_g\times(d_g/H)}$ 为可学习投影矩阵。
 各头输出在最后一维拼接后，经线性映射得到
 $\mathrm{MSA}^{(l)}(H^{(l-1)})$。
-前馈网络 $\mathrm{FFN}^{(l)}$ 为两层 MLP，其公式如(3.26)所示：
+前馈网络 $\mathrm{FFN}^{(l)}$ 为两层 MLP，其公式如~(\ref{eq:ffn})所示：
 \begin{equation}
   \mathrm{FFN}^{(l)}(x)
   = W^{(l)}_2\, \sigma\!\left(W^{(l)}_1 x + b^{(l)}_1\right) + b^{(l)}_2,
+  \label{eq:ffn}
 \end{equation}
 其中 $W^{(l)}_1\in\mathbb{R}^{d_g\times d_{\mathrm{ff}}}$，
 $W^{(l)}_2\in\mathbb{R}^{d_{\mathrm{ff}}\times d_g}$，
 $\sigma(\cdot)$ 为非线性激活函数（如 $\mathrm{GELU}$）。
 经过 $L_{\mathrm{enc}}$ 层堆叠，
-可得到最终的 token 级结构表示\(H^{(L_{\mathrm{enc}})}\)，其公式如(3.27)所示：
+可得到最终的 token 级结构表示\(H^{(L_{\mathrm{enc}})}\)，其公式如~(\ref{eq:enc-output})所示：
 \begin{equation}
   H^{(L_{\mathrm{enc}})} = \mathrm{Enc}_G(s)
   \in \mathbb{R}^{L\times d_g}.
+  \label{eq:enc-output}
 \end{equation}
 
 在具体实现中，本文采用与 GraphGPT-B24~\cite{Zhao2023GraphGPTGP} 相近的规模配置，
@@ -393,7 +410,7 @@ $\sigma(\cdot)$ 为非线性激活函数（如 $\mathrm{GELU}$）。
 本文沿用 GraphGPT~\cite{Zhao2023GraphGPTGP} 中的尾部读出策略。
 
 \begin{itemize}
-  \item \textbf{图级表征 }
+  \item \textit{图级表征 }
   对于图分类或回归任务，
   在序列 $s$ 尾部附加特殊标记 $[\mathrm{GSUM}]$，
   记其在序列中的位置为 $i_{\mathrm{gsum}}$。
@@ -404,7 +421,7 @@ $\sigma(\cdot)$ 为非线性激活函数（如 $\mathrm{GELU}$）。
   \)，
   随后输入任务特定的 MLP 头进行预测。
 
-  \item \textbf{节点级表征 }
+  \item \textit{节点级表征 }
   对节点分类等任务，
   将目标节点 $v$ 的节点 token 追加到序列尾部，
   记其位置为 $i_v$，
@@ -415,7 +432,7 @@ $\sigma(\cdot)$ 为非线性激活函数（如 $\mathrm{GELU}$）。
   由于节点 $v$ 在欧拉序列中可能出现多次，
   该追加位置可视为在全局上下文条件下对所有出现位置的聚合读出。
 
-  \item \textbf{边级表征 }
+  \item \textit{边级表征 }
   对链路预测等任务，
   在序列尾部追加目标边两端点的节点 token，
   如 $(u,v)$，
@@ -478,20 +495,22 @@ $s_n = \Phi(G_n) = (w^{(n)}_1,\dots,w^{(n)}_{L_n})$，
 采样一组掩码位置集合 $\mathcal{I}_n \subseteq \{1,\dots,L_n\}$，
 并将这些位置的 token 替换为特殊标记 $[\mathrm{MASK}]$，得到输入序列
 $\tilde{s}_n$。
-记 $\mathrm{Enc}_G$ 以及其后的 token 分类头联合定义的条件分布如式(3.28) 所示：
+记 $\mathrm{Enc}_G$ 以及其后的 token 分类头联合定义的条件分布如式~(\ref{eq:smtp-pred}) 所示：
 \begin{equation}
   p_\theta(w \mid \tilde{s}_n, i),
   \quad w \in \mathcal{V},\; i \in \mathcal{I}_n,
+  \label{eq:smtp-pred}
 \end{equation}
 即在给定被掩码序列 $\tilde{s}_n$ 与位置 $i$ 的条件下，
 对该位置原始 token 的预测分布。
 对单个序列 $s_n$ 的 SMTP 损失定义为所有掩码位置的平均交叉熵，
-形式如式(3.29) 所示：
+形式如式~(\ref{eq:smtp-loss}) 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{SMTP}}(s_n)
   = \frac{1}{|\mathcal{I}_n|}
     \sum_{i \in \mathcal{I}_n}
     - \log p_\theta\big(w^{(n)}_i \mid \tilde{s}_n, i\big).
+    \label{eq:smtp-loss}
 \end{equation}
 当序列采用“短／长编码格式”表示多维节点或边属性时，
 对于属于同一属性维度的 token 列，
@@ -500,12 +519,13 @@ $\tilde{s}_n$。
 以保证多维属性 token 在预测时的一致性与协同性。
 
 整个混合语料上的预训练目标为所有图损失的期望（或其小批量近似），
-形式化描述如式(3.30) 所示：
+形式化描述如式~(\ref{eq:pretrain-loss}) 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{pre}}
   = \frac{1}{N}
     \sum_{n=1}^{N}
     \mathcal{L}_{\mathrm{SMTP}}(s_n),
+    \label{eq:pretrain-loss}
 \end{equation}
 其优化过程等价于在统一词表下对所有结构、属性与特殊 token
 进行多分类交叉熵最小化。
@@ -556,13 +576,17 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 其二，基于生成式交叉熵的跨模态生成对齐方法，利用语言模型编解码器\(Dec_T\)，
 以图结构表征为条件生成节点描述或类别解释，并通过生成式交叉熵损失约束生成文本与真实描述的一致性，从而将对齐信号直接注入自回归解码过程，使图表征具备驱动语言生成的能力。
 
-综合而言，本节提出的对齐损失由全局 InfoNCE 对比损失、局部子结构对齐损失以及生成式交叉熵损失三部分构成，通过加权联合优化实现从“全局语义相似性→局部结构对应性→生成行为一致性”的渐进式跨模态对齐。实验结果表明，相比仅采用全局对比学习的基线配置，引入局部与生成式对齐后，
+综合而言，本节提出的对齐损失由全局 InfoNCE 对比损失、局部对齐损失以及交叉熵损失三部分构成，通过加权联合优化实现从“全局语义相似性→局部结构对应性→生成行为一致性”的渐进式跨模态对齐。实验结果表明，相比仅采用全局对比学习的基线配置，引入局部与生成式对齐后，
 图结构编码器在多种图任务上的零样本/少样本性能以及推理链的语义一致性均得到显著提升。
 \subsection{基于 InfoNCE 损失的全局表征对齐}
 
 在完成图结构编码器 \(\mathrm{Enc}_G\)、文本特征编码器 \(\mathrm{Enc}_T\) 以及对齐网络 \(N_A\) 的构建之后，本文首先采用基于 InfoNCE 损失的全局对比对齐作为跨模态对齐的基线方案。该方案借鉴视觉--语言预训练中的对比学习范式，将同一节点的图结构表征与文本语义表征视作一对语义一致的正样本，批内其他跨模态组合视作负样本，从而在共享对齐空间中压缩并对齐两种模态的几何结构。
 
-如第~3.2 节所述，图结构编码器与文本特征编码器分别输出节点级表征 \(h_i^{\mathrm{struc}} \in \mathbb{R}^{d_g}\) 与 \(h_i^{\mathrm{text}} \in \mathbb{R}^{d_t}\)。在对齐网络 \(N_A\) 中，通过投影函数 \(f_g\) 和 \(f_t\) 将二者映射到共享对齐空间 \(\mathbb{R}^{d_a}\)，其形式如式~(3.31) 所示：
+如第~3.2 节所述，图结构编码器与文本特征编码器分别输出节点级表征
+ \(h_i^{\mathrm{struc}} \in \mathbb{R}^{d_g}\) 与 
+ \(h_i^{\mathrm{text}} \in \mathbb{R}^{d_t}\)。
+ 在对齐网络 \(N_A\) 中，通过投影函数 \(f_g\) 和 \(f_t\) 
+ 将二者映射到共享对齐空间 \(\mathbb{R}^{d_a}\)，如式~(\ref{eq:align-proj}) 所示：
 \begin{equation}
   \tilde{h}_i^{\mathrm{struc}} = f_g\bigl(h_i^{\mathrm{struc}}\bigr), 
   \qquad
@@ -571,20 +595,27 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 \end{equation}
 其中 \(f_g:\mathbb{R}^{d_g}\!\rightarrow\!\mathbb{R}^{d_a}\)、\(f_t:\mathbb{R}^{d_t}\!\rightarrow\!\mathbb{R}^{d_a}\) 为两层 MLP 或线性投影。
 
-为采用余弦相似度作为对比学习的相似性度量，本文对对齐后的向量进行 \(\ell_2\) 归一化，其计算过程如式~(3.32) 所示：
+为采用余弦相似度作为对比学习的相似性度量，本文对对齐后的向量进行 \(\ell_2\) 归一化，
+其计算过程如式~(\ref{eq:normalize}) 所示：
 \begin{equation}
   u_i = \frac{\tilde{h}_i^{\mathrm{struc}}}{\bigl\|\tilde{h}_i^{\mathrm{struc}}\bigr\|_2},
   \qquad
   v_i = \frac{\tilde{h}_i^{\mathrm{text}}}{\bigl\|\tilde{h}_i^{\mathrm{text}}\bigr\|_2},
   \label{eq:normalize}
 \end{equation}
-其中 \(u_i, v_i \in \mathbb{R}^{d_a}\)。在此基础上，跨模态相似度自然定义为二者的内积，具体如式~(3.33) 所示：
+其中 \(u_i, v_i \in \mathbb{R}^{d_a}\)。
+在此基础上，跨模态相似度自然定义为二者的内积，如式~(\ref{eq:sim}) 所示：
 \begin{equation}
   \mathrm{sim}(u_i, v_j) = u_i^\top v_j.
   \label{eq:sim}
 \end{equation}
 
-在训练阶段，记一个 mini-batch 中的节点索引集合为 \(\mathcal{B}\)。对于每个节点 \(i \in \mathcal{B}\)，其图结构表征 \(u_i\) 与对应文本表征 \(v_i\) 构成一对正样本，而 \(\{v_j\}_{j \in \mathcal{B}, j \neq i}\) 构成负样本集合。给定温度系数 \(\tau > 0\)，从“图 \(\rightarrow\) 文本”方向定义的 InfoNCE 损失如式~(3.34) 所示：
+在训练阶段，记一个 mini-batch 中的节点索引集合为 \(\mathcal{B}\)。
+对于每个节点 \(i \in \mathcal{B}\)，
+其图结构表征 \(u_i\) 与对应文本表征 \(v_i\) 构成一对正样本，
+而 \(\{v_j\}_{j \in \mathcal{B}, j \neq i}\) 构成负样本集合。
+给定温度系数 \(\tau > 0\)，从“图 \(\rightarrow\) 文本”方向定义的 InfoNCE 损失
+如式~(\ref{eq:infonce-g2t}) 所示：
 \begin{equation}
   \mathcal{L}_{g \rightarrow t}
   =
@@ -597,7 +628,10 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 \end{equation}
 该目标驱动每个图结构向量 \(u_i\) 在对齐空间中靠近其语义对应的 \(v_i\)，同时与其他节点的文本向量保持足够区分度，从图侧约束语言模态的语义几何结构。
 
-为缓解单向对齐带来的偏置并增强训练稳定性，本文对称地引入“文本 \(\rightarrow\) 图”方向的 InfoNCE 损失。此时，每个文本向量 \(v_i\) 需在所有图结构向量 \(\{u_j\}_{j \in \mathcal{B}}\) 中检索到其对应节点，其损失定义如式~(3.35) 所示：
+为缓解单向对齐带来的偏置并增强训练稳定性，
+本文对称地引入“文本 \(\rightarrow\) 图”方向的 InfoNCE 损失。
+此时，每个文本向量 \(v_i\) 需在所有图结构向量 \(\{u_j\}_{j \in \mathcal{B}}\) 
+中检索到其对应节点，其损失公式如~(\ref{eq:infonce-t2g}) 所示：
 \begin{equation}
   \mathcal{L}_{t \rightarrow g}
   =
@@ -609,7 +643,8 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
   \label{eq:infonce-t2g}
 \end{equation}
 
-综合两种方向，基于 InfoNCE 的全局表征对齐基线损失定义为对称损失的平均，其形式如式~(3.36) 所示：
+综合两种方向，基于 InfoNCE 的全局表征对齐基线损失定义为对称损失的平均，
+其形式如式~(\ref{eq:global-align}) 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{global}}
   =
@@ -650,7 +685,7 @@ S_i = (V_i,E_i,X_i,A_i)
 将其进一步划分为若干尺寸可控的子结构
 \(
 \{S_{i,k}\}_{k=1}^{K_i}
-\)，即公式(3.37)所示：
+\)，即公式(\ref{eq:sub_sampling})所示：
 \begin{equation}
   S_{i,k}
   = \mathcal{S}_{\mathrm{sub}}\bigl(S_i,\, c_{i,k},\, \theta_{\mathrm{sub}}\bigr),
@@ -665,7 +700,8 @@ s_{i,k} = \Phi(S_{i,k})
 \)。
 
 在语义侧，参考 GraphTranslator 中 Producer 的分解式文本构造范式，
-本文为每个子结构 \(S_{i,k}\) 设计局部描述模板，将中心节点属性、邻域属性与局部关系模式整合为一段自然语言片段
+本文为每个子结构 \(S_{i,k}\) 设计局部描述模板，将中心节点属性、
+邻域属性与局部关系模式整合为一段自然语言片段
 \(
 u_{i,k}
 \)，并由文本编码器 \(\mathrm{Enc}_T\) 映射至语义空间。
@@ -673,7 +709,7 @@ u_{i,k}
 \(
 x^{(u)}_{i,k} = \tau(u_{i,k})
 \)，
-则相应的语义表示如式~(3.38) 所示：
+则相应的语义表示如式~(\ref{eq:sub_text_embed}) 所示：
 \begin{equation}
   h^{\mathrm{text}}_{i,k}
   = \mathrm{Pool}_t\!\bigl(\Phi_{\mathrm{LM}}\bigl(E(x^{(u)}_{i,k})\bigr)\bigr)
@@ -690,7 +726,9 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \)。
 为获得子结构级结构表示，
 本文在序列尾部为每个子图附加特殊标记 \([\mathrm{SSUM}]\)，
-并从对应位置读取局部聚合向量，或对该子图内的结构 token 进行平均池化，得到
+并从对应位置读取局部聚合向量，或对该子图内的结构 token 进行平均池化，
+得到\( h^{\mathrm{struc}}_{i,k}\)，其公式如~(\ref{eq:sub_graph_embed}) 所示：
+
 \begin{equation}
   h^{\mathrm{struc}}_{i,k}
   = \mathrm{Pool}_g\!\bigl(H_{i,k}\bigr)
@@ -698,11 +736,13 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
   \label{eq:sub_graph_embed}
 \end{equation}
 其中 \(\mathrm{Pool}_g(\cdot)\) 为子图级读出算子。
-
 与全局节点级对齐类似，
 局部对齐网络 \(N_A\) 通过一组可学习投影函数
 \(f_g, f_t\) 将结构与文本表征映射至共享对齐空间
-\(\mathbb{R}^{d_a}\)；在子结构层面，有
+\(\mathbb{R}^{d_a}\)；
+在子结构层面，
+得到局部结构表征\(z^{\mathrm{g}}_{i,k}\)
+与文本片段表征\(z^{\mathrm{t}}_{i,k}\)，如式~(\ref{eq:sub_proj}) 所示：
 \begin{equation}
   z^{\mathrm{g}}_{i,k} = f_g\bigl(h^{\mathrm{struc}}_{i,k}\bigr),
   \qquad
@@ -729,7 +769,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \end{equation}
 并可对称地定义文本到图的对齐损失
 \(\mathcal{L}_{\mathrm{sub}}^{\mathrm{t\rightarrow g}}\)，
-从而得到双向局部对齐目标
+从而得到双向局部对齐目标，如式~(\ref{eq:sub_bidirectional}) 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{sub}}
   = \frac{1}{2}
@@ -750,7 +790,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \(H^{\mathrm{t}}_{i,k} \in \mathbb{R}^{L^{(u)}_{i,k}\times d_a}\)
 分别为对齐空间中的结构侧与文本侧 token 表示
 （可通过对 \(H_{i,k}\) 与 \(\Phi_{\mathrm{LM}}(E(x^{(u)}_{i,k}))\) 施加线性变换获得），
-则第 \(\ell\) 个结构 token 与第 \(j\) 个文本 token 之间的相似度定义为
+则第 \(\ell\) 个结构 token 与第 \(j\) 个文本 token 之间的相似度，如式~(\ref{eq:token_sim}) 所示：
 \begin{equation}
   s_{i,k}(\ell,j)
   = \mathrm{sim}\!\bigl(H^{\mathrm{g}}_{i,k}[\ell],\, H^{\mathrm{t}}_{i,k}[j]\bigr).
@@ -771,7 +811,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 在训练时，
 对正样本对 \((i,k)\) 赋予标签 \(y_{i,k}=1\)，
 对由不同子结构或不同节点构成的负样本对 \((i,k),(j,l)\) 赋予标签 \(0\)，
-构造二元交叉熵损失
+构造二元交叉熵损失，其公式表示如式~(\ref{eq:local_match_loss}) 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{match}}
   = - \frac{1}{|\mathcal{B}|}
@@ -789,7 +829,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 
 \textbf{局部对齐损失的总体形式。}
 综合子结构级 InfoNCE 与 token 级匹配约束，
-面向子结构的局部对齐损失定义为
+面向子结构的局部对齐损失定义如式~(\ref{eq:local_total}) 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{local}}
   = \lambda_{\mathrm{sub}} \mathcal{L}_{\mathrm{sub}}
@@ -807,7 +847,59 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 
 
 
-\subsection{基于交叉熵的跨模态对齐方法}
+\subsection{图到文本重建的交叉熵损失}
+在完成图结构与语义文本的对比对齐之后，本文进一步引入基于交叉熵的图到文本重建目标，
+以强化图结构表征对节点语义信息的保留能力。
+具体地，对于带有文本属性的节点 $v$，
+记其标准化后的图结构条件表示为 $H_{\mathrm{cond}}^{(v)}$，对应的节点文本被分词为序列
+\(
+\mathbf{w}_v = (w_{v,1},\dots,w_{v,L_v}),
+\)
+其中 $L_v$ 为文本长度。
+文本解码器 $\mathrm{Dec}_T$ 在条件输入 $H_{\mathrm{cond}}^{(v)}$ 
+上建模节点文本的自回归条件分布，
+如公式~(\ref{eq:graph2text_prob})所示：
+\begin{equation}
+  p_\theta(\mathbf{w}_v \mid G,T,q_{\mathrm{rec}})
+  =
+  \prod_{t=1}^{L_v}
+  p_\theta\big(w_{v,t} \mid w_{v,<t}, H_{\mathrm{cond}}^{(v)}\big),
+  \label{eq:graph2text_prob}
+\end{equation}
+
+其中 $q_{\mathrm{rec}}$ 为用于重建任务的统一提示模板，$w_{v,<t}$ 表示第 $t$ 个位置之前的所有词片。
+
+在训练阶段，采用教师强制（Teacher Forcing）策略，以真实文本序列
+\(
+\mathbf{w}_v^\star = (w_{v,1}^\star,\dots,w_{v,L_v}^\star)
+\)
+作为解码器输入，最小化基于负对数似然的交叉熵损失。对一个包含若干节点的 mini-batch $B$，
+图到文本重建损失定义如公式~(\ref{eq:graph2text_ce}) 所示：
+\begin{equation}
+  \mathcal{L}_{\mathrm{CE}}
+  =
+  -\frac{1}{|B|}
+  \sum_{v \in B}
+  \sum_{t=1}^{L_v}
+  \log
+  p_\theta\big(
+    w_{v,t}^\star
+    \,\big|\,
+    w_{v,<t}^\star,
+    H_{\mathrm{cond}}^{(v)}
+  \big).
+  \label{eq:graph2text_ce}
+\end{equation}
+该目标在样本维度与时间维度上对预测对数概率求和，并对 batch 大小进行归一化。
+直观上，$\mathcal{L}_{\mathrm{CE}}$ 约束由图编码器与
+跨模态对齐模块得到的结构表征能够
+在不访问原始文本编码器的情况下“重述”节点的语义描述，
+从而鼓励图空间中保留与文本空间一致的细粒度语义信息，
+并为后续基于图结构条件的生成式节点分类与图推理奠定基础。
+
+
+
+
 \section{性能测评与实验分析} 
 \subsection{实验目标与配置} 
 \subsection{图结构编码方式对比实验} 
