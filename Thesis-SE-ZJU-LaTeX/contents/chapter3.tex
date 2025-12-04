@@ -370,12 +370,13 @@ $\mathrm{FFN}^{(l)}$ 为逐 token 的前馈网络。
   V_h = H^{(l-1)} W^{(l)}_{V,h},
   \label{eq:attn-qkv}
 \end{align}
-则对应的注意力输出为公式(\ref{eq:attn})：
+则对应的注意力输出为公式~(\ref{eq:attn})：
 \begin{equation}
   \mathrm{Attn}_h(H^{(l-1)})
   = \mathrm{Softmax}\!\left(
        \frac{Q_h K_h^\top}{\sqrt{d_g/H}} + M
      \right) V_h,
+     \label{eq:attn}
 \end{equation}
 其中 $h=1,\dots,H$ 为注意力头索引，
 $W^{(l)}_{Q,h}, W^{(l)}_{K,h}, W^{(l)}_{V,h}\in\mathbb{R}^{d_g\times(d_g/H)}$ 为可学习投影矩阵。

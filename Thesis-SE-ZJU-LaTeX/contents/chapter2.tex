@@ -103,7 +103,7 @@ h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 \end{equation}
 其中 \(\alpha+\beta+\gamma=1\)，\(\mathcal{V}_{\mathrm{ans}}\) 为答案验证器，
 \(\mathrm{PathScore}\) 为拓扑一致性得分，\(\mathrm{ConstraintSat}\) 为约束满足度。
-采用 GRPO 算法最大化策略目标，
+采用 GRPO \cite{Shao2024DeepSeekMathPT}算法最大化策略目标，
 其公式表示如~(\ref{eq:GRPO_objective})所示：
 \begin{equation}
 \mathcal{J}_{\mathrm{GRPO}}(\theta) =
@@ -449,7 +449,8 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
 在图结构 \(G\) 和查询 \(q\) 条件下生成包含中间分析步骤的推理链与答案
 \(y_{1:T} = (c_1,\ldots,c_T,a)\)。
 图算法或规则系统对生成结果进行自动验证，返回同时考虑答案正确性、路径合法性和约束满足程度的奖励。
-在优化层面，采用组式策略优化算法（Group-wise Policy Optimization, GRPO）对模型进行迭代更新，
+在优化层面，采用组式策略优化算法（Group-wise Policy Optimization, GRPO）
+\cite{Shao2024DeepSeekMathPT}对模型进行迭代更新，
 每轮采样多组推理轨迹并按奖励排序，仅对高奖励轨迹对应的策略进行更新，
 在满足图结构约束的前提下强化准确且可验证的推理行为，
 同时缓解传统强化学习中探索效率低与训练不稳定等问题。
@@ -705,7 +706,7 @@ Erdős覆盖 50 种图论推理任务，全部来自 NetworkX 提供的标准图
 并与 Erdős 图推理数据集中的 50 种图论任务样本按任务均衡方式混合，
 形成统一的图推理指令微调语料，用于学习规范化的图推理格式与显式思维链。
 随后在强化学习阶段，采用 Erdős 数据集提供的 $100\,000$ 条训练样本及其可程序验证的评分函数，
-构建基于 GRPO 的规则奖励信号，对基座模型进行图推理能力的强化学习式优化，
+构建基于 GRPO\cite{Shao2024DeepSeekMathPT} 的规则奖励信号，对基座模型进行图推理能力的强化学习式优化，
 进一步提升其在复杂图算法与高难度推理任务上的正确率与零样本泛化能力。
 
 
@@ -814,7 +815,7 @@ $y_{ij} \in \{0,1\}$ 指示二者是否匹配。
 \textbf{交叉熵损失。}
 在对齐空间中，以图结构表征为条件驱动 LLM 解码器生成节点文本描述。
 记目标文本序列为 $y = (y_1,\dots,y_T)$，
-则生成式损失可写如公式(2.32)：
+则生成式损失可写如公式~(\ref{eq:Cross_entropy_loss})：
 \begin{equation}
 \mathcal{L}_{\mathrm{gen}}
 =
@@ -823,6 +824,7 @@ $y_{ij} \in \{0,1\}$ 指示二者是否匹配。
 \sum_{t=1}^{T}
 \log p_\theta\big(y_t \mid y_{<t}, G, x\big)
 \bigg],
+\label{eq:Cross_entropy_loss}
 \end{equation}
 本质上为条件语言建模的自回归交叉熵，
 促使图结构表征内化可被 LLM 直接解码的细粒度语义信息。
@@ -837,13 +839,14 @@ $y_{ij} \in \{0,1\}$ 指示二者是否匹配。
 又在对齐空间中逐步撕开模态鸿沟，实现图–文表示的一致化。
 
 \subsubsection{面向节点分类任务的监督微调}
+
 本阶段在通用图–文基座之上注入具体节点分类与关联预测任务的监督信号，
 实现对图分类场景的参数高效适配。
 记节点 $v$ 的预测类别分布为 $\hat{\mathbf{p}}_v$，真实单标签为 one-hot 向量 $\mathbf{y}_v$。
 
 在损失函数方面，
 针对不同任务构造多任务监督目标。
-对单标签节点分类任务，采用标准类别交叉熵，其公式如 (2.33) 所示：
+对单标签节点分类任务，采用标准类别交叉熵，其公式如~(\ref{eq:Node_classification_cross_entropy_loss}) 所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{cls}}^{\mathrm{single}}
 =
@@ -851,6 +854,7 @@ $y_{ij} \in \{0,1\}$ 指示二者是否匹配。
 \big[
 \sum_{c} y_{v,c} \log \hat{p}_{v,c}
 \big].
+\label{eq:Node_classification_cross_entropy_loss}
 \end{equation}
 对多标签节点分类任务，采用按类别独立的二元交叉熵，其公式如 (2.34) 所示：
 \begin{equation}
@@ -901,6 +905,7 @@ y_{uv} \log \sigma(s_{uv})
 该阶段得到面向节点分类场景的图结构大语言基座模型。
 
 \subsubsection{图推理指令微调与强化学习优化}
+\label{sec:training_sft}
 阶段四面向图推理任务，
 通过监督式思维链指令微调（CoT-SFT）和基于可验证奖励的强化学习两步式优化，
 进一步提升模型生成显式、可验证推理链的能力。
@@ -909,7 +914,7 @@ y_{uv} \log \sigma(s_{uv})
 在 CoT-SFT 阶段，
 训练目标为条件语言建模损失。
 给定图 $G$、任务查询 $q$ 以及目标输出 $y=(y_1,\dots,y_T)$（包含推理链与最终答案），
-损失可写如公式(2.37)：
+损失可写如公式~(\ref{eq:Standard_supervision_fine_tuning_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{SFT}}
 =
@@ -918,6 +923,7 @@ y_{uv} \log \sigma(s_{uv})
 \sum_{t=1}^{T}
 \log p_\theta\big(y_t \mid y_{<t}, G, q\big)
 \bigg].
+\label{eq:Standard_supervision_fine_tuning_loss}
 \end{equation}
 该损失鼓励模型学习标准化的图推理格式以及结构化思维链模式。
 
@@ -933,7 +939,7 @@ y_{uv} \log \sigma(s_{uv})
 \textbf{基于可验证奖励的强化学习阶段。}
 在强化学习阶段，
 将 CoT 推理视作条件策略生成过程，
-采用基于 Group-wise Policy Optimization（GRPO）的策略优化目标。
+采用基于 Group-wise Policy Optimization（GRPO）\cite{Shao2024DeepSeekMathPT}的策略优化目标。
 记策略为 $\pi_\theta(y \mid G,q)$，可验证奖励函数为 $R(G,q,y)$，
 其由答案正确性、路径或结构合法性以及约束满足程度等部分加权组合而成，
 其公式定义如~(\ref{eq:reward_function})所示：
@@ -984,6 +990,7 @@ $\pi_{\theta_{\mathrm{ref}}}$ 为参考策略（例如 CoT-SFT 后的模型）�
 显著提升模型在复杂图推理任务上的可验证性与零样本泛化能力。
 
 \section{图基座模型推理生成流程}
+\label{sec:graph_llm_inference}
 
 本研究构建的图基座模型在推理阶段采用统一的"编码-提示-解码"范式，其核心在于将图结构信息与文本语义无缝融合，通过冻结参数的条件生成机制实现多任务推理。
 如图XX所示，该流程包含三个关键组件：
@@ -1008,7 +1015,7 @@ p_\theta\big(y \mid H_{\mathrm{cond}}\big),
 不再进行梯度更新，不同任务仅通过提示模板与后处理规则加以区分。
 下文分别给出垂直领域节点分类与基于强化学习优化的图推理任务上的具体推理生成流程。
 
-\subsection{垂直领域节点分类推理}
+\textbf{（1）垂直领域节点分类推理。}
 
 图基座模型在节点分类任务推理时具体分为三个步骤。
 
@@ -1045,7 +1052,7 @@ x_v = [E_{\mathrm{text}};\, \tilde{h}_v],
 视为节点 \(v\) 属于类别 \(c\) 的非归一化置信度，经归一化后得到概率分布，
 最终预测标签为\(\hat{y}_v\)。
 
-\subsection{基于强化学习优化的图推理与链式生成}
+\textbf{（2）基于强化学习优化的图推理与链式生成。}
 
 第~2.1.2 节中，图推理任务被形式化为学习图基础模型 \(F_\theta\)，输出推理链 \(c=(c_1,\dots,c_T)\) 与答案 \(a\)。在经过 CoT 监督微调与 GRPO 强化学习优化后，推理阶段将参数固定为 \(\theta^\ast\)，整体流程可概括为“条件构造—自回归生成—可验证重排序”三个步骤。
 
