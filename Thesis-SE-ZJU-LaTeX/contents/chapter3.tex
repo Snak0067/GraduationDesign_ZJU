@@ -298,7 +298,7 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 实现了在不同图尺度上的统一、可控编码。
 在此基础上，下一小节将进一步介绍专用图结构编码器如何在 token 序列空间中提炼可迁移的结构语义表征。
 
-\subsection{图结构编码器的模型架构}
+\subsection{图结构编码器与节点表征抽取}
 
 在获得图到序列的可逆映射
 $\Phi:\mathcal{G}\rightarrow\mathcal{V}^\ast$ 之后，
@@ -454,7 +454,7 @@ $\Phi(G)$ 映射到统一的隐藏空间 $\mathbb{R}^{d_g}$。
 并通过 24 层双向 Transformer 充分建模子图内部的长程依赖，
 从而为后续的生成式预训练以及多粒度图任务提供统一且可迁移的结构语义基底。
 
-\subsection{基于混合数据集的图表征预训练}
+\subsection{基于混合数据集的图表征预训练策略}
 
 在完成基于（semi-）Eulerian 路径的图到序列编码设计及图结构编码器
 $\mathrm{Enc}_G$ 的构建之后，
@@ -580,6 +580,7 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 综合而言，本节提出的对齐损失由全局 InfoNCE 对比损失、局部对齐损失以及交叉熵损失三部分构成，通过加权联合优化实现从“全局语义相似性→局部结构对应性→生成行为一致性”的渐进式跨模态对齐。实验结果表明，相比仅采用全局对比学习的基线配置，引入局部与生成式对齐后，
 图结构编码器在多种图任务上的零样本/少样本性能以及推理链的语义一致性均得到显著提升。
 \subsection{基于 InfoNCE 损失的全局表征对齐}
+\label{subsec:global_align}
 
 在完成图结构编码器 \(\mathrm{Enc}_G\)、文本特征编码器 \(\mathrm{Enc}_T\) 以及对齐网络 \(N_A\) 的构建之后，本文首先采用基于 InfoNCE 损失的全局对比对齐作为跨模态对齐的基线方案。该方案借鉴视觉--语言预训练中的对比学习范式，将同一节点的图结构表征与文本语义表征视作一对语义一致的正样本，批内其他跨模态组合视作负样本，从而在共享对齐空间中压缩并对齐两种模态的几何结构。
 
@@ -663,7 +664,8 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 
 
 
-\subsection{子结构-短语级的局部对齐机制}
+\subsection{子结构-短语级的局部语义对齐机制}
+\label{subsec:local_align}
 
 仅依赖前文基于 InfoNCE 的节点级全局对齐，
 虽然能够在语义空间中整体拉近图结构表征与文本表征，
@@ -672,7 +674,50 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 本文在欧拉路径解析基础上，引入面向子结构的局部表征对齐机制，
 借鉴 GraphTranslator\cite{Zhang2024GraphTranslatorAG} 中多粒度对齐思想，
 在统一对齐空间内显式约束局部子图与局部文本描述的一一对应关系。
-% :contentReference[oaicite:0]{index=0}
+整体子结构-短语级的局部语义对齐算法流程如~(\ref{alg:local_match_algorithm})所示：
+\begin{algorithm}[t]
+\caption{子结构-短语级局部匹配损失 $\mathcal{L}_{\mathrm{match}}$ 计算流程}
+\label{alg:local_match_algorithm}
+\KwIn{一批子结构序列 $\{s_{i,k}\}$ 与对应文本片段 $\{x^{(u)}_{i,k}\}$；
+      图结构编码器 $\mathrm{Enc}_G$；
+      文本编码器 $\Phi_{\mathrm{LM}}$；
+      对齐投影层 $W_g,W_t$}
+\KwOut{局部匹配损失 $\mathcal{L}_{\mathrm{match}}$}
+
+初始化样本集合 $\mathcal{B} \gets \emptyset$\;
+
+\ForEach{子结构--文本对 $(s_{i,k}, x^{(u)}_{i,k})$}{
+  结构侧 token 表示：
+  $H^{\mathrm{g}}_{i,k} \gets \mathrm{Enc}_G(s_{i,k}) W_g$\;
+  文本侧 token 表示：
+  $H^{\mathrm{t}}_{i,k} \gets \Phi_{\mathrm{LM}}(x^{(u)}_{i,k}) W_t$\;
+
+  \For{$\ell \gets 1$ \KwTo $L_{i,k}$}{
+    \For{$j \gets 1$ \KwTo $L^{(u)}_{i,k}$}{
+      计算相似度
+      $s_{i,k}(\ell,j) \gets \mathrm{sim}\!\big(H^{\mathrm{g}}_{i,k}[\ell], H^{\mathrm{t}}_{i,k}[j]\big)$\;
+    }
+  }
+  计算子结构匹配得分：
+  $m_{i,k} \gets \frac{1}{L_{i,k}} \sum_{\ell=1}^{L_{i,k}}
+      \max_{1 \le j \le L^{(u)}_{i,k}} s_{i,k}(\ell,j)$\;
+
+  将正样本对 $(i,k)$ 及其得分 $m_{i,k}$ 加入集合 $\mathcal{B}$，并置标签 $y_{i,k}=1$\;
+}
+
+\ForEach{从不同子结构/节点构造的负样本对 $(i,k),(j,l)$}{
+  计算对应得分 $m_{j,l}$，加入集合 $\mathcal{B}$，并置标签 $y_{j,l}=0$\;
+}
+
+基于 Sigmoid 计算二元交叉熵损失：
+\(
+  \mathcal{L}_{\mathrm{match}}
+\)\;
+
+\Return{$\mathcal{L}_{\mathrm{match}}$}\;
+\end{algorithm}
+
+
 
 \textbf{局部子结构与文本片段的构造。}
 记第 \(i\) 个节点在欧拉路径序列化之后所对应的局部子图为
@@ -848,18 +893,17 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 
 
 
-\subsection{图到文本重建的交叉熵损失}
+\subsection{图到文本重建与联合训练目标}
+\textbf{图到文本重建。}
 在完成图结构与语义文本的对比对齐之后，本文进一步引入基于交叉熵的图到文本重建目标，
-以强化图结构表征对节点语义信息的保留能力。
-具体地，对于带有文本属性的节点 $v$，
-记其标准化后的图结构条件表示为 $H_{\mathrm{cond}}^{(v)}$，对应的节点文本被分词为序列
+以强化图结构表征对节点语义信息的保留与还原能力。
+具体地，对于带有文本属性的节点 $v$，记其标准化后的图结构条件表示为 $H_{\mathrm{cond}}^{(v)}$，
+对应节点文本被分词为序列
 \(
 \mathbf{w}_v = (w_{v,1},\dots,w_{v,L_v}),
 \)
 其中 $L_v$ 为文本长度。
-文本解码器 $\mathrm{Dec}_T$ 在条件输入 $H_{\mathrm{cond}}^{(v)}$ 
-上建模节点文本的自回归条件分布，
-如公式~(\ref{eq:graph2text_prob})所示：
+在此条件下，文本解码器 $\mathrm{Dec}_T$ 对节点文本建模的自回归条件分布可写为式~(\ref{eq:graph2text_prob})：
 \begin{equation}
   p_\theta(\mathbf{w}_v \mid G,T,q_{\mathrm{rec}})
   =
@@ -867,15 +911,16 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
   p_\theta\big(w_{v,t} \mid w_{v,<t}, H_{\mathrm{cond}}^{(v)}\big),
   \label{eq:graph2text_prob}
 \end{equation}
-
 其中 $q_{\mathrm{rec}}$ 为用于重建任务的统一提示模板，$w_{v,<t}$ 表示第 $t$ 个位置之前的所有词片。
+该式显式刻画了在图结构条件 $H_{\mathrm{cond}}^{(v)}$ 下，解码器按时间步依次生成文本 token 的过程。
 
-在训练阶段，采用教师强制（Teacher Forcing）策略，以真实文本序列
+在训练阶段，采用教师强制（Teacher Forcing）策略，
+以真实文本序列
 \(
 \mathbf{w}_v^\star = (w_{v,1}^\star,\dots,w_{v,L_v}^\star)
 \)
-作为解码器输入，最小化基于负对数似然的交叉熵损失。对一个包含若干节点的 mini-batch $B$，
-图到文本重建损失定义如公式~(\ref{eq:graph2text_ce}) 所示：
+作为解码器输入，最小化基于负对数似然的交叉熵损失。
+对一个包含若干节点的 mini-batch $B$，图到文本重建损失定义如式~(\ref{eq:graph2text_ce}) 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{CE}}
   =
@@ -892,19 +937,223 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
   \label{eq:graph2text_ce}
 \end{equation}
 该目标在样本维度与时间维度上对预测对数概率求和，并对 batch 大小进行归一化。
-直观上，$\mathcal{L}_{\mathrm{CE}}$ 约束由图编码器与
-跨模态对齐模块得到的结构表征能够
-在不访问原始文本编码器的情况下“重述”节点的语义描述，
+直观上，$\mathcal{L}_{\mathrm{CE}}$ 约束由图编码器与跨模态投影模块得到的结构表征
+能够在不访问原始文本编码器的情况下“重述”节点的语义描述，
 从而鼓励图空间中保留与文本空间一致的细粒度语义信息，
 并为后续基于图结构条件的生成式节点分类与图推理奠定基础。
 
+\textbf{联合训练目标。}
+在此基础上，本文采用多目标联合优化策略，将节点级全局对齐损失、局部对齐损失与图到文本重建损失进行加权组合。
+记第~\ref{subsec:global_align} 节中定义的节点级 InfoNCE 全局对齐损失为 $\mathcal{L}_{\mathrm{global}}$，
+第~\ref{subsec:local_align} 节中定义的局部对齐损失为 $\mathcal{L}_{\mathrm{local}}$，
+则跨模态对齐阶段的总体训练目标可表示为式~(\ref{eq:joint_align_loss})：
+\begin{equation}
+  \mathcal{L}_{\mathrm{align}}
+  =
+  \lambda_{\mathrm{g}} \,\mathcal{L}_{\mathrm{global}}
+  +
+  \lambda_{\mathrm{loc}} \,\mathcal{L}_{\mathrm{local}}
+  +
+  \lambda_{\mathrm{ce}} \,\mathcal{L}_{\mathrm{CE}},
+  \label{eq:joint_align_loss}
+\end{equation}
+其中 $\lambda_{\mathrm{g}},\lambda_{\mathrm{loc}},\lambda_{\mathrm{ce}} \ge 0$ 为可调权重系数，
+用于平衡全局对齐、局部对齐与重建目标在训练过程中的相对贡献。
+式~(\ref{eq:joint_align_loss}) 给出了三个损失项在整体跨模态对齐框架中的联合建模形式。
+
+联合优化的直观作用可以概括为：
+(i) $\mathcal{L}_{\mathrm{global}}$ 通过 InfoNCE 约束节点级图--文表示在全局语义空间中对齐，
+确保图结构向量与对应节点文本在嵌入空间中的一致性；
+(ii) $\mathcal{L}_{\mathrm{local}}$ 通过子结构--短语级对齐进一步细化约束，
+避免仅依赖全局池化导致的语义过度平滑，使关键子图模式与文本短语之间建立更精细的对应关系；
+(iii) $\mathcal{L}_{\mathrm{CE}}$ 则从生成建模角度反向检验图表示的语义完备性，
+要求图编码在被送入解码器时能够恢复出高质量的节点描述文本。
+三者在式~(\ref{eq:joint_align_loss}) 中协同作用，使得最终得到的图结构表征既适合下游节点分类判别任务，
+又具备良好的跨模态语义对齐与生成能力。
+
+在具体实现中，训练阶段采用基于 AdamW 的随机梯度优化器对图编码器高层与跨模态投影层参数进行更新，
+而文本编码器及大部分语言模型主干参数保持冻结，
+以避免破坏原有语言知识并降低训练开销。
+权重系数 $\lambda_{\mathrm{g}},\lambda_{\mathrm{loc}},\lambda_{\mathrm{ce}}$ 选取为同一量级，
+并在验证集上通过网格搜索确定其相对比例；
+除非特别说明，后续实验均采用在验证集上表现最优的一组固定配置，
+具体数值将在第~(\ref{subsec:Chapter_3_Ablation_Experiment}) 节的消融实验中给出。
+
+\section{性能测评与实验分析}
+\subsection{实验目标与配置}
+\textbf{(1)实验目标}
+
+本章提出的算法针对图基座模型中图表征质量不足与跨模态语义对齐能力有限的问题，
+通过基于欧拉路径的图--序列表征与多层次跨模态对齐策略两项改进，
+构建了通用的图结构基座模型。
+实验部分旨在系统分析上述两类改进对节点分类性能的影响，
+以及二者联合使用时的协同效应，
+并在不同规模、不同结构特征的公开文本属性图数据集上验证所提方法的泛化能力。
+围绕第三章构建的通用图结构基座模型，本章的实验目标概括如下：
+
+\begin{itemize}
+  \item 测评同时采用图编码改进与跨模态对齐优化的完整图基座模型，
+  在节点分类任务上的整体性能表现，并与典型基线方法进行对比。
+
+  \item 定量分析基于欧拉路径的图--序列表征对节点分类性能的影响，
+  验证图结构编码改进对提升节点表示质量的有效性。
+
+  \item 考察不同跨模态训练目标组合（如仅全局对齐、仅局部对齐、仅重建及其联合）
+  对模型性能的影响，刻画多层次跨模态对齐策略在节点分类任务中的具体贡献。
+
+  \item 通过消融分析与超参数配置对比，探索图表征改进与跨模态对齐算法中关键超参数的合理设置范围，
+  为后续模型应用与扩展提供参考。
+\end{itemize}
+
+\textbf{(2)环境配置}
+
+本方案相关的训练和测试工作的硬件环境如表~\ref{tab:hardware_env} 所示，
+软件环境配置见表~\ref{tab:software_env}。
+% ================== 硬件环境 ==================
+\begin{table}[htbp]
+  \centering
+  \caption{结合欧拉路径图表征和跨模态对齐优化实验的硬件环境配置}
+  \label{tab:hardware_env}
+  \begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{0.18\textwidth}|>{\centering\arraybackslash}X|}
+
+    \hline
+    硬件名称 & 具体信息 \\ \hline
+    操作系统 & Ubuntu 22.04 LTS \\ \hline
+    CPU      & AMD EPYC 7763 64-Core Processor @ 3.17GHz \\ \hline
+    GPU      & NVIDIA A100\mbox{-}SXM4\mbox{-}80GB Specs $\times$ 8 \\ \hline
+    内存     & 1TB \\ \hline
+  \end{tabularx}
+\end{table}
 
 
 
-\section{性能测评与实验分析} 
-\subsection{实验目标与配置} 
-\subsection{图结构编码方式对比实验} 
-\subsection{跨模态对齐损失对比实验} 
+% ================== 软件环境 ==================
+\begin{table}[htbp]
+  \centering
+  \caption{结合欧拉路径图表征和跨模态对齐优化实验的软件环境配置}
+  \label{tab:software_env}
+  \begin{tabularx}{\textwidth}{|>{\centering\arraybackslash}p{0.18\textwidth}|>{\centering\arraybackslash}X|}
+
+    \hline
+    软件名称 & 版本信息 \\ \hline
+    Python   & 3.9 \\ \hline
+    PyTorch  & 2.3.1 \\ \hline
+    CUDA     & 11.8 \\ \hline
+  \end{tabularx}
+\end{table}
+
+
+\textbf{（3）数据集配置}
+
+为系统评估本章提出的图结构表征与跨模态对齐方法，
+实验采用多源异构图数据集进行训练与验证。
+表~\ref{tab:dataset_overview}详细汇总了第一、二训练阶段所用数据集的核心特性与配置参数。
+
+
+\begin{table}[htbp]
+  \centering
+  \small
+  \caption{第一、二训练阶段图数据集配置概览}
+  \label{tab:dataset_overview}
+  % 可以根据需要略微调节间距
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabularx}{\textwidth}{@{}l c r r >{\centering\arraybackslash}p{2.8cm} c@{}}
+    \toprule
+    数据集 & 图类型 & 节点数 & 边数 & 节点文本 / 特征维度 & 训练阶段 \\
+    \midrule
+    Cora            & 学术引用图         &  2,708   &    10,556  & 1,433（BoW）       & 阶段一、二 \\
+    PubMed          & 生物医学引用图     & 19,717   &    88,648  & 500（TF--IDF）          & 阶段一、二 \\
+    OGB-Arxiv       & 大规模论文引用图   & 169,343  & 2,315,598    & 128（论文嵌入）         & 阶段一、二 \\
+    Amazon-Computers& 电商共购图         & 87,229   &   1,256,548     & 768（商品特征）         & 阶段一     \\
+    PCQM4Mv2        & 分子图集合         & 3,803,453 & 78,256,721    & 原子 / 键特征           & 阶段一     \\
+    \midrule
+    图表征混合数据集$^\dagger$     & 综合       & 552,052  & 4,459,033            & --                      & 阶段一     \\
+    跨模态对齐混合数据集$^\dagger$     & 文本属性图    & 191,768  & 2,414,802            & 1,433 / 500 / 128       & 阶段二     \\
+    \bottomrule
+  \end{tabularx}
+
+  {\raggedright\footnotesize
+  注：$^\dagger$ 图表征混合数据集为对上述多个图数据集重标号、采样与合并后
+  得到的综合预训练图，其节点 / 边规模来源于实际构建结果，
+  并非简单等于各单一数据集规模之和；跨模态对齐混合数据集仅由 Cora、PubMed 与
+  OGB-Arxiv 三个文本属性图拼接而成，节点数与边数为三者之和。\par}
+\end{table}
+
+
+
+
+第一阶段图编码器预训练采用混合数据集策略，整合了学术引用网络（Cora、PubMed、OGB-arxiv）、
+电商协同网络（Amazon-*）及分子图（PCQM4Mv2）等五类异构图数据，
+通过统一的欧拉路径编码转换为序列化表示，总计包含552,052个节点与4,459,033条边。
+该混合策略确保编码器在训练过程中接触到多样化的拓扑模式——
+从稀疏高聚类系数的引文网络到具有严格化学约束的分子图——从而提升结构表征的跨域泛化能力。
+
+第二阶段跨模态对齐则聚焦于文本属性丰富的真实场景图（Cora、PubMed、OGB-arxiv），
+严格遵循原始数据集的节点文本属性与图结构关联，构建图-文对齐样本对。
+所有数据集均采用官方划分标准，节点采样策略与邻域范围保持一致，
+以消除预处理差异对实验结果的影响。
+在输入格式上，图结构经欧拉路径序列化后统一截断至256 tokens，
+文本属性经SentencePiece分词后限制在128 tokens以内，确保模型输入的标准化与可比性。
+
+并且我们对使用的数据集进行图特性的分析，
+具体见表~(\ref{tab:dataset_characteristics})：
+
+
+\begin{table}[htbp]
+\centering
+\caption{图数据集特性对比}
+\label{tab:dataset_characteristics}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\toprule
+\textbf{数据集} & \textbf{图密度} & \textbf{平均度} & \textbf{聚类系数} & \textbf{直径} & \textbf{同质性} & \textbf{异构性} \\
+\midrule
+Cora & 0.0015 & 3.9 & 0.23 & 19 & 高 & 低 \\
+PubMed & 0.00011 & 4.5 & 0.03 & 6 & 高 & 低 \\
+OGB-arxiv & 0.00004 & 13.8 & 0.14 & 4 & 中 & 中 \\
+Amazon-Computers & 0.000095 & 8.3 & 0.17 & 20 & 低 & 高 \\
+Amazon-Sports & 0.000065 & 11.2 & 0.13 & 18 & 低 & 高 \\
+Erdős (平均) & 0.12 & 4.7 & 0.31 & 6 & 可变 & 低 \\
+PCQM4Mv2 & 0.02 & 20.6 & 0.38 & 3 & 低 & 高 (化学约束) \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+\textbf{（4）实验细节配置}
+
+为保证实验可重复性与结果的可比性，本节统一给出两阶段训练的核心超参数配置。若无特殊说明，所有实验均在 8 张 A100 80GB GPU 上进行，采用 DeepSpeed ZeRO-2 混合精度训练，随机种子固定为 42。
+
+\textbf{阶段一实验细节配置：}
+模型参数如下：图编码器采用 GET-Base24：隐藏维度 \(d_g = 768\)，Transformer 层数为 24，多头注意力头数为 12，前馈层维度 \(d_{\mathrm{ff}} = 4d_g = 3072\)，激活函数为 GELU；注意力层 Dropout 取 0.1，MLP 与嵌入层 Dropout 取 0。
+图 token 序列最大长度设为 \(L_{\mathrm{ctx}} = 512\)，对超过该长度的样本通过子图采样截断。
+SMTP 掩码比例从 15\% 线性增加到 30\%，并对同一节点在欧拉序列中的全部出现位置同步掩码。
+优化器采用 AdamW，\(\beta_1 = 0.9\)、\(\beta_2 = 0.95\)，\(\epsilon = 10^{-8}\)，权重衰减 0.1。学习率采用“预热 + 线性衰减”，最大学习率 \(\mathrm{lr}_{\max} = 3\times10^{-4}\)，最小值为 0，预热步数占总训练步数的 5\%。全局梯度裁剪阈值为 1.0。
+全局 batch size 为 256，对短序列采用样本打包策略。总训练步数为 150k，可覆盖约 \(10^8\) 级别的图 token。按固定步长在验证集上监控 SMTP 损失及线性探针性能，并选取验证损失最优模型作为阶段一最终结果。
+
+\textbf{阶段二实验细节配置：}
+阶段二文本编码器 \(\mathrm{Enc}_T\) 采用 RoBERTa-base，隐藏维度 \(d_t = 768\)，
+与图侧一同更新。跨模态投影头 \(f_G:\mathbb{R}^{d_g}\rightarrow\mathbb{R}^{d_z}\)、\(f_T:\mathbb{R}^{d_t}\rightarrow\mathbb{R}^{d_z}\) 及局部匹配线性层从随机初始化开始训练，公共语义空间维度设为 \(d_z = 768\)。\(\mathrm{Dec}_T\) 采用 Qwen2.5-14B-Instruct，在本阶段保持冻结。
+LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
+节点文本在输入 \(\mathrm{Enc}_T\) 时截断至 256 token 并聚合为节点级表示。
+ 联合优化全局图–文对比损失 \(\mathcal{L}_{\mathrm{global}}\)、
+ 局部子结构匹配损失 \(\mathcal{L}_{\mathrm{local}}\) 与
+ 文本生成损失 \(\mathcal{L}_{\mathrm{gen}}\)，
+ 权重分别为 \(\lambda_{\mathrm{global}} = 1.0\)、\(\lambda_{\mathrm{local}} = 0.5\)、
+ \(\lambda_{\mathrm{gen}} = 0.5\)。
+所有可训练参数使用 AdamW。编码器主干学习率 \(\mathrm{lr}_{\mathrm{enc}} = 2\times10^{-4}\)，
+跨模态投影头与任务头学习率 \(\mathrm{lr}_{\mathrm{proj}} = 2\times10^{-3}\)，
+\(\beta_1 = 0.9\)、\(\beta_2 = 0.95\)，\(\epsilon = 10^{-8}\)，权重衰减 0.01。
+学习率采用“预热 + 余弦退火”，预热步数占 3\%，之后按余弦曲线衰减至初始值的 1/10；
+全局梯度裁剪阈值同样为 1.0。
+
+综上，除特别说明外，所有基于图–文联合表征的实验均默认采用上述超参数配置。
+
+
+
 \subsection{节点分类任务基准对比实验}
+\subsection{图结构编码方式有效性分析} 
+\subsection{跨模态对齐损失有效性分析} 
 \subsection{消融实验} 
+\label{subsec:Chapter_3_Ablation_Experiment}
 \section{本章小结}

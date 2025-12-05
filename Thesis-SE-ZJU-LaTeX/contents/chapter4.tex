@@ -44,7 +44,7 @@
 
 
 
-\section{图推理导向的监督式冷启动微调}
+\section{基于思维链监督的冷启动微调}
 \label{sec:cot_sft}
 如第~\ref{sec:problem_graph_reasoning} 节所述，图推理任务被形式化为在给定图–文本输入 \((G,q)\) 的条件下，学习生成推理链与答案的条件语言模型
 \(
@@ -76,7 +76,7 @@ p_\theta(y \mid G,q)
 再经多维度可验证规则筛选得到最终监督样本。
 本节下文将详细展开数据集构建过程。
 
-\subsubsection{合成图论任务样本构建}
+\subsubsection{图论合成任务与难度分层策略}
 
 本文在现有基准数据集基础上，\emph{参照} Guo 等人\cite{Guo2025G1TL} 提出的图推理任务设计与
 难度分层范式，
@@ -143,7 +143,7 @@ N_t = 200
 综上，本文在任务定义与难度分层上参考 G1 的设计，但在图采样策略、查询模板、图到 Token 编码以及真值计算等环节完全重新实现，构建了规模为 \(5\)k、覆盖 50 类图论任务的自建合成图推理数据集，为后续思维链生成与强化学习训练提供了可控且结构多样的基础数据。
 
 
-\subsubsection{真实图推理任务样本构建}
+\subsubsection{真实属性图上的图推理任务构建}
 为提高在真实场景下的迁移能力，进一步从 Cora、PubMed、OGB-Arxiv 等典型文本属性图中构造真实图推理任务。
 针对每张图，选取若干种节点级或子图级查询，
 包括节点连通性判别、多跳邻居检索、局部子图同构判定、学科子领域覆盖度估计等，
@@ -182,7 +182,7 @@ y^\star = (c^\star,a^\star)
 \(c^\star\) 为符合图论逻辑的自然语言推理链，
 \(a^\star\) 为与图算法真值一致的精确答案。
 
-\subsubsection{基于拒绝采样的思维链生成}
+\subsubsection{结合教师模型与规则验证的拒绝采样式思维链生成}
 \label{subsubsec:rejection_cot}
 
 为获得高质量的思维链标注，
@@ -348,7 +348,7 @@ Top-p阈值0.95（保留高概率token），
 
 综上，本文基于拒绝采样范式，在图算法可验证器的支撑下构建了一个规模可观、结构可验证且语义高质量的图推理思维链数据集 \(\mathcal{D}_{\text{CoT}}\)，为后续冷启动微调与基于 GRPO 的强化学习提供了坚实的数据基础。
 
-\subsection{思维链监督微调目标}
+\subsection{思维链监督微调目标建模}
 \label{subsec:cot_sft_objective}
 
 在获得思维链监督数据集 \(\mathcal{D}_{\mathrm{CoT}}\) 后，
@@ -414,7 +414,7 @@ Top-p阈值0.95（保留高概率token），
 与 DeepSeek-R1 和 G1 中的 CoT-SFT 阶段类似，本文对推理链与答案部分采用统一权重的全序列监督，而不额外区分链内/链外 Token 的重要性。
 实验结果表明，这一简单而统一的目标已足以显著提升模型在图论任务上的思维链可读性与答案可验证性，并为后续基于可验证奖励的 RL 阶段提供稳定且结构化的初始策略。
 
-\subsection{训练策略与实现细节}
+\subsection{冷启动阶段的训练策略与实现}
 \label{subsec:cot_sft_train_detail}
 
 为了在有限算力预算下高效提升图推理能力，同时尽量保留预训练语言模型的通用知识，本文在 CoT-SFT 阶段采用了参数冻结、任务均衡采样与稳定优化相结合的训练策略。
@@ -448,7 +448,7 @@ Top-p阈值0.95（保留高概率token），
 将作为后续 GRPO 强化学习阶段的初始化，为基于可验证奖励的策略优化提供结构良好、分布合理的起点。
 
 
-\section{基于 GRPO 的可验证奖励设计与强化学习框架}
+\section{可验证奖励与 GRPO 强化学习框架}
 \label{sec:grpo_rl}
 
 在第~\ref{sec:cot_sft} 节中，本文通过思维链监督微调（CoT-SFT）将图基座模型初始化为具备基本“先推理、后作答”行为的条件语言模型，得到参数
@@ -472,9 +472,9 @@ DeepSeek-R1 则在数学、代码等领域通过大规模 RL 与
 再在第~\ref{subsec:grpo_objective} 节中形式化推导 GRPO 训练目标与基模约束，
 并在第~\ref{subsec:grpo_train_detail} 节系统说明强化学习训练流程与工程细节。
 
-\subsection{规则可验证奖励设计}
+\subsection{规则化可验证奖励建模}
 \label{subsec:rule_reward_design}
-\subsubsection{问题设定与总体思路}
+\subsubsection{奖励建模问题设定与总体设计思路}
 
 规则可验证奖励机制是本框架的核心创新，
 其设计目标是在无需人工干预的前提下，为不同类型的图推理任务提供精确、细粒度且可扩展的自动化评估信号。
@@ -517,7 +517,7 @@ y = (c,a)
 为超参数权重，控制各分量的相对重要性。
 在实现中，各分量均被归一化至 \([0,1]\) 区间，以便于在不同任务与批次间保持数值稳定。
 
-\subsubsection{答案正确性奖励 \(R_{\mathrm{ans}}\)}
+\subsubsection{答案正确性奖励 \(R_{\mathrm{ans}}\)的规则化建模}
 
 答案正确性是图推理任务最核心、也最易通过规则验证的部分。
 延续 CoT 数据构建阶段的验证器设计（见第~\ref{subsubsec:rejection_cot} 节），
@@ -587,7 +587,7 @@ y = (c,a)
   \label{eq:reward_ans_all}
 \end{equation}
 
-\subsubsection{拓扑一致性奖励 \(R_{\mathrm{topo}}\)}
+\subsubsection{图拓扑一致性奖励 \(R_{\mathrm{topo}}\)的过程约束}
 
 仅考察最终答案正确性仍可能导致模型“直接给结果而不解释”，或在 CoT 中出现与图结构不一致的推理步骤。
 为引导模型学习符合图论规则的“结构化思维链”，
@@ -643,7 +643,7 @@ y = (c,a)
 其中 \(\alpha_{\mathrm{valid}},\alpha_{\mathrm{path}}\) 为归一化权重。
 该设计在保证最终答案正确的基础上，进一步鼓励“图上推理过程”的真实可追溯性。
 
-\subsubsection{格式与可读性奖励 \(R_{\mathrm{fmt}}\)}
+\subsubsection{输出格式与语言可读性奖励 \(R_{\mathrm{fmt}}\)}
 
 本文发现仅基于准确率的奖励容易使 CoT 出现语言混杂、格式混乱等问题，因此引入了语言一致性与格式奖励，以提高输出的可读性\cite{DeepSeekAI2025DeepSeekR1IR}。
 本文采用类似思想，为图推理场景定义轻量的格式与可读性奖励 \(R_{\mathrm{fmt}}\)，约束模型在强化学习阶段保持统一的输出结构与目标语言。
@@ -685,7 +685,7 @@ y = (c,a)
 \end{equation}
 其中 \(\beta_{\mathrm{tag}},\beta_{\mathrm{lang}}\) 为权重超参数。
 
-\subsubsection{长度正则项 \(R_{\mathrm{len}}\)}
+\subsubsection{思维链长度正则化项 \(R_{\mathrm{len}}\)}
 
 在实际训练中，过短的 CoT 往往意味着缺乏足够解释，而过长的 CoT 则可能包含冗余推理甚至“幻觉步骤”。
 为此，本文设计了一个简单的长度正则项，用于鼓励 CoT 长度落在经验上合理的范围。
@@ -705,7 +705,7 @@ y = (c,a)
 \(\gamma>0\) 控制惩罚强度。
 该项与准确率奖励相加后，可有效抑制极端短链或“无穷长链”的出现。
 
-\subsubsection{小结}
+\subsubsection{可验证奖励函数的分解与性质小结}
 
 综上，本文在规则结果奖励与 
 推理导向奖励建模框架基础上，
@@ -715,7 +715,7 @@ y = (c,a)
 在后续 GRPO 训练中，这一奖励将作为唯一的环境反馈信号，
 用于驱动策略在图推理空间中不断自我优化。
 
-\subsection{GRPO 训练目标与基模约束}
+\subsection{GRPO 策略优化目标与基模约束}
 \label{subsec:grpo_objective}
 
 在 CoT-SFT 阶段获得初始策略
@@ -732,9 +732,43 @@ CoT-SFT 阶段的基模策略，在提升图推理性能的同时抑制策略退
 \(x_i\)（~\eqref{eq:cot_input_seq}）下自回归生成推理–答案序列
 \(y=(c,a)\)，在序列结束时由可验证奖励函数
 \(\mathcal{R}(G_i,q_i,y)\)（~\eqref{eq:reward_function}）给出单步回合回报。
-在此基础上，GRPO 利用同一问题下多条采样轨迹之间的相对得分构造优势函数，
-在无需额外价值网络的前提下降低方差，适合大模型场景下的大规模 RL 训练\cite{Shao2024DeepSeekMathPT}。
 
+整体过程形式化如算法~\ref{alg:grpo_graph_reasoning}所示，
+\begin{algorithm}[t]
+\caption{基于 GRPO 的图推理强化学习训练流程}
+\label{alg:grpo_graph_reasoning}
+\KwIn{冷启动后图推理基座参数 $\theta_{\mathrm{CoT}}^\ast$；RL 训练任务集 $\mathcal{D}_{\mathrm{RL}}$；组大小 $G$；批次大小 $B$；最大训练步数 $T_{\max}$}
+\KwOut{强化学习后的策略参数 $\theta_{\mathrm{RL}}^\ast$}
+
+初始化当前策略参数 $\theta \gets \theta_{\mathrm{CoT}}^\ast$，旧策略参数 $\theta_{\mathrm{old}} \gets \theta$，参考基模参数 $\theta_{\mathrm{ref}} \gets \theta$\;
+
+\For{$t \gets 1$ \KwTo $T_{\max}$}{
+  从 $\mathcal{D}_{\mathrm{RL}}$ 中采样一个批次图--问题对 $\{(G_i,q_i)\}_{i=1}^B$\;
+  \For{$i \gets 1$ \KwTo $B$}{    % 组内多轨迹采样与奖励计算
+    构造条件输入提示 $x_i$（包含系统提示、任务提示、图编码与查询）\;
+    \For{$g \gets 1$ \KwTo $G$}{
+      用旧策略采样一条推理--答案轨迹 $y_i^{(g)} \sim \pi_{\theta_{\mathrm{old}}}(\cdot \mid x_i)$\;
+      调用规则验证器计算可验证奖励 $r_i^{(g)} \gets \mathcal{R}(G_i,q_i,y_i^{(g)})$\;
+    }
+    由 $\{r_i^{(g)}\}_{g=1}^G$ 计算组内均值与方差，得到标准化优势 $A_i^{(g)}$\;
+    计算序列级比率 $\rho_i^{(g)}$，构造裁剪后的策略损失 $\mathcal{L}_i^{\mathrm{policy}}$\;
+    计算相对参考策略 $\pi_{\theta_{\mathrm{ref}}}$ 的 KL 正则项 $\mathcal{L}_i^{\mathrm{KL}}$\;
+    得到样本级损失 $\mathcal{L}_i^{\mathrm{GRPO}} \gets \mathcal{L}_i^{\mathrm{policy}} + \mathcal{L}_i^{\mathrm{KL}}$\;
+  }
+  计算批次损失 $\mathcal{L}_{\mathrm{GRPO}} \gets \frac{1}{B}\sum_{i=1}^{B} \mathcal{L}_i^{\mathrm{GRPO}}$\;
+  计算梯度 $g \gets \nabla_{\theta} \mathcal{L}_{\mathrm{GRPO}}$，并进行梯度裁剪 $\|g\|_2 \le 1.0$\;
+  按调度器更新学习率，使用 AdamW 更新策略参数 $\theta$\;
+
+  \If{$t \bmod 100 = 0$}{
+    同步旧策略参数：$\theta_{\mathrm{old}} \gets \theta$\;
+  }
+
+  \If{$t \bmod T_{\mathrm{eval}} = 0$}{
+    在验证集上评估平均奖励、答案正确率和 KL 散度等指标，更新并保存最佳模型检查点\;
+  }
+}
+\Return{$\theta_{\mathrm{RL}}^\ast \gets \theta$}\;
+\end{algorithm}
 具体而言，对第 \(i\) 个样本，从当前旧策略
 \(
 \pi_{\theta_{\mathrm{old}}}
@@ -868,7 +902,7 @@ CoT-SFT 后的策略
 更新仅作用于语言模型解码器 \(\mathrm{Dec}_T\) 及其轻量适配层，
 实现“在保持基模语义与对齐结构的前提下，对推理策略进行最小干预的强化调整”。
 
-\subsection{强化学习训练流程与实施细节}
+\subsection{强化学习训练流程与实现配置}
 \label{subsec:grpo_train_detail}
 
 在上述 GRPO 目标之上，本文构建了一套面向图推理任务的强化学习训练流程，
@@ -934,8 +968,25 @@ CoT-SFT 后的策略
 
 
 \section{实验测评与分析}
-\subsection{实验目标与配置}
-\subsection{图推理任务基准对比实验}
-\subsection{节点分类任务迁移对比实验}
+\subsection{实验设置与评测目标}
+\begin{table}[htbp]
+\centering
+\caption{Erdős图论任务数据集任务分布详情}
+\label{tab:erdos_tasks}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{难度等级} & \textbf{占比} & \textbf{任务数量} & \textbf{样本数量} & \textbf{任务类型示例}  \\
+\midrule
+Easy & 29.16\% & 15 & 29,160 & 节点计数、边计数、平均度数  \\
+Medium & 22.91\% & 11 & 22,910 & 连通分量数、公共邻居、BFS/DFS遍历  \\
+Hard & 33.33\% & 17 & 33,330 & 最短路径、中心性计算、图直径  \\
+Challenging & 14.58\% & 7 & 14,580 & 最大独立集、TSP、哈密顿路径  \\
+\midrule
+总计 & 100\% & 50 & 100,000 & -  \\
+\bottomrule
+\end{tabular}
+\end{table}
+\subsection{图推理任务基准对比}
+\subsection{节点分类任务迁移评估}
 \subsection{消融实验}
 \section{本章小结}

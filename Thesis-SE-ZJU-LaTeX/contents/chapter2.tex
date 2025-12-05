@@ -132,9 +132,12 @@ G = (V,E,A,T)
 V_L \subseteq V
 \)
 上，每个节点 \(v \in V_L\) 关联有真实标签 \(y_v \in \mathcal{C}\)。
-模型需要在利用图结构与文本属性的前提下，学习一个判别函数\(f_{\theta}^{\mathrm{node}}\)，其公式表示如(2.8)所示
+模型需要在利用图结构与文本属性的前提下，
+学习一个判别函数\(f_{\theta}^{\mathrm{node}}\)，
+其公式表示如~(\ref{eq:discriminant_function})所示：
 \begin{equation}
     f_{\theta}^{\mathrm{node}} : (G,v) \rightarrow \Delta^{C-1},
+    \label{eq:discriminant_function}
 \end{equation}
 其中 \(\Delta^{C-1}\) 为 \(C\) 维概率单纯形，\(f_{\theta}^{\mathrm{node}}(G,v)_c\) 表示节点 \(v\) 属于类别 \(c\) 的预测概率，最终预测标签为
 \(
@@ -144,7 +147,7 @@ V_L \subseteq V
 在训练阶段，节点分类可表示为最小化经验风险的优化问题。记训练数据集为
 \(
 \mathcal{D}_{\mathrm{cls}} = \{(G, v, y_v)\}
-\)，则分类损失定义如(2.9)所示：
+\)，则分类损失定义如~(\ref{eq:node_cls_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{cls}}(\theta)
 =
@@ -152,7 +155,7 @@ V_L \subseteq V
 \big[
 \log f_{\theta}^{\mathrm{node}}(G,v)_{y_v}
 \big],
-\label{eq:node-cls}
+\label{eq:node_cls_loss}
 \end{equation}
 目标是求解
 \(
@@ -183,15 +186,16 @@ c = (c_1,\dots,c_T)
 y = (c,a)
 \)。
 记真实答案为 \(a^{\ast}\)，图推理任务可以形式化为条件生成和决策问题：学习一个图基础模型
-\(F_{\theta}\)，其公式表示如(2.10)所示：
+\(F_{\theta}\)，其公式表示如~(\ref{eq:graph_Foundation_model})所示：
 \begin{equation}
     F_{\theta} : (G,q) \rightarrow (c,a),
+    \label{eq:graph_Foundation_model}
 \end{equation}
 
 在给定 \((G,q)\) 的条件下最大化生成正确答案的概率，同时推理链 \(c\) 与图结构及问题约束保持一致。设标注数据集为
 \(
 \mathcal{D}_{\mathrm{reason}} = \{(G_i,q_i,a_i^{\ast})\}_{i=1}^N
-\)，则对应的条件语言建模目标可写如(2.11)所示：
+\)，则对应的条件语言建模目标可写如~(\ref{eq:graph_reason})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{reason}}(\theta)
 =
@@ -200,7 +204,7 @@ y = (c,a)
 \sum_{t=1}^{T_a}
 \log p_{\theta}\big(a^{\ast}_t \mid G,q, a^{\ast}_{<t}\big)
 \right],
-\label{eq:graph-reason}
+\label{eq:graph_reason}
 \end{equation}
 其中 \(a^{\ast}_t\) 为答案序列第 \(t\) 个 token，\(T_a\) 为答案长度。
 
@@ -241,16 +245,18 @@ S_\tau(v)=(V_v,E_v,A_v,T_v)\subseteq G
 将子图转化为节点和边关系的自然语言 token 序列
 \(s_v=(w_1,\dots,w_{L_v})\)，
 再经由预训练语言模型的嵌入层
-\(\mathrm{Emb}_T\) 映射为向量序列 \(X_v\)，如式~(2.12) 所示：
+\(\mathrm{Emb}_T\) 映射为向量序列 \(X_v\)，如~(\ref{eq:graph_emb})所示：
 \begin{equation}
     X_v = \mathrm{Emb}_T(s_v)\in\mathbb{R}^{L_v\times d_t}.
+    \label{eq:graph_emb}
 \end{equation}
 
 随后利用共享的 Transformer 层 \(\mathrm{Trm}(\cdot)\) 进行上下文建模，
 并通过池化算子 \(\mathrm{Pool}(\cdot)\) 得到最终结构向量 \(h_v^\mathrm{struc}\)，
-其形式如式~(2.13)：
+其形式如~(\ref{eq:graph_struc})所示：
 \begin{equation}
     h_v^{\mathrm{struc}} = \mathrm{Pool}\big(\mathrm{Trm}(X_v)\big)\in\mathbb{R}^{d_g}.
+    \label{eq:graph_struc}
 \end{equation}
 
 在该范式中，图结构被间接嵌入到自然语言序列中，其表征能力依赖于模板 
@@ -526,9 +532,12 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 
   Micro-F1 对样本量较大的类别赋予更高权重，通常反映模型在整体样本层面的平均性能。
 
-  \item \textbf{Macro-F1}：对所有类别的 F1 分数取算术平均，不考虑类别样本量差异，平等对待每个类别，核心用于缓解类别不均衡带来的评估偏差，精准刻画模型对少数类的预测能力。其计算公式如(2.24)所示：
+  \item \textbf{Macro-F1}：对所有类别的 F1 分数取算术平均，不考虑类别样本量差异，
+  平等对待每个类别，核心用于缓解类别不均衡带来的评估偏差，
+  精准刻画模型对少数类的预测能力。其计算公式如~(\ref{eq:macro})所示：
   \begin{equation}
   F1_{\text{macro}}=\frac{1}{C}\sum_{c=1}^{C} F1_c,
+  \label{eq:macro}
   \end{equation}
   其中 $C$ 为类别数。Macro-F1 对每一类等权处理，
   因此在类别高度不均衡的数据集中尤其重要，能够敏感地揭示模型在少数类上的性能波动。
@@ -540,9 +549,10 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 
 设对某一类别，模型对所有节点给出置信度分数，
 遍历不同阈值可得到一系列“真正例率–假正例率”（TPR–FPR）对，描绘出 ROC 曲线。
-其面积计算如公式(2.25)所示：
+其面积计算如~(\ref{eq:auc})所示：
 \begin{equation}
 \mathrm{AUC} = \int_{0}^{1} \mathrm{TPR}(\mathrm{FPR})\, d\mathrm{FPR},
+\label{eq:auc}
 \end{equation}
 实际实现中常用数值积分或等价的秩统计形式进行估计。AUC 值域为 $[0.5,1]$，$0.5$ 对应随机猜测，$1$ 对应完美分类，对类别不平衡具有较好鲁棒性。
 
@@ -553,9 +563,11 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 将每道图推理题视作一个判定问题，采用 Test Accuracy 作为核心指标。
 
 设测试集中共有 $N$ 个图推理问题，第 $i$ 个问题的标准答案为 $a_i$，
-模型输出最终答案为 $\hat{a}_i$，定义准确率\(\mathrm{Acc}\)计算公式如(2.26)所示：
+模型输出最终答案为 $\hat{a}_i$，
+定义准确率\(\mathrm{Acc}\)计算公式如~(\ref{eq:acc})所示：
 \begin{equation}
 \mathrm{Acc} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{I}\{\hat{a}_i \equiv a_i\},
+\label{eq:acc}
 \end{equation}
 其中“$\equiv$”根据任务类型采用不同的等价判定规则：
 \begin{itemize}
@@ -586,9 +598,11 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 在跨模态／零样本检索实验中，对于给定图节点表征，检索最匹配的类别描述或原型向量。本文采用 Recall@k 评估前 $k$ 个候选中召回真实类别的能力。Recall@k 在跨模态检索和表示对齐任务中被广泛采用，用于衡量嵌入空间的一致性。
 
 设某一查询（如一个节点）对应的相关目标集合大小为 $R$，
-在排序结果的前 $k$ 个中命中的相关目标数为 $r_k$，对所有查询求平均，可得其计算公式如(2.27)所示：
+在排序结果的前 $k$ 个中命中的相关目标数为 $r_k$，
+对所有查询求平均，可得其计算公式如~(\ref{eq:recall})所示：
 \begin{equation}
 \mathrm{Recall@}k = \frac{1}{Q} \sum_{q=1}^{Q} \frac{r_k^{(q)}}{R^{(q)}},
+\label{eq:recall}
 \end{equation}
 其中 $Q$ 为查询总数。对于单标签情形，$R^{(q)} = 1$，Recall@k 等价于“Top-$k$ 命中率”。
 
@@ -601,67 +615,106 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 以 Open Graph Benchmark（OGB）为代表的综合型基准系统性涵盖节点、边与图级任务，
 包括 ogbn-arxiv、ogbn-products、ogbn-proteins、ogbl-citation2、ogbl-ppa 等通用图数据集，
 以及面向分子性质预测的 PCQM4Mv2 等大规模分子图基准\cite{Hu2020OpenGB}。
+
 在早期图表示学习研究中，PyTorch Geometric 库中的 Cora\cite{McCallum2000AutomatingTC}、
 Citeseer\cite{Giles1998CiteSeerAA}、PubMed\cite{Sen2008CollectiveCI} 等引文网络仍是图神经网络方法对比的标准数据集。
-
-在分子与生物领域，MoleculeNet\cite{Wu2017MoleculeNetAB} 将 ESOL、FreeSolv、QM7/QM8/QM9 等多种分子性质数据统一为一套评测基准，
+在分子与生物领域，MoleculeNet\cite{Wu2017MoleculeNetAB} 
+将 ESOL、FreeSolv、QM7-9 等多种分子性质数据统一为一套评测基准，
 PCQM4Mv2\cite{Hu2020OpenGB}、ChEBI-20\cite{Edwards2021Text2MolCM} 与 PCdes\cite{Kim2018PubChem2U}
 进一步将分子图与自然语言描述对齐，为分子理解、性质预测及对话式分子设计提供了大规模图–文本数据支撑。
-
 面向图推理与图算法，Erdős 数据集\cite{Guo2025G1TL}系统化构造了覆盖 50 种图论任务、数十万规模样本的基准，
 支持可验证强化学习式图推理训练与零样本评估；
 NLGraph\cite{Wang2023CanLM}、GraphArena\cite{Tang2024GraphArenaBL}、GraCoRe\cite{Yuan2024GraCoReBG}、
 GraphWiz\cite{Chen2024GraphWizAI} 与 GraphOmni\cite{Xu2025GraphOmniAC} 等工作
 则在连通性、最短路径、最大流及多类 NP 完全问题上，基于真实或合成图构建多样化评测任务，系统揭示现有大模型在结构推理上的脆弱性与局限。
-
 在电商与社交场景中，Amazon-Computers、Amazon-Sports、Amazon-Photo 等共购图\cite{Wan2018ItemRO}，
 以及包含合作、引用与机构信息的 AMiner 学术网络和面向动态图建模的 DGraph\cite{hypermode_dgraph_overview}，
 为节点分类、链路预测与推荐算法提供了真实大规模图环境。
-基于上述资源，本文在统一的训练框架下构建多阶段图任务数据集，涵盖节点分类与图推理两个方向。
+基于上述资源，本文在统一的训练框架下构建多阶段图任务数据集，
+涵盖节点分类与图推理两个方向。主流数据集详细属性汇总如表~(\ref{tab:dataset_properties})所示：
+
+
+
+
+\begin{table}[htbp]
+\centering
+\caption{图数据集详细属性汇总表}
+\label{tab:dataset_properties}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{数据集} & \textbf{类型} & \textbf{节点数} & \textbf{边数} & \textbf{特征维度} & \textbf{文本属性} & \textbf{任务类型} & \textbf{类别/标签} & \textbf{数据划分} \\
+\midrule
+\multicolumn{9}{c}{\textbf{合成图论数据集}} \\
+\midrule
+Erdős & 合成图论任务 & 5-35 (子图) & 10-70 (子图) & 无 & 节点ID+边列表 & 50种图论任务 & 数值/布尔/集合/路径 & 100K训练/5K测试 \\
+\midrule
+\multicolumn{9}{c}{\textbf{学术引用网络}} \\
+\midrule
+Cora & 无向引用图 & 2,708 & 10,556 & 1,433 (BoW) & 论文标题+摘要 & 节点分类 & 7 & 3:1:1  \\
+PubMed & 无向引用图 & 19,717 & 88,648 & 500 (TF-IDF) & 医学论文描述 & 节点分类 & 3 & 3:1:1 \\
+OGB-arxiv & 有向引用图 & 169,343 & 2,315,598 & 128 (嵌入) & 标题+摘要 & 节点分类 & 40 & 6:2:2  \\
+Citeseer & 有向引用图 & 3,186 & 8,450 & 1,433(BoW) & 论文标题+摘要 & 节点分类 & 6 & 3:1:1 \\ 
+\midrule
+\multicolumn{9}{c}{\textbf{电商共购网络}} \\
+\midrule
+Amazon-Computers & 无向共购图 & 87,229 & 1,256,548 & 768 (描述) & 商品描述 & 节点分类 & 10 & 6:2:2 \\
+Amazon-Sports & 无向共购图 & 173,055 & 3,020,134 & 512 (标题) & 商品标题 & 节点分类 & 13 & 6:2:2 \\
+Amazon-Photo & 无向共购图 & 48,362 & 873,793 & 1,024 (评论) & 商品评论 & 节点分类 & 12 & 6:2:2 \\
+\midrule
+\multicolumn{9}{c}{\textbf{分子与生物网络}} \\
+\midrule
+PCQM4Mv2 & 分子图 & 3,803,453 & 78,256,721 & 无 (原子/键属性) & 无 & 回归 (HOMO-LUMO) & 128 & 8:1:1 \\
+ogbn-proteins & 蛋白质交互 & 132,534 & 39,561,252 & 8D (关联强度) & 无 & 多标签分类 & 112 & 7:1.5:1.5 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
 
 \subsubsection{节点分类数据集}
+\textbf{Cora学术引用网络}：Cora\cite{Hu2020OpenGB} 包含计算机科学领域的论文引用网络，
+2,708个节点表示论文，10,556条边表示引用关系，包含约 $25{,}120$ 篇研究论文。
+每篇论文通过1,433维词袋模型表示，涵盖7个机器学习子领域的类别标签。数据集具有高维稀疏特征和相对较高的聚类系数(0.23)，
+是验证图神经网络在稀疏高维特征空间表现的基础数据集。
 
-\textbf{OGB-arxiv 数据集：}
-OGB-arxiv\cite{McCallum2000AutomatingTC} 来源于微软学术图（MAG）中计算机科学领域的 arXiv 论文，
-构成一张有向引用网络：节点表示论文，边表示引用关系。
-每个节点以标题与摘要文本编码为 128 维特征向量，标签为论文所属的研究主题，包含约 $169{,}343$ 个节点和 $2{,}337{,}755$ 条边。
-该数据集覆盖计算机科学的主要二级领域，是评估节点分类与图表征能力的代表性大规模基准。
+\textbf{PubMed生物医学网络}：PubMed\cite{Sen2008CollectiveCI}源自美国国家医学图书馆的文献数据库，
+包含19,717篇与糖尿病相关的论文和44,338条引用关系。
+节点特征为500维TF-IDF向量，标签分为三种糖尿病研究类型。
+该数据集特征维度较低但语义丰富，平均度为4.5，聚类系数较低(0.03)，
+反映了医学文献的特定引用模式。
 
-\textbf{PubMed 数据集：}
-PubMed\cite{Sen2008CollectiveCI} 源自美国国家医学图书馆（NLM）的 PubMed 文献数据库，
-选取与糖尿病相关的论文构建无向引用网络，包含 $19{,}717$ 篇科学出版物和 $44{,}338$ 条边。
-每个节点由基于约 500 个词汇表的 tf-idf 向量表示，标签划分为 Experimental induced diabetes、Type 1 diabetes 和 Type 2 diabetes 三类。
-该数据集兼具高维稀疏文本特征与稀疏图结构，是生物医学领域节点分类的经典测试平台。
+\textbf{OGB-arxiv大规模学术图}：OGB-arxiv\cite{McCallum2000AutomatingTC}微软学术图的子集，
+包含169,343篇计算机科学领域的论文，构成1,166,245条引用边。
+每篇论文由128维嵌入向量表示，标签分为40个细粒度研究领域。
+该数据集规模大、连通性好(平均度13.8)，
+是评估模型在大规模图上泛化能力的重要基准，尤其适合测试计算效率和可扩展性。
 
-\textbf{Cora 数据集：}
-Cora\cite{Hu2020OpenGB} 最初由卡内基梅隆大学整理，是机器学习领域的学术引用网络。
-本文采用其扩展版本，包含约 $25{,}120$ 篇研究论文，节点以词袋模型表示，特征维度为 1433，
-标签数扩展至 70 类，覆盖多个细分研究方向。
-图结构为无向图，节点表示论文，边表示引用关系，是验证图神经网络在稀疏、高维文本特征场景下性能的基础数据集之一。
-
-\textbf{PCQM4Mv2 数据集：}
-PCQM4Mv2\cite{Hu2020OpenGB} 是 OGB-LSC 提出的超大规模分子图数据集，
-针对量子化学中的 HOMO–LUMO 能隙预测任务构建。
-数据来自 PubChemQC 项目，每个样本为一个分子图及其通过密度泛函理论（DFT）计算得到的标量 HOMO–LUMO 能隙，
-整体规模约为 $3.3$–$3.7$ 百万个分子，在分子数量与元素种类上均显著超越传统 QM 系列数据集，
-被视为分子性质预测领域的“ImageNet 级”基准。
-官方同时给出固定的训练 / 验证 / 测试划分与推理时间约束，用于综合评估模型在精度与效率方面的权衡。
+\textbf{PCQM4Mv2分子图数据集}：
+PCQM4Mv2\cite{Hu2020OpenGB}是量子化学领域的超大规模分子图数据集，
+包含约380万个分子结构。每个分子由原子节点和化学键边构成，任务是预测HOMO-LUMO能隙。
+该数据集具有严格的化学约束(如价键规则)和高平均度(20.6)，
+被视为分子性质预测领域的"ImageNet级"基准，对模型理解复杂拓扑结构和物理规律的能力提出极高要求。
 
 \textbf{Amazon-item 数据集：}
 Amazon-item\cite{Wan2018ItemRO} 是电商领域的代表性共购图数据集，
 基于亚马逊平台用户的联合购买行为构建无向商品图：节点表示商品，边表示被共同购买的关系或频次。
 典型规模约为 $15.5$M 节点和 $100$M 边，覆盖电子产品、图书、家居等多种品类。
 节点特征通常由商品标题、简介等文本经过清洗与分词后，使用词袋或 tf-idf 编码为高维稀疏向量；
-标签多为商品的品类或多标签类别。
-在实验设置上，常按时间或随机策略将样本划分为训练 / 验证 / 测试集（如 8:1:1），
-既保证时间因果性，又便于复现。
-该数据集标签分布高度长尾，天然适合用于评估模型在电商场景下的节点分类与链路预测能力，以及对冷门类别的泛化表现。
+呈现高异构性和低同质性。
+这类数据集通常具有长尾分布特性，对模型处理稀疏结构和异构节点特征的能力提出挑战。
 
 \subsubsection{图推理数据集}
-\textbf{Erdős 数据集：}Erdős数据集\cite{Guo2025G1TL}目标是为大模型在图论问题上的可验证强化学习（RL from verifiable rewards）提供一个大规模、任务多样且自动可判分的训练和评测平台。
-Erdős覆盖 50 种图论推理任务，全部来自 NetworkX 提供的标准图算法接口，涵盖从基础图属性到经典 NP 难问题的完整谱系，如节点数 / 边数统计、连通性、BFS/DFS、最小生成树、多种相似度与中心性指标，到最大独立集、最小顶点覆盖、旅行商问题等。
-所有任务按四个难度等级划分，反映任务本身的计算复杂度与现有 LLM 的解题难度；例如 Easy 主要是图属性和线性 / 多项式时间算法，Challenging 则集中在 NP 难组合优化。
-数据规模上，Erdős 提供 100,000 条训练样本和 5,000 条测试样本，训练集按任务均匀采样，每个任务约 2,000 个样本，使得各类问题在 RL 训练中得到均衡覆盖。
+\textbf{Erdős 数据集：}
+Erdős数据集\cite{Guo2025G1TL}目标是
+为大模型在图论问题上的可验证强化学习（RL from verifiable rewards）
+提供一个大规模训练和评测平台。
+Erdős覆盖 50 种图论推理任务，全部来自 NetworkX 提供的标准图算法接口，
+涵盖从基础图属性到经典 NP 难问题的完整谱系。
+通过带重启的随机游走策略采样5-35节点的子图。
+任务难度分为四类：Easy级(29.16\%)包含节点计数等基础任务；Medium级(22.91\%)包含连通性判断等中等复杂度任务；
+Hard级(33.33\%)涉及最短路径、中心性计算等复杂任务；Challenging级(14.58\%)覆盖NP-hard问题如最大独立集、TSP等。
+训练集包含10万样本，测试集5千样本，答案形式包括整数、布尔值、节点列表和边列表等。
 
 \textbf{GraphArena数据集：}GraphArena数据集\cite{Tang2024GraphArenaBL}专门用于在真实大规模图上系统评估 LLM 在图计算与图推理问题上的能力。
 它提供了一套包含四个多项式时间任务（例如最短距离问题）和六个NP完全挑战（例如旅行商问题）的测试集。GraphArena采用严格的评估框架，将LLM的输出分类为正确、次优（可行但非最优）、幻觉（格式正确但不可行）或缺失。对超过10个LLM的评估表明，即使是性能最佳的LLM在处理更大、更复杂的图问题时也会遇到困难，并出现幻觉问题。我们进一步探讨了四种解决此问题并改进LLM在图计算方面性能的潜在方案，包括思路提示、指令调优、代码编写和扩展测试时计算能力，每种方案都展现出独特的优势和局限性。
@@ -700,11 +753,14 @@ Erdős覆盖 50 种图论推理任务，全部来自 NetworkX 提供的标准图
 通过在学术引文网络与电商共购网络等不同领域分别进行节点分类微调，
 检验前两阶段预训练与对齐的迁移效果，测评基座模型在不同垂直场景下的性能。
 
-第四阶段为图推理指令微调与强化学习数据集。首先在指令微调（CoT-SFT）阶段，
-从前述训练数据中针对每一类图任务（如节点分类、链路预测等）随机抽取每个任务约 $100$ 条代表性样本，
-构造“问题描述—图或子图编码—思维链推理—最终答案”的合成指令数据，
-并与 Erdős 图推理数据集中的 50 种图论任务样本按任务均衡方式混合，
-形成统一的图推理指令微调语料，用于学习规范化的图推理格式与显式思维链。
+
+第四阶段为图推理指令微调与强化学习数据集。首先在冷启动思维链微调（CoT-SFT）阶段，
+一方面针对图论任务，针对五十类图论任务随机抽取每个任务约 $100$ 条代表性样本，
+获得合成图数据集$10k$条思维链数据集样本；
+另一方面本文进一步从 Cora、PubMed、OGB\mbox{-}Arxiv 等典型文本属性图中
+构造真实图推理任务样本，同样获得真实图任务思维链数据集$10k$条，
+总计$20k$条思维链数据，形成统一的图推理指令微调语料，
+用于学习规范化的图推理格式与显式思维链。
 随后在强化学习阶段，采用 Erdős 数据集提供的 $100\,000$ 条训练样本及其可程序验证的评分函数，
 构建基于 GRPO\cite{Shao2024DeepSeekMathPT} 的规则奖励信号，对基座模型进行图推理能力的强化学习式优化，
 进一步提升其在复杂图算法与高难度推理任务上的正确率与零样本泛化能力。
@@ -729,7 +785,7 @@ $s = (z_1,\dots,z_L)$，
 采用调度掩码 token 预测（Scheduled Masked Token Prediction, SMTP）作为唯一优化目标。
 对每个被掩码位置 $i \in \mathcal{M}(s)$，
 $\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的分布，
-整体损失如公式(2.28)所示：
+整体损失公式如~(\ref{eq:smtp_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{SMTP}}
 =
@@ -738,6 +794,7 @@ $\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的
 \sum_{i \in \mathcal{M}(s)}
 \log p_\theta\big(z_i \mid s_{\backslash i}\big)
 \bigg],
+\label{eq:smtp_loss}
 \end{equation}
 其中掩码比例在训练过程中由 $15\%$ 线性调度至 $30\%$，
 以平衡训练早期的收敛稳定性与后期的建模难度。
@@ -762,7 +819,8 @@ $\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的
 其中 $f_g,f_t$ 为跨模态投影网络。
 
 在损失函数方面，
-采用全局对比、局部匹配与生成式建模三类目标的加权组合，其公式定义如(2.29)所示：
+采用全局对比、局部匹配与生成式建模三类目标的加权组合，
+其公式定义如~(\ref{eq:graph_align_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{align}}
 =
@@ -771,11 +829,12 @@ $\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的
 \lambda_{\mathrm{l}} \mathcal{L}_{\mathrm{local}}
 +
 \lambda_{\mathrm{gen}} \mathcal{L}_{\mathrm{gen}}.
+\label{eq:graph_align_loss}
 \end{equation}
-
 \textbf{全局对比损失。}
 对一个 batch 中的图–文对 $(g_i, t_i)$，
-采用 InfoNCE 形式的对比学习目标，如公式(2.30)所示：
+采用 InfoNCE 形式的对比学习目标，
+公式如~(\ref{eq:graph_global_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{global}}
 =
@@ -788,6 +847,7 @@ $\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的
 \sum_{j} \exp\big(\mathrm{sim}(g_i,t_j)/\tau\big)
 }
 \bigg],
+\label{eq:graph_global_loss}
 \end{equation}
 其中 $\mathrm{sim}(\cdot,\cdot)$ 为余弦相似度，$\tau$ 为温度系数。
 该损失在节点级或子图级尺度上拉近匹配图–文对的表示，
@@ -796,7 +856,8 @@ $\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的
 \textbf{局部匹配损失。}
 为刻画欧拉路径上的局部子结构与文本短语片段之间的细粒度对应关系，
 利用跨模态注意力得到结构 token 与文本 token 的匹配概率 $a_{ij}$，
-并以二元交叉熵形式约束预定义匹配矩阵 $\{y_{ij}\}$，其计算公式如(2.31)所示：
+并以二元交叉熵形式约束预定义匹配矩阵 $\{y_{ij}\}$，
+其计算公式如~(\ref{eq:graph_local_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{local}}
 =
@@ -807,6 +868,7 @@ y_{ij} \log a_{ij}
 +
 (1-y_{ij}) \log (1-a_{ij})
 \big],
+\label{eq:graph_local_loss}
 \end{equation}
 其中 $(i,j) \in \mathcal{P}$ 表示被纳入监督的结构–文本 token 对，
 $y_{ij} \in \{0,1\}$ 指示二者是否匹配。
@@ -828,7 +890,7 @@ $y_{ij} \in \{0,1\}$ 指示二者是否匹配。
 \end{equation}
 本质上为条件语言建模的自回归交叉熵，
 促使图结构表征内化可被 LLM 直接解码的细粒度语义信息。
-三重损失通过加权求和联合优化，权重比为 1:0.8:0.5，确保全局语义相似性与局部结构对应性的协同提升。
+三重损失通过加权求和联合优化，确保全局语义相似性与局部结构对应性的协同提升。
 
 在训练策略方面，
 阶段二采用“图侧局部微调 + 文本侧冻结”的策略：
@@ -1016,7 +1078,6 @@ p_\theta\big(y \mid H_{\mathrm{cond}}\big),
 下文分别给出垂直领域节点分类与基于强化学习优化的图推理任务上的具体推理生成流程。
 
 \textbf{（1）垂直领域节点分类推理。}
-
 图基座模型在节点分类任务推理时具体分为三个步骤。
 
 首先，在局部子图抽取与结构编码阶段，
@@ -1053,7 +1114,6 @@ x_v = [E_{\mathrm{text}};\, \tilde{h}_v],
 最终预测标签为\(\hat{y}_v\)。
 
 \textbf{（2）基于强化学习优化的图推理与链式生成。}
-
 第~2.1.2 节中，图推理任务被形式化为学习图基础模型 \(F_\theta\)，输出推理链 \(c=(c_1,\dots,c_T)\) 与答案 \(a\)。在经过 CoT 监督微调与 GRPO 强化学习优化后，推理阶段将参数固定为 \(\theta^\ast\)，整体流程可概括为“条件构造—自回归生成—可验证重排序”三个步骤。
 
 在条件构造阶段，给定测试图 \(G\) 与自然语言查询 \(q\)，
