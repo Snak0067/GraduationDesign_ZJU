@@ -88,7 +88,7 @@ p_\theta(y \mid G,q)
 N_t = 200
 \)
 个图实例 \(G \sim \mathcal{G}_t\)。
-在图生成过程中，我们首先从若干真实大图
+在图生成过程中，本文首先从若干真实大图
 （如 Network Repository\cite{Rossi2015TheND} 中的网络）中选取种子图，
 随后在种子图上采用带重启的随机游走策略下采样连通子图，
 将子图规模约束在 \(5\!\sim\!35\) 个节点，以兼顾拓扑多样性与大语言模型的上下文窗口限制。
@@ -467,7 +467,7 @@ DeepSeek-R1 则在数学、代码等领域通过大规模 RL 与
 该方法将强化学习目标与图论先验知识深度融合，
 使模型在合成图任务上习得可迁移的通用推理能力，并在真实图任务上展现出卓越的零样本泛化性能。
 
-在本节中，我们首先在
+在本节中，本文首先在
 ~\ref{subsec:rule_reward_design} 节给出面向图推理的可验证奖励设计，
 再在第~\ref{subsec:grpo_objective} 节中形式化推导 GRPO 训练目标与基模约束，
 并在第~\ref{subsec:grpo_train_detail} 节系统说明强化学习训练流程与工程细节。
@@ -728,7 +728,7 @@ GRPO（Group Relative Policy Optimization）\cite{Shao2024DeepSeekMathPT}
 GRPO 通过组内轨迹的相对奖励构造优势信号，同时结合 KL 散度正则项锚定
 CoT-SFT 阶段的基模策略，在提升图推理性能的同时抑制策略退化与语言能力坍缩。
 与 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR} 类似，
-我们将每个图–问题对 \((G_i,q_i)\) 视为一次完整的环境交互回合，模型在条件输入
+本文将每个图–问题对 \((G_i,q_i)\) 视为一次完整的环境交互回合，模型在条件输入
 \(x_i\)（~\eqref{eq:cot_input_seq}）下自回归生成推理–答案序列
 \(y=(c,a)\)，在序列结束时由可验证奖励函数
 \(\mathcal{R}(G_i,q_i,y)\)（~\eqref{eq:reward_function}）给出单步回合回报。
@@ -857,7 +857,7 @@ r_i^{(g)} = \mathcal{R}(G_i,q_i,y_i^{(g)})
 CoT-SFT 后的策略
 \(\pi_{\mathrm{ref}}=\pi_{\theta_{\mathrm{CoT}}^\ast}\) 作为冻结参考基模，
 约束新策略与之的分布距离。
-借鉴 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR}，我们采用序列级“反向 KL”近似：
+借鉴 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR}，本文采用序列级“反向 KL”近似：
 \begin{equation}
   \mathcal{L}^{\mathrm{KL}}_i(\theta)
   =
