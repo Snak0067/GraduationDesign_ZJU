@@ -118,7 +118,7 @@ h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 参数更新通过梯度上升实现：
 \(\theta \leftarrow \theta + \eta \nabla_\theta \mathcal{J}_{\mathrm{GRPO}}(\theta)\)，优化目标为 \(\max_{\theta} \mathcal{J}_{\mathrm{GRPO}}(\theta)\)，其中 \(\eta\) 为学习率。
 
-\subsection{节点分类任务定义}
+\subsection{节点分类问题描述}
 
 节点分类任务旨在基于图结构及其文本属性，对指定节点赋予语义类别标签。给定一张文本属性图
 \(
@@ -165,7 +165,7 @@ V_L \subseteq V
 \)，从而在未标注节点和新图任务上获得良好的泛化性能。
 
 
-\subsection{图推理任务定义}
+\subsection{图推理问题描述}
 \label{sec:problem_graph_reasoning}
 
 图推理任务关注在复杂图结构上执行多步逻辑推理并给出可验证答案。给定一张文本属性图
