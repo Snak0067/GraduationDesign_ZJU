@@ -483,7 +483,7 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
 \subsection{节点分类任务测评指标}
 对于节点分类任务（包括单标签与多标签情形），本文主要采用客观评测指标，不额外引入主观评分。
 
-\subparagraph{准确率（Test Accuracy）}
+\textbf{准确率（Test Accuracy）:}
 准确率用于衡量模型预测正确的节点占总节点数的比例，是分类任务最基础的性能基准，
 直观反映模型整体预测能力，是图节点分类中最常用的指标之一。
 设测试集共有 $N$ 个节点，第 $i$ 个节点的真实标签为 $y_i$，
@@ -494,52 +494,24 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
 其中 $\mathbb{I}\{\cdot\}$ 为指示函数，当条件为真时取 $1$，否则为 $0$。
 在类别相对均衡的单标签节点分类任务中，Accuracy 作为主报告指标，该指标适用于类别分布均衡的场景。
 
-\subparagraph{Micro-F1 与 Macro-F1}
-在类别分布显著不均衡或涉及多标签节点分类的场景中，
-仅报告准确率往往无法充分反映模型对少数类的判别能力。
-因此，本文进一步采用 Micro-F1 与 Macro-F1 作为补充评价指标，
-以更全面地衡量模型在不同类别上的整体表现。
+\textbf{Micro-F1:}
+在类别分布显著不均衡或涉及多标签节点分类的场景中，仅报告准确率往往无法充分反映模型对少数类的判别能力。为了更全面地衡量模型在不同类别上的整体表现，尤其是对少数类的预测能力，本文采用 \textbf{Macro-F1} 作为核心评价指标。
 
-设第 $c$ 类的真正例、假正例与假反例分别为 
-$\mathrm{TP}_c$、$\mathrm{FP}_c$ 与 $\mathrm{FN}_c$，
-其类级精确率、召回率以及类级 $F1$ 公式如(2.20)所示：
+Macro-F1 的计算基于各类的独立表现。设第 $c$ 类的真正例、假正例与假反例分别为 $\mathrm{TP}_c$、$\mathrm{FP}_c$ 与 $\mathrm{FN}_c$，则该类的精确率（Precision）、召回率（Recall）以及 F1 分数计算公式如下：
 \begin{equation}
 P_c = \frac{\mathrm{TP}_c}{\mathrm{TP}_c + \mathrm{FP}_c}, \qquad
 R_c = \frac{\mathrm{TP}_c}{\mathrm{TP}_c + \mathrm{FN}_c}, \qquad
 F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 \end{equation}
 
+在此基础上，Macro-F1 对所有类别的 F1 分数取算术平均，其计算公式为：
+\begin{equation}
+F1_{\text{macro}}=\frac{1}{C}\sum_{c=1}^{C} F1_c,
+\label{eq:macro}
+\end{equation}
+其中 $C$ 为类别总数。
 
-\begin{itemize}
-  \item \textbf{Micro-F1}：在全局层面汇总所有类别的
-   \(\mathrm{TP},\mathrm{FP},\mathrm{FN}\)，其公式如(2.21)所示
-  \begin{equation}
-  \mathrm{TP}=\sum_c \mathrm{TP}_c,\quad
-  \mathrm{FP}=\sum_c \mathrm{FP}_c,\quad
-  \mathrm{FN}=\sum_c \mathrm{FN}_c,
-  \end{equation}
-  得到全局精确率\(P_{\text{micro}}\)与召回率\(R_{\text{micro}}\)，计算方式如(2.22)所示：
-  \begin{equation}
-  P_{\text{micro}}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}},\qquad
-  R_{\text{micro}}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}},
-  \end{equation}
-  从而计算得到最终\(F1_{\text{micro}}\)公式如(2.23)所示：
-  \begin{equation}
-  F1_{\text{micro}}=\frac{2 P_{\text{micro}} R_{\text{micro}}}{P_{\text{micro}}+R_{\text{micro}}}.
-  \end{equation}
-
-  Micro-F1 对样本量较大的类别赋予更高权重，通常反映模型在整体样本层面的平均性能。
-
-  \item \textbf{Macro-F1}：对所有类别的 F1 分数取算术平均，不考虑类别样本量差异，
-  平等对待每个类别，核心用于缓解类别不均衡带来的评估偏差，
-  精准刻画模型对少数类的预测能力。其计算公式如~(\ref{eq:macro})所示：
-  \begin{equation}
-  F1_{\text{macro}}=\frac{1}{C}\sum_{c=1}^{C} F1_c,
-  \label{eq:macro}
-  \end{equation}
-  其中 $C$ 为类别数。Macro-F1 对每一类等权处理，
-  因此在类别高度不均衡的数据集中尤其重要，能够敏感地揭示模型在少数类上的性能波动。
-\end{itemize}
+与准确率等指标不同，Macro-F1 不考虑类别样本量的差异，平等地对待每一个类别。这种特性使其能够有效缓解类别不均衡带来的评估偏差，从而敏感地揭示模型在少数类上的性能波动，客观反映模型的全局泛化能力。
 
 \subparagraph{ROC-AUC}
 对于多标签节点分类任务，模型需为每个节点–类别对输出一个置信度，
@@ -863,6 +835,7 @@ $\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的
 \lambda_{\mathrm{gen}} \mathcal{L}_{\mathrm{gen}}.
 \label{eq:graph_align_loss}
 \end{equation}
+
 \textbf{全局对比损失。}
 对一个 batch 中的图–文对 $(g_i, t_i)$，
 采用 InfoNCE 形式的对比学习目标，
