@@ -1,9 +1,9 @@
 %!TEX root = ../main.tex
 
-\chapter{结合强化学习的图结构大语言模型总体方案设计}
+\chapter{结合强化学习的图结构基座大模型总体方案设计 }
 % 原则上，每一章开头不可马上进入第一节
 % 需要一段引文提要起到 TL;DR 的作用
-本章围绕结合强化学习的图结构大语言模型总体方案展开。
+本章围绕结合强化学习的图结构基座模型总体方案展开。
 首先，对面向图结构推理的建模任务进行形式化描述，解释方法流程框架并理清数据流脉络。
 随后，本章从整体框架层面详细介绍了图结构编码、图–语言表征融合以及后训练与强化学习策略之间的协同关系，
 勾勒模型训练与推理的完整流程。
@@ -25,7 +25,7 @@ G = (V,E,A,T),
 \(E \subseteq V \times V\) 为边集合，表示节点之间的关系（如引用关系、共购关系等）；
 \(A \in \{0,1\}^{N \times N}\) 为图的邻接矩阵；
 \(T = \{t_i\}_{i=1}^{N}\) 为节点文本属性集合，\(t_i\) 表示与节点 \(v_i\) 相关的自然语言描述。
-我们希望学习一个参数为 \(\theta\) 的图基础模型
+本文希望学习一个参数为 \(\theta\) 的图基础模型
 \(
 F_{\theta} : (G,q) \rightarrow (c,a),
 \)
@@ -41,25 +41,30 @@ F_{\theta} : (G,q) \rightarrow (c,a),
 通过半欧拉路径构造可逆序列 \(\pi(S(v)) = (e_1,\dots,e_L)\) 
 并离散化为图 token 序列 \(z_v \in \mathcal{V}_g^L\)，
 学习图编码器 \(\mathrm{Enc}_G: \mathcal{V}_g^L \rightarrow \mathbb{R}^{L \times d_g}\)，
-通过池化算子得到子图级表征，其公式为2.1:
+通过池化算子得到子图级表征，如公式~(\ref{eq:graph_encoder_pooling})所示：
 \begin{equation}
 h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
+\label{eq:graph_encoder_pooling}
 \end{equation}
 以 SMTP 任务为自监督目标，
-最小化表征损失，其公式定义为2.2：
+最小化表征损失，如公式~(\ref{eq:smtp_loss})所示：
 \begin{equation}
     \mathcal{L}_{\mathrm{repr}} = \mathbb{E}_{(G,v)}\big[ \ell_{\mathrm{repr}}\big(\mathrm{Enc}_G(z_v), S(v)\big) \big]
+    \label{eq:smtp_loss}
 \end{equation}
-其中 \(\ell_{\mathrm{repr}}\) 为拓扑一致性度量函数，目标是学习满足 \(\min_{\mathrm{Enc}_G} \mathcal{L}_{\mathrm{repr}}\) 的最优图编码器。
+其中 \(\ell_{\mathrm{repr}}\) 为拓扑一致性度量函数，
+目标是学习满足 \(\min_{\mathrm{Enc}_G} \mathcal{L}_{\mathrm{repr}}\) 的最优图编码器。
 
 \textbf{2）图-语义跨模态优化建模问题：}
 在获得图结构表征 \(h_v^\mathrm{glob}\)的基础上，解决图拓扑特征与文本语义特征在表示空间中的割裂问题，实现从异构特征空间到统一语义空间的投影，保证相同语义概念在跨模态空间中具有高相似度。
 形式化描述如下：设图表征维度为 \(d_g\)，语言模型嵌入维度为 \(d_\ell\)，引入映射层 \(f_{\mathrm{proj}}: \mathbb{R}^{d_g} \rightarrow \mathbb{R}^{d_\ell}\) 得到投影表征 \(\tilde{h}_v = f_{\mathrm{proj}}(h_v^{\mathrm{glob}})\)；通过文本编码函数 \(\phi_{\mathrm{text}}\) 得到描述文本的池化表征 \(s_v = \mathrm{Pool}(\phi_{\mathrm{text}}(t_v))\)。
-设计三维度对齐损失函数\(\mathcal{L}_{\mathrm{align}}\)，其公式定义如2.3所示：
+设计三维度对齐损失函数\(\mathcal{L}_{\mathrm{align}}\)，
+其公式定义如~(\ref{eq:Contrastive_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{align}} = \lambda_1 \mathcal{L}_{\mathrm{con}} + \lambda_2 \mathcal{L}_{\mathrm{match}} + \lambda_3 \mathcal{L}_{\mathrm{gen}}
+\label{eq:Contrastive_loss}
 \end{equation}
-其中,\(\mathcal{L}_{\mathrm{con}}\) 为 InfoNCE 全局对比损失，约束 \(\tilde{h}_v\) 与 \(s_v\) 的相似度；\(\mathcal{L}_{\mathrm{match}}\) 为局部匹配损失，通过跨模态注意力实现图结构单元与文本片段的细粒度对齐；\(\mathcal{L}_{\mathrm{gen}}\) 为生成式交叉熵损失，约束图表征重建对应文本的能力；\(\lambda_1,\lambda_2,\lambda_3\) 为权重系数且满足归一化条件。优化目标为 \(\min_{\mathrm{Enc}_G, f_{\mathrm{proj}}} \mathcal{L}_{\mathrm{align}}\)（冻结语言模型参数）。
+其中,\(\mathcal{L}_{\mathrm{con}}\) 为 InfoNCE 全局对比损失，约束 \(\tilde{h}_v\) 与 \(s_v\) 的相似度；\(\mathcal{L}_{\mathrm{match}}\) 为局部匹配损失，通过跨模态注意力实现图结构单元与文本片段的细粒度对齐；\(\mathcal{L}_{\mathrm{gen}}\) 为交叉熵损失，约束图表征重建对应文本的能力；\(\lambda_1,\lambda_2,\lambda_3\) 为权重系数且满足归一化条件。优化目标为 \(\min_{\mathrm{Enc}_G, f_{\mathrm{proj}}} \mathcal{L}_{\mathrm{align}}\)（冻结语言模型参数）。
 
  \textbf{3）图推理任务调优学习问题：}
 针对图推理任务中模型缺乏结构化推理能力的问题，
@@ -67,15 +72,19 @@ h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 核心目标是在冻结图编码与跨模态对齐模块的约束下，优化语言模型参数，
 使其能够生成结构一致、语义合理的推理链与答案，实现推理能力的冷启动。
 数学表达：
-设冻结模块将整图 G 映射为条件表征\(\tilde{H}\)，其公式定义如2.4所示：
+设冻结模块将整图 G 映射为条件表征\(\tilde{H}\)，
+其公式定义如~(\ref{eq:Graph_inference_task_tuning_learning})所示：
 \begin{equation}
     \tilde{H} = f_{\mathrm{proj}}(\mathrm{Enc}_G(G)) \in \mathbb{R}^{N \times d_\ell}
+    \label{eq:Graph_inference_task_tuning_learning}
 \end{equation}
 语言模型嵌入函数 \(\phi_{\mathrm{LLM}}\) 
 将问题 q 编码为 \(\phi_{\mathrm{LLM}}(q) \in \mathbb{R}^{|q| \times d_\ell}\)，联合输入为 \(x = [\tilde{H}; \phi_{\mathrm{LLM}}(q)]\)。模型需生成推理链 - 答案序列 \(y = (c,a)\)，
-优化目标为最小化条件语言建模损失\(\mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) \)，其公式定义如2.5所示：
+优化目标为最小化条件语言建模损失\(\mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) \)，
+其公式定义如~(\ref{eq:sft_loss})所示：
 \begin{equation}
     \mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) = - \mathbb{E}_{(G,q,y)\sim\mathcal{D}_{\mathrm{CoT}}} \left[ \sum_{t=1}^{T} \log p_{\theta_{\mathrm{LLM}}} \big( y_t \mid x,\ y_{<t} \big) \right]
+    \label{eq:sft_loss}
 \end{equation}
 其中 \(\theta_{\mathrm{LLM}}\) 为语言模型参数，\(\mathcal{D}_{\mathrm{CoT}}\) 为拒绝采样与图论校验器构造的高质量数据集，最优参数求解为：\(\theta_{\mathrm{LLM}}^{\ast} = \arg\min_{\theta_{\mathrm{LLM}}} \mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}})\)。
 
@@ -85,16 +94,24 @@ h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
 使模型聚焦于结构合法、逻辑自洽且答案正确的推理模式，
 最大化奖励加权的策略目标。
 形式化描述如下：将模型形式化为条件策略生成器
- \(\pi_\theta(y \mid G, q) = p_\theta((c,a) \mid G, q)\)，
-设计可验证奖励函数\(\mathcal{R}(G,q,y)\)，其公式表示如2.6所示：
+ \(\pi_\theta(y \mid G, q) = p_\theta((c,a) \mid G, q)\)，
+设计可验证奖励函数\(\mathcal{R}(G,q,y)\)，
+其公式定义如~(\ref{eq:VerifiableRrewardFunction})所示：
 \begin{equation}
 \mathcal{R}(G,q,y) = \alpha \cdot \mathbb{I}\big[\mathcal{V}_{\mathrm{ans}}(G,q,a)=\mathrm{true}\big] + \beta \cdot \mathrm{PathScore}(G,c) + \gamma \cdot \mathrm{ConstraintSat}(q,c)    
+\label{eq:VerifiableRrewardFunction}
 \end{equation}
 其中 \(\alpha+\beta+\gamma=1\)，\(\mathcal{V}_{\mathrm{ans}}\) 为答案验证器，
 \(\mathrm{PathScore}\) 为拓扑一致性得分，\(\mathrm{ConstraintSat}\) 为约束满足度。
-采用 GRPO 算法最大化策略目标，其公式表示如2.7所示：
+采用 GRPO \cite{Shao2024DeepSeekMathPT}算法最大化策略目标，
+其公式表示如~(\ref{eq:GRPO_objective})所示：
 \begin{equation}
-\mathcal{J}_{\mathrm{GRPO}}(\theta) = \mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}}} \left[ \frac{1}{|\mathcal{Y}^+|} \sum_{y\in\mathcal{Y}^+} \sum_{t=1}^{T_y} \log \pi_\theta(y_t \mid G, q, y_{<t}) \cdot \big(r(y) - b(G,q)\big) \right]
+\mathcal{J}_{\mathrm{GRPO}}(\theta) =
+ \mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}}} 
+ \left[ \frac{1}{|\mathcal{Y}^+|} \sum_{y\in\mathcal{Y}^+} 
+ \sum_{t=1}^{T_y} \log \pi_\theta(y_t \mid G, q, y_{<t}) \cdot
+  \big(r(y) - b(G,q)\big) \right]
+  \label{eq:GRPO_objective}
 \end{equation}
 其中 \(\mathcal{Y}^+\) 为高奖励轨迹集，
 \(b(G,q) = \frac{1}{K}\sum_{k=1}^K r^{(k)}\) 为基线函数，
@@ -115,9 +132,12 @@ G = (V,E,A,T)
 V_L \subseteq V
 \)
 上，每个节点 \(v \in V_L\) 关联有真实标签 \(y_v \in \mathcal{C}\)。
-模型需要在利用图结构与文本属性的前提下，学习一个判别函数\(f_{\theta}^{\mathrm{node}}\)，其公式表示如2.8所示
+模型需要在利用图结构与文本属性的前提下，
+学习一个判别函数\(f_{\theta}^{\mathrm{node}}\)，
+其公式表示如~(\ref{eq:discriminant_function})所示：
 \begin{equation}
     f_{\theta}^{\mathrm{node}} : (G,v) \rightarrow \Delta^{C-1},
+    \label{eq:discriminant_function}
 \end{equation}
 其中 \(\Delta^{C-1}\) 为 \(C\) 维概率单纯形，\(f_{\theta}^{\mathrm{node}}(G,v)_c\) 表示节点 \(v\) 属于类别 \(c\) 的预测概率，最终预测标签为
 \(
@@ -127,7 +147,7 @@ V_L \subseteq V
 在训练阶段，节点分类可表示为最小化经验风险的优化问题。记训练数据集为
 \(
 \mathcal{D}_{\mathrm{cls}} = \{(G, v, y_v)\}
-\)，则分类损失定义如2.9所示：
+\)，则分类损失定义如~(\ref{eq:node_cls_loss})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{cls}}(\theta)
 =
@@ -135,7 +155,7 @@ V_L \subseteq V
 \big[
 \log f_{\theta}^{\mathrm{node}}(G,v)_{y_v}
 \big],
-\label{eq:node-cls}
+\label{eq:node_cls_loss}
 \end{equation}
 目标是求解
 \(
@@ -146,6 +166,7 @@ V_L \subseteq V
 
 
 \subsection{图推理任务定义}
+\label{sec:problem_graph_reasoning}
 
 图推理任务关注在复杂图结构上执行多步逻辑推理并给出可验证答案。给定一张文本属性图
 \(
@@ -165,15 +186,16 @@ c = (c_1,\dots,c_T)
 y = (c,a)
 \)。
 记真实答案为 \(a^{\ast}\)，图推理任务可以形式化为条件生成和决策问题：学习一个图基础模型
-\(F_{\theta}\)，其公式表示如2.10所示：
+\(F_{\theta}\)，其公式表示如~(\ref{eq:graph_Foundation_model})所示：
 \begin{equation}
     F_{\theta} : (G,q) \rightarrow (c,a),
+    \label{eq:graph_Foundation_model}
 \end{equation}
 
 在给定 \((G,q)\) 的条件下最大化生成正确答案的概率，同时推理链 \(c\) 与图结构及问题约束保持一致。设标注数据集为
 \(
 \mathcal{D}_{\mathrm{reason}} = \{(G_i,q_i,a_i^{\ast})\}_{i=1}^N
-\)，则对应的条件语言建模目标可写如2.11所示：
+\)，则对应的条件语言建模目标可写如~(\ref{eq:graph_reason})所示：
 \begin{equation}
 \mathcal{L}_{\mathrm{reason}}(\theta)
 =
@@ -182,7 +204,7 @@ y = (c,a)
 \sum_{t=1}^{T_a}
 \log p_{\theta}\big(a^{\ast}_t \mid G,q, a^{\ast}_{<t}\big)
 \right],
-\label{eq:graph-reason}
+\label{eq:graph_reason}
 \end{equation}
 其中 \(a^{\ast}_t\) 为答案序列第 \(t\) 个 token，\(T_a\) 为答案长度。
 
@@ -193,78 +215,270 @@ y = (c,a)
 的同时，生成的推理链 \(c\) 可被外部验证器证明为结构合法、逻辑自洽，从而同时兼顾预测准确性与推理可解释性。
 
 
+\section{基于预训练大语言模型的图结构基座大模型架构} 
+参考 LLaGA\cite{Chen2024LLaGALL} 中的网络架构，本文构建的基于预训练语言大模型的图结构理解框架如图~X 所示。整体由四个核心模块构成，分别为：  
+（1）图结构特征编码器 \(\mathrm{Enc}_G\)，负责从原始图中抽取节点的拓扑信息，并将其转化为结构化的节点级表示；  
+（2）文本特征编码器 \(\mathrm{Enc}_T\)，负责对节点附带的自然语言描述进行语义编码；  
+（3）图结构--语义对齐网络 \(N_A\)，用于在共享表示空间中实现结构特征与语义特征之间的跨模态对齐；  
+（4）语言模型解码器 \(\mathrm{Dec}_T\)，通过自回归解码建模条件分布 \(p(y\mid G,T,i)\)，生成节点类别标签及其自然语言解释。
+
+\textbf{图结构编码器 \(\mathrm{Enc}_G\)。}
+给定文本属性图
+\(G=(V,E,A,T)\)，
+图结构编码器 \(\mathrm{Enc}_G\) 的目标是构建映射
+\(
+\mathrm{Enc}_G:\mathcal{X}_G \rightarrow \mathbb{R}^{d_g},
+\)
+将节点的局部或全局拓扑信息压缩为节点级结构向量
+\(h_v^{\mathrm{struc}} \in \mathbb{R}^{d_g}\)，
+并作为跨模态对齐与节点分类的结构语义基底。
+在 LLaGA 范式下，图编码器 \(\mathrm{Enc}_G\) 通过邻域采样模板构建结构序列。
+
+具体而言，给定中心节点 \(v\)，首先利用 \(h\)-跳邻域采样算子
+\(\mathcal{S}_\tau\)（其中 \(\tau\) 表示 ND、HO 等模板）
+获得局部子图
+\(
+S_\tau(v)=(V_v,E_v,A_v,T_v)\subseteq G
+\)。
+随后，采用模板化线性化算子
+\(\phi_\tau:S_\tau(v)\rightarrow \mathcal{W}^{L_v}\)
+将子图转化为节点和边关系的自然语言 token 序列
+\(s_v=(w_1,\dots,w_{L_v})\)，
+再经由预训练语言模型的嵌入层
+\(\mathrm{Emb}_T\) 映射为向量序列 \(X_v\)，如~(\ref{eq:graph_emb})所示：
+\begin{equation}
+    X_v = \mathrm{Emb}_T(s_v)\in\mathbb{R}^{L_v\times d_t}.
+    \label{eq:graph_emb}
+\end{equation}
+
+随后利用共享的 Transformer 层 \(\mathrm{Trm}(\cdot)\) 进行上下文建模，
+并通过池化算子 \(\mathrm{Pool}(\cdot)\) 得到最终结构向量 \(h_v^\mathrm{struc}\)，
+其形式如~(\ref{eq:graph_struc})所示：
+\begin{equation}
+    h_v^{\mathrm{struc}} = \mathrm{Pool}\big(\mathrm{Trm}(X_v)\big)\in\mathbb{R}^{d_g}.
+    \label{eq:graph_struc}
+\end{equation}
+
+在该范式中，图结构被间接嵌入到自然语言序列中，其表征能力依赖于模板 
+\(\tau\) 对局部拓扑的覆盖程度以及预训练语言模型对结构描述语句的编码能力。
+
+与此不同，本文在图表征部分采用更注重结构保真与粒度可控性的编码方式，
+在图侧显式构建基于欧拉路径的图到 token 序列化机制与专用图结构编码器，
+将子图拓扑在同构意义下近似无损地映射到统一的离散表示空间。
+相关改进编码策略与实现细节将在第~3.3 节中系统阐述。
+
+\textbf{文本特征编码器 \(\mathrm{Enc}_T\)。}
+为了对节点及其上下文的自然语言描述进行编码，
+本文采用预训练语言模型 RoBERTa\cite{Liu2019RoBERTaAR} 作为文本特征编码器。
+形式化地，仍设文本属性图为
+\(G=(V,E,A,T)\)，其中 \(T=\{t_i\}_{i=1}^{N}\) 为节点文本属性集合，
+第 \(i\) 个节点的文本描述记为
+\(
+t_i = (w_{i,1},\dots,w_{i,L_i}),
+\)
+其中 \(w_{i,j}\) 为第 \(j\) 个词元，\(L_i\) 为文本长度。
+文本特征编码器 \(\mathrm{Enc}_T\) 基于预训练语言模型的分词器与 Transformer 主干，
+将自然语言序列映射到连续语义空间，记为
+\(
+\mathrm{Enc}_T : \mathcal{V}_{\text{text}}^{\ast} \rightarrow \mathbb{R}^{d_t},
+\)
+其中 \(\mathcal{V}_{\text{text}}\) 为文本词表，\(d_t\) 为语言模型隐藏维度，输出为节点级语义向量 \(h_i^{\text{text}}\in\mathbb{R}^{d_t}\)。
+
+在具体表征范式上，本文通过指令化模板将节点文本与任务说明拼接为统一的语言输入。
+记预训练语言模型的分词器为 \(\tau(\cdot)\)，
+则节点 \(v_i\) 的输入文本（包含节点属性描述及可选的全局任务指令）
+记为 \(\tilde{t}_i\)，其 token 序列如式~(2.14)：
+\begin{equation}
+    x_i = \tau(\tilde{t}_i) = (x_{i,1},\dots,x_{i,L_i'}) \in \mathcal{V}_{\text{text}}^{L_i'},
+\end{equation}
+其中 \(L_i'\) 为指令化后序列长度。
+令 \(E \in \mathbb{R}^{|\mathcal{V}_{\text{text}}|\times d_t}\) 为
+预训练语言模型的嵌入矩阵，\(\Phi_{\text{LM}}\) 为由多层 Transformer 堆叠构成的编码算子，则文本特征编码器的序列级输出可表示为式~(2.15)：
+\begin{equation}
+    H_i^{(t)} = \Phi_{\text{LM}}(E(x_i)) \in \mathbb{R}^{L_i' \times d_t},
+\end{equation}
+并通过池化或特定位置读取获得节点级语义向量 \(h_i^{\text{text}}\)，其公式表达如~(2.16)所示：
+\begin{equation}
+    h_i^{\text{text}} = \mathrm{Pool}_t\big(H_i^{(t)}\big) \in \mathbb{R}^{d_t},
+\end{equation}
+其中 \(\mathrm{Pool}_t(\cdot)\) 可实现为对有效 token 的平均或加权池化。
+
+与 LLaGA\cite{Chen2024LLaGALL} 的设计一致，\(\mathrm{Enc}_T\) 
+与后续语言模型编解码器 \(\mathrm{Dec}_T\) 共享同一预训练语言模型参数，
+即上述分词器 \(\tau(\cdot)\)、嵌入矩阵 \(E\) 与 Transformer 主干 \(\Phi_{\text{LM}}\) 
+在跨模态对齐预训练和下游任务阶段保持冻结或仅进行轻量调优，
+从而最大限度保留预训练语言模型的知识与生成能力。
+
+\textbf{图结构--语义对齐网络 \(N_A\)。}
+图结构--语义对齐网络 \(N_A\) 参考了 Tang 等人\cite{Tang2023GraphGPTGI} 提出的跨模态对齐思想，旨在在统一框架下桥接图结构空间与自然语言语义空间，通过对齐约束使预训练语言模型具备理解图结构概念并执行节点分类的能力。形式化地，预训练图编码器输出的节点级结构向量为
+\(h_i^{\mathrm{struc}}\in\mathbb{R}^{d_g}\)，
+文本特征编码器得到的节点级语义表示为
+\(h_i^{\mathrm{text}}\in\mathbb{R}^{d_t}\)。
+图结构--语义对齐网络通过一组可学习投影函数，即图特征投影网络 \(f_g\) 和语义特征投影网络 \(f_t\)，其形式如式~(2.17)：
+\begin{equation}
+    f_g:\mathbb{R}^{d_g}\rightarrow\mathbb{R}^{d_a},\qquad 
+    f_t:\mathbb{R}^{d_t}\rightarrow\mathbb{R}^{d_a},
+\end{equation}
+将两类表征映射至共享对齐空间
+\(\mathbb{R}^{d_a}\)，
+得到跨模态对齐向量 \(\tilde{h}_i^{\mathrm{struc}}\) 和 \(\tilde{h}_i^{\mathrm{text}}\)，
+其公式表达如式~(2.18)：
+\begin{equation}
+    \tilde{h}_i^{\mathrm{struc}} = f_g(h_i^{\mathrm{struc}}),
+    \qquad
+    \tilde{h}_i^{\mathrm{text}} = f_t(h_i^{\mathrm{text}}).
+\end{equation}
+
+在上述全局对齐机制基础上，本文进一步引入多尺度对齐损失函数，从全局节点级对齐、局部子结构对齐和生成式对齐等多个维度强化图结构与文本语义之间的关联建模，使跨模态表征在结构保真与语义一致性方面得到协同优化。相关对齐损失的构造与优化细节将在第~3.4 节中系统展开。
+
+\textbf{语言模型解码器 \(\mathrm{Dec}_T\)。}
+本文使用预训练语言大模型 Qwen2.5-14B-Instruct\cite{Yang2024Qwen25TR}
+作为语言模型解码器 \(\mathrm{Dec}_T\)。
+\(\mathrm{Dec}_T\) 作为本框架的推理与生成核心，
+在跨模态对齐阶段接收由图结构编码器 \(\mathrm{Enc}_G\) 与文本特征编码器 \(\mathrm{Enc}_T\)（RoBERTa\cite{Liu2019RoBERTaAR}）输出的表示，
+经过可学习的特征映射层（MLP 投影）转换到语言模型嵌入空间，
+并与任务指令拼接为统一的输入序列，
+据此建模条件分布 \(p(y \mid G,T,i)\)，输出节点类别标签及其自然语言解释。
+
+形式化地，\(\mathrm{Dec}_T\) 以冻结的预训练语言模型为基座，
+仅通过前置的跨模态特征映射层将图–文联合表征嵌入到 Qwen 的 token 嵌入空间，
+随后利用自回归解码机制生成对应的预测输出。
+跨模态对齐与下游节点分类微调阶段主要在轻量的特征映射层上进行优化，
+两侧主干模型保持冻结。
+得益于对齐阶段已经将图结构嵌入到语言可解释的语义空间中，
+\(\mathrm{Dec}_T\) 在解码时无需额外的图侧模块即可完成节点分类、结构解释以及与任务相关的自然语言生成，
+为整个框架提供统一且可扩展的语言推理接口。
+
+
+
 \section{总体流程框架}
-针对上述科学问题, 本文构建了一个三阶段渐进式训练框架，
-旨在系统性解决图结构大语言模型在结构理解与推理泛化方面的核心挑战。 
-其流程框架如图 2.1所示, 主要包括三个阶段: 无损图结构解析与表征预训练阶段、
-多层次图—语言语义对齐阶段、面向图结构推理的大模型后训练阶段，
-建立了从图结构表征到可验证推理链生成的完整技术路径。
+针对前文提出的科学问题，本文提出一种“图基座模型构建 + 任务特定后训练”的四阶段渐进式训练框架，
+旨在构建通用图结构基座模型（Graph Foundation Model，GFM），
+并通过任务针对性优化使其在节点分类与图推理两大核心任务上均展现出色性能。
 
-\textbf{1)无损图结构解析与表征预训练阶段}
+整体逻辑为：前两阶段侧重通用能力构建，
+获得同时具备高保真图结构表征与跨模态语义对齐能力的共享基座；
+在此基础上，后两阶段分别面向节点分类与图推理任务进行差异化适配，
+前者聚焦垂直应用场景的监督微调，后者强调链式推理与泛化能力的强化。
+如图~XX 所示，四个阶段共同构成了“统一表征 $\rightarrow$ 任务特化”的完整技术路径。
 
-图结构表征预训练阶段对应上述的第一个子任务。
-针对现有 Graph-LLM 普遍采用局部邻域模板或随机采样进行序列化，导致拓扑信息丢失的问题，
-本文借鉴基于欧拉路径的图序列化思想\cite{Zhao2023GraphGPTGP}，
-对节点及其邻域进行半欧拉路径（semi-Eulerian path）构造与规范化排序，
-将原本离散的拓扑结构转换为可逆的序列输入，实现对子图的近无损、可逆序列化编码。
-在此基础上，引入Graph Eulerian Transformer（GET）图编码器，
-在大规模真实图混合数据集上基于SMTP任务对欧拉路径序列进行建模，
-同时引入节点类型、度数等结构特征作为附加信号，
-以获得既能保留原始拓扑结构、又适配大语言模型输入形式的高质量图表征。
+\subsection{通用基座训练阶段}
+通用基座训练阶段为节点分类与图推理两类任务提供共享的核心能力，
+包括图结构的近无损表征与图—文语义空间的统一对齐，
+对应前文第一、第二子任务，是后续任务适配与性能评估的基础。
 
-\textbf{2)多层次图—语义跨模态对齐阶段}
+\textbf{阶段一：无损图结构解析与表征预训练}
 
-跨模态对齐阶段对应上述的第二个子任务。
-在获得图表征的基础上，本文进一步面向图–语言语义鸿沟问题，设计了多层次的损失函数改进。
-参考Zhao和Zhang等人的工作\cite{Zhao2023GraphGPTGP,Zhang2024GraphTranslatorAG}，
-将图编码器产生的结构表征映射到语言嵌入空间，设计多层次损失约束，对图表示与文本表示进行联合优化。
-具体而言，一方面通过InfoNCE损失拉近全局图级向量与对应整体文本描述的表征，
-提升跨模态空间的一致性；另一方面，局部token级对齐通过跨模态注意力机制，
-将图结构单元与文本语义片段进行细粒度匹配，提升局部语义一致性；
-此外，采用生成式交叉熵损失训练图结构表征具备重建对应文本序列的能力，
-使模型内化文本的细粒度语义信息。
-三维度协同的跨模态对齐方案，
-显著提升图结构表征与文本语义表征在LLM嵌入空间中的有效对齐。
+图结构表征预训练阶段面向“如何构建高保真、可迁移的图结构基座表征”这一核心问题。
+针对现有 Graph--LLM 普遍采用局部邻域模板或随机采样进行线性化而易导致拓扑信息丢失的局限，
+本文借鉴Zhao等人 \cite{Zhao2023GraphGPTGP}基于欧拉路径的图序列化思想，
+对节点及其邻域执行半欧拉路径（semi-Eulerian path）构造与规范化排序，
+将离散拓扑结构转换为可逆序列输入，实现对子图的近无损、可逆序列化编码。
+
+在此基础上，引入 Graph Eulerian Transformer（GET）图编码器，
+在大规模真实图混合数据集上，以 Scheduled Masked Token Prediction（SMTP）为自监督目标对欧拉路径序列进行建模，
+并将节点类型、度数等结构特征作为附加信号注入，
+从而获得既能保留原始拓扑结构、又与大语言模型输入形式兼容的高质量图表征。
+该阶段的核心产出是一个结构保真型的图表征编码器，为后续两类任务提供统一且可迁移的图结构输入基座。
+
+\textbf{阶段二：多层次图—语义跨模态对齐预训练}
 
 
-\textbf{3) 面向图结构推理的大模型后训练阶段}
+为了弥合图结构表征与文本语义表征之间的模态鸿沟，
+第二阶段设计多层次跨模态对齐损失，对图编码器与文本编码器的输出进行联合优化，对应前文第二子任务。
+参考 Tang 和 Zhang 等人的工作 \cite{Tang2023GraphGPTGI,Zhang2024GraphTranslatorAG}，
+首先将图编码器产生的结构表征映射至语言嵌入空间，
+在共享对齐空间中对图表示与文本表示施加多粒度约束。
 
-第三阶段对应上述的第三、第四子任务。
-在前两阶段已获得统一图–语言表征的基础上，
-针对图推理任务，对图基础模型进行系统的后训练增强。
-该阶段由三个相互衔接的组成部分构成：监督式冷启动微调、基于可验证奖励的强化学习优化，共同作用于模型的策略层，直接优化其生成的链式推理过程与最终答案。
+具体而言，一方面基于 InfoNCE 损失拉近全局图级向量与对应整体文本描述的表征，
+提升跨模态嵌入空间的一致性；另一方面，
+局部 token 级对齐通过跨模态注意力机制，将欧拉路径中的结构单元与文本语义片段进行细粒度匹配，
+强化局部结构—语义对应关系；此外，
+利用交叉熵损失训练图结构表征在条件解码器的作用下重建对应文本序列，
+促使结构向量内化可用于语言重构的细粒度语义信息。
+上述三维度协同构成的跨模态对齐方案，显著提升了图结构表征与文本语义表征在 LLM 嵌入空间中的有效对齐。
 
-\textbf{监督式冷启动微调：}
-本工作首先通过监督式冷启动微调（CoT-SFT）为模型注入高质量的链式思维先验。
-受 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR} 和 G1\cite{Guo2025G1TL} 中拒绝采样构造 CoT 数据策略的启发，
+该阶段的核心产出是统一的图—文表征空间，
+使图结构表征能够被预训练语言模型直接“理解”和利用，
+为两类下游任务中的语义融合与条件生成提供支撑。
+
+\subsection{双任务差异化适配优化阶段}
+在前两阶段构建的通用基座模型之上，
+本文分别通过节点分类与图推理两条任务链路评估与强化图基座模型的能力。
+其中，节点分类任务主要检验表征质量与监督可调性，
+图推理任务则侧重考察链式推理与零样本／小样本泛化能力。
+针对两类任务的差异性需求，设计相应的适配与优化策略，实现不同任务目标的精准落地。
+
+\textbf{阶段三：面向节点分类任务的监督微调}
+
+参考GraphGPT\cite{Tang2023GraphGPTGI}、LLaGA\cite{Chen2024LLaGALL}等工作
+在节点分类任务上的实践经验，
+第三阶段在通用基座模型之上进行节点分类任务的监督微调，
+对应前文第一、第二子任务的落地验证。
+具体做法上，固定图编码器 \(\mathrm{Enc}_G\)、文本编码器 \(\mathrm{Enc}_T\)、
+文本解码器 \(\mathrm{Dec}_T\) 及跨模态对齐模块的核心参数，
+仅微调任务适配层（如分类头与局部投影层），
+使模型在保持通用表示能力的前提下聚焦节点类别判别需求。
+
+图基座模型在 Cora、PubMed、OGB-Arxiv 三个经典文本属性图数据集上进行多任务微调与系统评估，
+在统一的问答式提示模板下学习
+“图结构 + 节点文本 \(\rightarrow\) 节点类别标签 + 自然语言解释” 的映射。
+这一阶段的两个关键优势在于：
+（1）通过欧拉路径无损编码与 GET 编码器显著提升节点结构表征质量；
+（2）通过多层次对齐损失将结构特征细粒度嵌入预训练语言模型的语义空间，
+在不增加大模型参数规模的前提下显著提升多个节点分类基准上的监督性能。
+至此得到的模型可视为面向节点分类场景的“图结构大语言基座模型”。
+
+\textbf{阶段四：面向图推理任务的强化学习优化}
+
+第四阶段对应前文第三、第四子任务。
+在上述图—语言基座模型之上，本阶段沿用同一图结构编码器与跨模态对齐模块，
+但将任务形式扩展为更具挑战性的图结构推理与泛化任务。
+受 DeepSeek-R1 \cite{DeepSeekAI2025DeepSeekR1IR} 和 G1 \cite{Guo2025G1TL}等工作的启发，
+通过“监督式链式思维冷启动 + 基于可验证奖励的强化学习”两步后训练，
+获得具备链式推理能力的 GFMs。
+
+首先，采用监督式冷启动微调（CoT-SFT）为模型注入高质量的链式思维先验。
+通过拒绝采样构造 CoT 数据策略的启发，
 从真实图任务和合成图任务中采样一批图–问题实例 \((G,q)\)，
 采用 Qwen2.5-14B-Instruct 作为教师模型，
 在给定图结构编码与自然语言提示的条件下多次生成候选推理链与答案序列 \(y = (c,a)\)。
-随后利用精确图算法或任务特定校验器（verifier）自动评估答案正确性及结构约束，
-仅保留通过验真的样本，构成高置信度的 CoT 监督数据集。
+随后利用精确图算法或任务特定校验器（verifier）自动评估答案正确性及结构约束满足性，
+仅保留通过验真的样本，构成高置信度 CoT 监督数据集。
 训练时冻结图结构编码与多模态对齐模块，仅对大语言模型参数进行条件语言建模微调，
-以最小化标准负对数似然损失，从而获得一套结构一致、语义合理的初始链式推理策略。
+最小化标准负对数似然损失，从而获得一套结构一致、语义合理的初始链式推理策略。
 
-\textbf{可验证奖励驱动的强化学习：}
-在监督式冷启动获得基础推理能力之后，引入基于可验证奖励的强化学习机制，
+在监督冷启动获得基础推理能力之后，
+本文进一步引入参考 G1 的基于可验证奖励的强化学习优化机制，
 以缓解图结构推理泛化性弱、对高质量标注依赖强的问题。
 将模型视作策略生成器 \(\pi_\theta(a \mid q,G)\)，
 在图结构 \(G\) 和查询 \(q\) 条件下生成包含中间分析步骤的推理链与答案
 \(y_{1:T} = (c_1,\ldots,c_T,a)\)。
-图算法或规则系统对生成结果进行自动验证，返回综合考虑答案正确性、路径合法性和约束满足程度的奖励。
-在优化层面，采用组式策略优化算法（GRPO）对模型进行迭代更新，
+图算法或规则系统对生成结果进行自动验证，返回同时考虑答案正确性、路径合法性和约束满足程度的奖励。
+在优化层面，采用组式策略优化算法（Group-wise Policy Optimization, GRPO）
+\cite{Shao2024DeepSeekMathPT}对模型进行迭代更新，
 每轮采样多组推理轨迹并按奖励排序，仅对高奖励轨迹对应的策略进行更新，
 在满足图结构约束的前提下强化准确且可验证的推理行为，
-同时缓解传统强化学习中探索效率低与训练不稳定的问题。
+同时缓解传统强化学习中探索效率低与训练不稳定等问题。
+
+\textbf{整体框架的技术优势在于：}
+1）通过前两阶段构建通用图结构基座模型，避免了为每个任务单独训练模型的高昂成本；
+2）在同一基座之上通过任务特定的适配与优化，
+既保留了通用图理解与语义对齐能力，又获得面向节点分类与图推理的专业性能；
+3）在图推理任务中引入可验证奖励机制，使模型能够在合成图与真实图任务上实现零样本／小样本泛化，
+显著提升推理过程的可追溯性与可信度。
+
+综上，四阶段框架系统性地解决了图结构编码信息损失、
+图文表征空间割裂、高质量标注数据依赖以及推理过程缺失等关键问题，
+验证了统一图结构基座模型在多样化图任务上的适应性和扩展性，
+为构建真正通用的图智能系统提供了一条可行的技术路径。
 
 
 
 \section{主要评估指标}
 
-为全面评估所提图结构大语言模型在节点分类与图推理任务上的性能表现，
-本文从客观指标和主观指标两个层面构建评价体系。
-客观指标量化模型在标准基准数据集上的预测性能，
-而主观指标则刻画模型在生成推理链条时的逻辑性与可读性。
+为全面评估所提图结构基座模型在节点分类、图推理及跨模态检索等任务上的性能表现，本文构建了包含客观指标与主观指标的综合评价体系。客观指标旨在量化模型在标准基准数据集上的预测精度与排序能力，
+而主观指标则侧重于刻画模型生成推理链条的逻辑完备性与人类可读性。
 
 \subsection{节点分类任务测评指标}
 对于节点分类任务（包括单标签与多标签情形），本文主要采用客观评测指标，不额外引入主观评分。
@@ -273,7 +487,7 @@ y = (c,a)
 准确率用于衡量模型预测正确的节点占总节点数的比例，是分类任务最基础的性能基准，
 直观反映模型整体预测能力，是图节点分类中最常用的指标之一。
 设测试集共有 $N$ 个节点，第 $i$ 个节点的真实标签为 $y_i$，
-模型预测标签为 $\hat{y}_i$，则测试准确率计算公式如2.12所示：
+模型预测标签为 $\hat{y}_i$，则测试准确率计算公式如(2.19)所示：
 \begin{equation}
 \mathrm{Acc} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{I}\{\hat{y}_i = y_i\},
 \end{equation}
@@ -288,7 +502,7 @@ y = (c,a)
 
 设第 $c$ 类的真正例、假正例与假反例分别为 
 $\mathrm{TP}_c$、$\mathrm{FP}_c$ 与 $\mathrm{FN}_c$，
-其类级精确率、召回率以及类级 $F1$ 公式如2.13所示：
+其类级精确率、召回率以及类级 $F1$ 公式如(2.20)所示：
 \begin{equation}
 P_c = \frac{\mathrm{TP}_c}{\mathrm{TP}_c + \mathrm{FP}_c}, \qquad
 R_c = \frac{\mathrm{TP}_c}{\mathrm{TP}_c + \mathrm{FN}_c}, \qquad
@@ -298,27 +512,30 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 
 \begin{itemize}
   \item \textbf{Micro-F1}：在全局层面汇总所有类别的
-   \(\mathrm{TP},\mathrm{FP},\mathrm{FN}\)，其公式如2.14所示
+   \(\mathrm{TP},\mathrm{FP},\mathrm{FN}\)，其公式如(2.21)所示
   \begin{equation}
   \mathrm{TP}=\sum_c \mathrm{TP}_c,\quad
   \mathrm{FP}=\sum_c \mathrm{FP}_c,\quad
   \mathrm{FN}=\sum_c \mathrm{FN}_c,
   \end{equation}
-  得到全局精确率\(P_{\text{micro}}\)与召回率\(R_{\text{micro}}\)，计算方式如2.15所示：
+  得到全局精确率\(P_{\text{micro}}\)与召回率\(R_{\text{micro}}\)，计算方式如(2.22)所示：
   \begin{equation}
   P_{\text{micro}}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FP}},\qquad
   R_{\text{micro}}=\frac{\mathrm{TP}}{\mathrm{TP}+\mathrm{FN}},
   \end{equation}
-  从而计算得到最终\(F1_{\text{micro}}\)公式如2.16所示：
+  从而计算得到最终\(F1_{\text{micro}}\)公式如(2.23)所示：
   \begin{equation}
   F1_{\text{micro}}=\frac{2 P_{\text{micro}} R_{\text{micro}}}{P_{\text{micro}}+R_{\text{micro}}}.
   \end{equation}
 
   Micro-F1 对样本量较大的类别赋予更高权重，通常反映模型在整体样本层面的平均性能。
 
-  \item \textbf{Macro-F1}：对所有类别的 F1 分数取算术平均，不考虑类别样本量差异，平等对待每个类别，核心用于缓解类别不均衡带来的评估偏差，精准刻画模型对少数类的预测能力。其计算公式如2.17所示：
+  \item \textbf{Macro-F1}：对所有类别的 F1 分数取算术平均，不考虑类别样本量差异，
+  平等对待每个类别，核心用于缓解类别不均衡带来的评估偏差，
+  精准刻画模型对少数类的预测能力。其计算公式如~(\ref{eq:macro})所示：
   \begin{equation}
   F1_{\text{macro}}=\frac{1}{C}\sum_{c=1}^{C} F1_c,
+  \label{eq:macro}
   \end{equation}
   其中 $C$ 为类别数。Macro-F1 对每一类等权处理，
   因此在类别高度不均衡的数据集中尤其重要，能够敏感地揭示模型在少数类上的性能波动。
@@ -330,9 +547,10 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 
 设对某一类别，模型对所有节点给出置信度分数，
 遍历不同阈值可得到一系列“真正例率–假正例率”（TPR–FPR）对，描绘出 ROC 曲线。
-其面积计算如公式2.18所示：
+其面积计算如~(\ref{eq:auc})所示：
 \begin{equation}
 \mathrm{AUC} = \int_{0}^{1} \mathrm{TPR}(\mathrm{FPR})\, d\mathrm{FPR},
+\label{eq:auc}
 \end{equation}
 实际实现中常用数值积分或等价的秩统计形式进行估计。AUC 值域为 $[0.5,1]$，$0.5$ 对应随机猜测，$1$ 对应完美分类，对类别不平衡具有较好鲁棒性。
 
@@ -343,15 +561,17 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 将每道图推理题视作一个判定问题，采用 Test Accuracy 作为核心指标。
 
 设测试集中共有 $N$ 个图推理问题，第 $i$ 个问题的标准答案为 $a_i$，
-模型输出最终答案为 $\hat{a}_i$，定义准确率\(\mathrm{Acc}\)计算公式如2.19所示：
+模型输出最终答案为 $\hat{a}_i$，
+定义准确率\(\mathrm{Acc}\)计算公式如~(\ref{eq:acc})所示：
 \begin{equation}
 \mathrm{Acc} = \frac{1}{N} \sum_{i=1}^{N} \mathbb{I}\{\hat{a}_i \equiv a_i\},
+\label{eq:acc}
 \end{equation}
 其中“$\equiv$”根据任务类型采用不同的等价判定规则：
 \begin{itemize}
-  \item \textbf{唯一值任务}（如节点数、图半径）：数值完全一致计为正确；
-  \item \textbf{集合类任务}（如公共邻居集合、最大独立集）：若模型输出集合与真值集合的 Jaccard 指数为 $1$（即完全重合）则判为正确；
-  \item \textbf{多解路径类任务}（如最短路径、哈密顿路径）：通过图算法验证器
+  \item \textit{唯一值任务}（如节点数、图半径）：数值完全一致计为正确；
+  \item \textit{集合类任务}（如公共邻居集合、最大独立集）：若模型输出集合与真值集合的 Jaccard 指数为 $1$（即完全重合）则判为正确；
+  \item \textit{多解路径类任务}（如最短路径、哈密顿路径）：通过图算法验证器
   （如 NetworkX 提供的相应函数）检查输出路径是否满足约束
   （边均存在、节点覆盖条件满足且不重复），通过则记为正确。
 \end{itemize}
@@ -364,9 +584,9 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 
 主观评测主要关注以下三个维度：
 \begin{enumerate}
-  \item \textbf{逻辑连贯性}\cite{Wang2023CanLM}：检查推理步骤是否前后衔接、是否遵循图论基本定理与常识，避免出现“前文否认，后文又使用”的因果矛盾（如先声明“节点无邻居”，却在后续步骤中使用该邻居计算度数）。
-  \item \textbf{答案合理性}\cite{Wang2023CanLM}：对存在多种可行解的 NP-hard 任务（如最大独立集、哈密顿路径），人工验证模型给出的解是否满足约束条件（如独立集中任意两点不相邻，哈密顿路径覆盖所有节点且不重复），并评估其搜索策略是否“符合直觉”（如在构造独立集时倾向于选择度数较低节点）。
-  \item \textbf{语义一致性}\cite{Zeng2023ChatMolIM}：当模型对图结构给出自然语言解释（例如分子图、蛋白质交互图的语义描述）时，评估其描述是否与结构事实相符、是否违反领域常识，避免出现“结构上正确但语义解释错误”的情形。
+  \item \textit{逻辑连贯性}\cite{Wang2023CanLM}：检查推理步骤是否前后衔接、是否遵循图论基本定理与常识，避免出现“前文否认，后文又使用”的因果矛盾（如先声明“节点无邻居”，却在后续步骤中使用该邻居计算度数）。
+  \item \textit{答案合理性}\cite{Wang2023CanLM}：对存在多种可行解的 NP-hard 任务（如最大独立集、哈密顿路径），人工验证模型给出的解是否满足约束条件（如独立集中任意两点不相邻，哈密顿路径覆盖所有节点且不重复），并评估其搜索策略是否“符合直觉”（如在构造独立集时倾向于选择度数较低节点）。
+  \item \textit{语义一致性}\cite{Zeng2023ChatMolIM}：当模型对图结构给出自然语言解释（例如分子图、蛋白质交互图的语义描述）时，评估其描述是否与结构事实相符、是否违反领域常识，避免出现“结构上正确但语义解释错误”的情形。
 \end{enumerate}
 
 \subsection{其他测评指标}
@@ -375,25 +595,598 @@ F1_c = \frac{2 P_c R_c}{P_c + R_c}.
 \subparagraph{Recall@k}
 在跨模态／零样本检索实验中，对于给定图节点表征，检索最匹配的类别描述或原型向量。本文采用 Recall@k 评估前 $k$ 个候选中召回真实类别的能力。Recall@k 在跨模态检索和表示对齐任务中被广泛采用，用于衡量嵌入空间的一致性。
 
-设某一查询（如一个节点）对应的相关目标集合大小为 $R$，在排序结果的前 $k$ 个中命中的相关目标数为 $r_k$，对所有查询求平均，可得：
+设某一查询（如一个节点）对应的相关目标集合大小为 $R$，
+在排序结果的前 $k$ 个中命中的相关目标数为 $r_k$，
+对所有查询求平均，可得其计算公式如~(\ref{eq:recall})所示：
 \begin{equation}
 \mathrm{Recall@}k = \frac{1}{Q} \sum_{q=1}^{Q} \frac{r_k^{(q)}}{R^{(q)}},
+\label{eq:recall}
 \end{equation}
 其中 $Q$ 为查询总数。对于单标签情形，$R^{(q)} = 1$，Recall@k 等价于“Top-$k$ 命中率”。
 
+\subparagraph{Mean Reciprocal Rank (MRR)}
+平均倒数排名（Mean Reciprocal Rank, MRR）是衡量检索系统在排序任务中将第一个相关结果排在首位能力的指标。与 Recall@k 关注前 $k$ 个结果的召回数量不同，MRR 更侧重于检索结果的精确排序位置，常用于评估链路预测与跨模态检索中的“首选正确性”。
+
+对于查询集合 $Q$，设第 $q$ 个查询的第一个正确答案在排序列表中的排名为 $\text{rank}_q$（若未检索到则倒数为0），MRR 计算公式如式~(\ref{eq:mrr})所示：
+\begin{equation}
+\mathrm{MRR} = \frac{1}{|Q|} \sum_{q=1}^{|Q|} \frac{1}{\text{rank}_q}.
+\label{eq:mrr}
+\end{equation}
+该指标的值域为 $[0, 1]$，值越接近 1 表示模型将正确结果排在越靠前的位置。在图检索任务中，MRR 能够敏锐地反映模型对最相关邻居或文本描述的定位能力。
+
+\subparagraph{Normalized Discounted Cumulative Gain (NDCG@k)}
+归一化折损累计增益（NDCG@k）是一种考虑了结果排序位置权重的评价指标。在跨模态对齐任务中，不仅要求模型召回相关样本，还要求相关性越高的样本排名越靠前。NDCG 通过对数折损机制，对排名靠后的相关项给予较低的权重，从而更准确地反映排序质量。
+
+首先计算折损累计增益（DCG@k），如式~(\ref{eq:dcg})所示：
+\begin{equation}
+\mathrm{DCG}@k = \sum_{i=1}^{k} \frac{2^{rel_i} - 1}{\log_2(i+1)},
+\label{eq:dcg}
+\end{equation}
+其中 $rel_i$ 表示第 $i$ 个位置的检索结果的相关性分数（在二元相关性设定下，相关为1，不相关为0）。为了在不同查询间进行比较，需将其归一化为 NDCG@k：
+\begin{equation}
+\mathrm{NDCG}@k = \frac{\mathrm{DCG}@k}{\mathrm{IDCG}@k},
+\label{eq:ndcg}
+\end{equation}
+其中 $\mathrm{IDCG}@k$ 为理想排序情况下的最大 DCG 值。NDCG@k 特别适用于评估模型在语义空间中对相似度梯度的拟合能力。
+
+\subparagraph{Hits@k}
+在链路预测与结构一致性评估中，Hits@k 用于衡量正确的目标节点（如真实存在的边或邻居）是否出现在预测列表的前 $k$ 位。与 Recall@k 类似，但在链路预测的语境下，通常针对每个测试三元组或节点对仅有一个正例真值。
+
+设 $rank_q$ 为第 $q$ 个查询中真实目标节点的排名，Hits@k 的定义如式~(\ref{eq:hits})所示：
+\begin{equation}
+\mathrm{Hits}@k = \frac{1}{|Q|} \sum_{q=1}^{|Q|} \mathbb{I}(\text{rank}_q \leq k),
+\label{eq:hits}
+\end{equation}
+其中 $\mathbb{I}(\cdot)$ 为指示函数。该指标直观地反映了模型在 Top-$k$ 截断下的命中能力，是评估图嵌入质量的标准指标之一。
+
+\section{图结构基座模型训练建模}
+\subsection{训练集构建方法}
+\subsubsection{图任务数据集概述}
+
+当前大规模公开图数据集已形成层次分明、覆盖广泛的生态，为图机器学习与图大语言模型研究提供了坚实基础。
+以 Open Graph Benchmark（OGB）为代表的综合型基准系统性涵盖节点、边与图级任务，
+包括 ogbn-arxiv、ogbn-products、ogbn-proteins、ogbl-citation2、ogbl-ppa 等通用图数据集，
+以及面向分子性质预测的 PCQM4Mv2 等大规模分子图基准\cite{Hu2020OpenGB}。
+
+在早期图表示学习研究中，PyTorch Geometric 库中的 Cora\cite{McCallum2000AutomatingTC}、
+Citeseer\cite{Giles1998CiteSeerAA}、PubMed\cite{Sen2008CollectiveCI} 等引文网络仍是图神经网络方法对比的标准数据集。
+在分子与生物领域，MoleculeNet\cite{Wu2017MoleculeNetAB} 
+将 ESOL、FreeSolv、QM7-9 等多种分子性质数据统一为一套评测基准，
+PCQM4Mv2\cite{Hu2020OpenGB}、ChEBI-20\cite{Edwards2021Text2MolCM} 与 PCdes\cite{Kim2018PubChem2U}
+进一步将分子图与自然语言描述对齐，为分子理解、性质预测及对话式分子设计提供了大规模图–文本数据支撑。
+面向图推理与图算法，Erdős 数据集\cite{Guo2025G1TL}系统化构造了覆盖 50 种图论任务、数十万规模样本的基准，
+支持可验证强化学习式图推理训练与零样本评估；
+NLGraph\cite{Wang2023CanLM}、GraphArena\cite{Tang2024GraphArenaBL}、GraCoRe\cite{Yuan2024GraCoReBG}、
+GraphWiz\cite{Chen2024GraphWizAI} 与 GraphOmni\cite{Xu2025GraphOmniAC} 等工作
+则在连通性、最短路径、最大流及多类 NP 完全问题上，基于真实或合成图构建多样化评测任务，系统揭示现有大模型在结构推理上的脆弱性与局限。
+在电商与社交场景中，Amazon-Computers、Amazon-Sports、Amazon-Photo 等共购图\cite{Wan2018ItemRO}，
+以及包含合作、引用与机构信息的 AMiner 学术网络和面向动态图建模的 DGraph\cite{hypermode_dgraph_overview}，
+为节点分类、链路预测与推荐算法提供了真实大规模图环境。
+基于上述资源，本文在统一的训练框架下构建多阶段图任务数据集，
+涵盖节点分类与图推理两个方向。主流数据集详细属性汇总如表~(\ref{tab:dataset_properties})所示：
 
 
-\section{数据集}
-\subsection{节点分类数据集}
-\subparagraph{OGB-arxiv数据集}
-\subparagraph{PubMed数据集}
-\subparagraph{Cora数据集}
 
-\subsection{图推理数据集}
+
+\begin{table}[htbp]
+\centering
+\caption{图数据集详细属性汇总表}
+\label{tab:dataset_properties}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccccc}
+\toprule
+\textbf{数据集} & \textbf{类型} & \textbf{节点数} & \textbf{边数} & \textbf{特征维度} & \textbf{文本属性} & \textbf{任务类型} & \textbf{类别/标签} & \textbf{数据划分} \\
+\midrule
+\multicolumn{9}{c}{\textbf{合成图论数据集}} \\
+\midrule
+Erdős & 合成图论任务 & 5-35 (子图) & 10-70 (子图) & 无 & 节点ID+边列表 & 50种图论任务 & 数值/布尔/集合/路径 & 100K训练/5K测试 \\
+\midrule
+\multicolumn{9}{c}{\textbf{学术引用网络}} \\
+\midrule
+Cora & 无向引用图 & 2,708 & 10,556 & 1,433 (BoW) & 论文标题+摘要 & 节点分类 & 7 & 3:1:1  \\
+PubMed & 无向引用图 & 19,717 & 88,648 & 500 (TF-IDF) & 医学论文描述 & 节点分类 & 3 & 3:1:1 \\
+OGB-arxiv & 有向引用图 & 169,343 & 2,315,598 & 128 (嵌入) & 标题+摘要 & 节点分类 & 40 & 6:2:2  \\
+Citeseer & 有向引用图 & 3,186 & 8,450 & 1,433(BoW) & 论文标题+摘要 & 节点分类 & 6 & 3:1:1 \\ 
+\midrule
+\multicolumn{9}{c}{\textbf{电商共购网络}} \\
+\midrule
+Amazon-Computers & 无向共购图 & 87,229 & 1,256,548 & 768 (描述) & 商品描述 & 节点分类 & 10 & 6:2:2 \\
+Amazon-Sports & 无向共购图 & 173,055 & 3,020,134 & 512 (标题) & 商品标题 & 节点分类 & 13 & 6:2:2 \\
+Amazon-Photo & 无向共购图 & 48,362 & 873,793 & 1,024 (评论) & 商品评论 & 节点分类 & 12 & 6:2:2 \\
+\midrule
+\multicolumn{9}{c}{\textbf{分子与生物网络}} \\
+\midrule
+PCQM4Mv2 & 分子图 & 3,803,453 & 78,256,721 & 无 (原子/键属性) & 无 & 回归 (HOMO-LUMO) & 128 & 8:1:1 \\
+ogbn-proteins & 蛋白质交互 & 132,534 & 39,561,252 & 8D (关联强度) & 无 & 多标签分类 & 112 & 7:1.5:1.5 \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+
+\subsubsection{节点分类数据集}
+\textbf{Cora学术引用网络}：Cora\cite{Hu2020OpenGB} 包含计算机科学领域的论文引用网络，
+2,708个节点表示论文，10,556条边表示引用关系，包含约 $25{,}120$ 篇研究论文。
+每篇论文通过1,433维词袋模型表示，涵盖7个机器学习子领域的类别标签。数据集具有高维稀疏特征和相对较高的聚类系数(0.23)，
+是验证图神经网络在稀疏高维特征空间表现的基础数据集。
+
+\textbf{PubMed生物医学网络}：PubMed\cite{Sen2008CollectiveCI}源自美国国家医学图书馆的文献数据库，
+包含19,717篇与糖尿病相关的论文和44,338条引用关系。
+节点特征为500维TF-IDF向量，标签分为三种糖尿病研究类型。
+该数据集特征维度较低但语义丰富，平均度为4.5，聚类系数较低(0.03)，
+反映了医学文献的特定引用模式。
+
+\textbf{OGB-arxiv大规模学术图}：OGB-arxiv\cite{McCallum2000AutomatingTC}微软学术图的子集，
+包含169,343篇计算机科学领域的论文，构成1,166,245条引用边。
+每篇论文由128维嵌入向量表示，标签分为40个细粒度研究领域。
+该数据集规模大、连通性好(平均度13.8)，
+是评估模型在大规模图上泛化能力的重要基准，尤其适合测试计算效率和可扩展性。
+
+\textbf{PCQM4Mv2分子图数据集}：
+PCQM4Mv2\cite{Hu2020OpenGB}是量子化学领域的超大规模分子图数据集，
+包含约380万个分子结构。每个分子由原子节点和化学键边构成，任务是预测HOMO-LUMO能隙。
+该数据集具有严格的化学约束(如价键规则)和高平均度(20.6)，
+被视为分子性质预测领域的"ImageNet级"基准，对模型理解复杂拓扑结构和物理规律的能力提出极高要求。
+
+\textbf{Amazon-item 数据集：}
+Amazon-item\cite{Wan2018ItemRO} 是电商领域的代表性共购图数据集，
+基于亚马逊平台用户的联合购买行为构建无向商品图：节点表示商品，边表示被共同购买的关系或频次。
+典型规模约为 $15.5$M 节点和 $100$M 边，覆盖电子产品、图书、家居等多种品类。
+节点特征通常由商品标题、简介等文本经过清洗与分词后，使用词袋或 tf-idf 编码为高维稀疏向量；
+呈现高异构性和低同质性。
+这类数据集通常具有长尾分布特性，对模型处理稀疏结构和异构节点特征的能力提出挑战。
+
+\subsubsection{图推理数据集}
+\textbf{Erdős 数据集：}
+Erdős数据集\cite{Guo2025G1TL}目标是
+为大模型在图论问题上的可验证强化学习（RL from verifiable rewards）
+提供一个大规模训练和评测平台。
+Erdős覆盖 50 种图论推理任务，全部来自 NetworkX 提供的标准图算法接口，
+涵盖从基础图属性到经典 NP 难问题的完整谱系。
+通过带重启的随机游走策略采样5-35节点的子图。
+任务难度分为四类：Easy级(29.16\%)包含节点计数等基础任务；Medium级(22.91\%)包含连通性判断等中等复杂度任务；
+Hard级(33.33\%)涉及最短路径、中心性计算等复杂任务；Challenging级(14.58\%)覆盖NP-hard问题如最大独立集、TSP等。
+训练集包含10万样本，测试集5千样本，答案形式包括整数、布尔值、节点列表和边列表等。
+
+\textbf{GraphArena数据集：}GraphArena数据集\cite{Tang2024GraphArenaBL}专门用于在真实大规模图上系统评估 LLM 在图计算与图推理问题上的能力。
+它提供了一套包含四个多项式时间任务（例如最短距离问题）和六个NP完全挑战（例如旅行商问题）的测试集。GraphArena采用严格的评估框架，将LLM的输出分类为正确、次优（可行但非最优）、幻觉（格式正确但不可行）或缺失。对超过10个LLM的评估表明，即使是性能最佳的LLM在处理更大、更复杂的图问题时也会遇到困难，并出现幻觉问题。本文进一步探讨了四种解决此问题并改进LLM在图计算方面性能的潜在方案，包括思路提示、指令调优、代码编写和扩展测试时计算能力，每种方案都展现出独特的优势和局限性。
+
+
+\subsubsection{多阶段训练数据构建}
+
+为支持图结构基座模型从结构建模、跨模态对齐到图推理强化学习的渐进式训练，
+本文在上述公开图数据集基础上构建了四个相互衔接的训练数据子集，
+分别对应图编码器自监督预训练、图–文表征对齐、垂直领域监督微调以及图推理指令微调与强化学习阶段。
+
+第一阶段为图编码器自监督预训练数据集。
+为让基座模型在尽可能丰富的结构模式和属性分布上学习统一的图表示，
+本文将 Cora、PubMed、OGB-arxiv、Amazon-* 共购图以及 PCQM4Mv2 分子图等
+多个大规模图学习数据集合并为一个统一预训练图。
+合并后通过重标号与归一化处理获得包含 $552{,}052$ 个节点、$4{,}459{,}033$ 条边的综合图结构。
+基于该统一图，首先基于欧拉路径的图到序列无损编码将子图转换为 token 序列，
+随后采用统一的掩码 token 预测（Masked Token Prediction）任务进行自监督训练，
+使编码器在不依赖下游标签的情况下学习到对结构与属性均敏感的通用图表示。
+
+第二阶段为图–文跨模态对齐数据集。
+考虑到 Cora、PubMed 与 OGB-arxiv 等基准天然属于文本属性图（Text-Attributed Graphs, TAGs），
+本文在这三个数据集上构建跨模态对齐子集：
+以节点的标题、摘要等文本作为语言模态输入，
+以第一阶段图编码器在其邻域子图上的表示作为图模态输入，
+形成一一对应的图–文样本对。该阶段的数据不再引入额外图结构，
+而是复用上述 TAG 数据集中所有带文本属性的节点，
+通过对比学习与生成式目标显式约束图表示与文本表示在 LLM 嵌入空间中的对齐，
+从而为后续在开放指令下的图任务推理打下跨模态基础。
+
+第三阶段为垂直领域节点分类监督微调数据集。
+该阶段回到具体下游任务，
+在 Cora、PubMed、OGB-arxiv等典型节点分类基准上，
+严格遵循各自官方给定的训练 / 验证 / 测试划分，仅使用训练划分中的少量标注节点作为监督信号，
+对图–文对齐后的基座模型进行任务特定的轻量微调。
+通过在学术引文网络与电商共购网络等不同领域分别进行节点分类微调，
+检验前两阶段预训练与对齐的迁移效果，测评基座模型在不同垂直场景下的性能。
+
+
+第四阶段为图推理指令微调与强化学习数据集。首先在冷启动思维链微调（CoT-SFT）阶段，
+一方面针对图论任务，针对五十类图论任务随机抽取每个任务约 $100$ 条代表性样本，
+获得合成图数据集$10k$条思维链数据集样本；
+另一方面本文进一步从 Cora、PubMed、OGB\mbox{-}Arxiv 等典型文本属性图中
+构造真实图推理任务样本，同样获得真实图任务思维链数据集$10k$条，
+总计$20k$条思维链数据，形成统一的图推理指令微调语料，
+用于学习规范化的图推理格式与显式思维链。
+随后在强化学习阶段，采用 Erdős 数据集提供的 $100\,000$ 条训练样本及其可程序验证的评分函数，
+构建基于 GRPO\cite{Shao2024DeepSeekMathPT} 的规则奖励信号，对基座模型进行图推理能力的强化学习式优化，
+进一步提升其在复杂图算法与高难度推理任务上的正确率与零样本泛化能力。
+
+
+\subsection{损失函数与训练策略}
+损失函数与训练策略的设计遵循四阶段渐进式训练框架，
+依次完成“通用表征构建、跨模态对齐、任务适配与推理强化”，
+在保证参数效率的前提下最大化各阶段表征与任务目标的一致性。
+本节从分阶段角度概述各阶段的主要优化目标与参数更新策略，
+具体实现细节与超参数配置将在后续小节中展开。
+
+\subsubsection{图编码器预训练阶段}
+本阶段通过自监督学习为图结构模块构建统一的通用表征基座，
+核心任务是对欧拉路径上的图结构序列进行无损建模与特征抽取。
+记图编码器（Graph Eulerian Transformer）为 $\mathrm{Enc}_G$，
+欧拉路径离散化得到的图 token 序列为
+$s = (z_1,\dots,z_L)$，
+掩码位置集合为 $\mathcal{M}(s)$。
+
+在损失函数方面，
+采用调度掩码 token 预测（Scheduled Masked Token Prediction, SMTP）作为唯一优化目标。
+对每个被掩码位置 $i \in \mathcal{M}(s)$，
+$\mathrm{Enc}_G$ 基于上下文 $s_{\backslash i}$ 预测原始 token $z_i$ 的分布，
+整体损失公式如~(\ref{eq:smtp_loss})所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{SMTP}}
+=
+- \mathbb{E}_{(G,s) \sim \mathcal{D}}
+\bigg[
+\sum_{i \in \mathcal{M}(s)}
+\log p_\theta\big(z_i \mid s_{\backslash i}\big)
+\bigg],
+\label{eq:smtp_loss}
+\end{equation}
+其中掩码比例在训练过程中由 $15\%$ 线性调度至 $30\%$，
+以平衡训练早期的收敛稳定性与后期的建模难度。
+该损失仅作用于图编码器输出端的 token 预测头，
+显式约束模型从局部上下文中恢复节点、边及其属性信息，
+从而同时捕捉节点–边共现规律与全局拓扑模式。
+
+在训练策略方面，阶段一采用图侧全量自监督预训练：
+仅引入 $\mathrm{Enc}_G$ 及其输出预测头，不加载文本编码器、跨模态投影层和大语言模型（LLM），
+对应参数既不初始化也不参与更新。
+优化时对多源图数据集进行混合采样，
+将子图统一编码为定长欧拉路径序列，
+利用预热 + 余弦退火学习率调度进一步提升训练稳定性。
+该阶段结束后，得到一个在结构层面具备良好泛化性的图结构基座编码器。
+
+\subsubsection{图–文跨模态对齐预训练阶段}
+本阶段在 $\mathrm{Enc}_G$ 的基础上引入预训练语言模型，
+通过图–文表示对齐将图结构特征映射到 LLM 的语义空间，
+从而构建统一的图–文基座模型。
+设图侧全局表示为 $g = f_g(\mathrm{Enc}_G(s))$，
+文本侧表示为 $t = f_t(\mathrm{Enc}_T(x))$，
+其中 $f_g,f_t$ 为跨模态投影网络。
+
+在损失函数方面，
+采用全局对比、局部匹配与生成式建模三类目标的加权组合，
+其公式定义如~(\ref{eq:graph_align_loss})所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{align}}
+=
+\lambda_{\mathrm{g}} \mathcal{L}_{\mathrm{global}}
++
+\lambda_{\mathrm{l}} \mathcal{L}_{\mathrm{local}}
++
+\lambda_{\mathrm{gen}} \mathcal{L}_{\mathrm{gen}}.
+\label{eq:graph_align_loss}
+\end{equation}
+\textbf{全局对比损失。}
+对一个 batch 中的图–文对 $(g_i, t_i)$，
+采用 InfoNCE 形式的对比学习目标，
+公式如~(\ref{eq:graph_global_loss})所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{global}}
+=
+- \mathbb{E}
+\bigg[
+\log
+\frac{
+\exp\big(\mathrm{sim}(g_i,t_i)/\tau\big)
+}{
+\sum_{j} \exp\big(\mathrm{sim}(g_i,t_j)/\tau\big)
+}
+\bigg],
+\label{eq:graph_global_loss}
+\end{equation}
+其中 $\mathrm{sim}(\cdot,\cdot)$ 为余弦相似度，$\tau$ 为温度系数。
+该损失在节点级或子图级尺度上拉近匹配图–文对的表示，
+压低不匹配对的相似度，确保全局语义一致性。
+
+\textbf{局部匹配损失。}
+为刻画欧拉路径上的局部子结构与文本短语片段之间的细粒度对应关系，
+利用跨模态注意力得到结构 token 与文本 token 的匹配概率 $a_{ij}$，
+并以二元交叉熵形式约束预定义匹配矩阵 $\{y_{ij}\}$，
+其计算公式如~(\ref{eq:graph_local_loss})所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{local}}
+=
+- \frac{1}{|\mathcal{P}|}
+\sum_{(i,j) \in \mathcal{P}}
+\big[
+y_{ij} \log a_{ij}
++
+(1-y_{ij}) \log (1-a_{ij})
+\big],
+\label{eq:graph_local_loss}
+\end{equation}
+其中 $(i,j) \in \mathcal{P}$ 表示被纳入监督的结构–文本 token 对，
+$y_{ij} \in \{0,1\}$ 指示二者是否匹配。
+该损失强化模型对关键子图（如环、多跳邻域）的语义绑定能力。
+
+\textbf{交叉熵损失。}
+在对齐空间中，以图结构表征为条件驱动 LLM 解码器生成节点文本描述。
+记目标文本序列为 $y = (y_1,\dots,y_T)$，
+则生成式损失可写如公式~(\ref{eq:Cross_entropy_loss})：
+\begin{equation}
+\mathcal{L}_{\mathrm{gen}}
+=
+- \mathbb{E}_{(G,x,y)}
+\bigg[
+\sum_{t=1}^{T}
+\log p_\theta\big(y_t \mid y_{<t}, G, x\big)
+\bigg],
+\label{eq:Cross_entropy_loss}
+\end{equation}
+本质上为条件语言建模的自回归交叉熵，
+促使图结构表征内化可被 LLM 直接解码的细粒度语义信息。
+三重损失通过加权求和联合优化，确保全局语义相似性与局部结构对应性的协同提升。
+
+在训练策略方面，
+阶段二采用“图侧局部微调 + 文本侧冻结”的策略：
+冻结预训练文本编码器与解码器主干参数，仅作为稳定语义基座；
+在图侧解冻 $\mathrm{Enc}_G$ 的若干顶层编码层及跨模态投影网络 $f_g,f_t$，
+利用上述多尺度对齐目标联合优化。
+这样既保持阶段一得到的底层拓扑先验与 LLM 原有语言能力，
+又在对齐空间中逐步撕开模态鸿沟，实现图–文表示的一致化。
+
+\subsubsection{面向节点分类任务的监督微调}
+
+本阶段在通用图–文基座之上注入具体节点分类与关联预测任务的监督信号，
+实现对图分类场景的参数高效适配。
+记节点 $v$ 的预测类别分布为 $\hat{\mathbf{p}}_v$，真实单标签为 one-hot 向量 $\mathbf{y}_v$。
+
+在损失函数方面，
+针对不同任务构造多任务监督目标。
+对单标签节点分类任务，采用标准类别交叉熵，其公式如~(\ref{eq:Node_classification_cross_entropy_loss}) 所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{cls}}^{\mathrm{single}}
+=
+- \mathbb{E}_v
+\big[
+\sum_{c} y_{v,c} \log \hat{p}_{v,c}
+\big].
+\label{eq:Node_classification_cross_entropy_loss}
+\end{equation}
+对多标签节点分类任务，采用按类别独立的二元交叉熵，其公式如 (2.34) 所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{cls}}^{\mathrm{multi}}
+=
+- \mathbb{E}_v
+\big[
+\sum_{c}
+y_{v,c} \log \hat{p}_{v,c}
++
+(1-y_{v,c}) \log (1-\hat{p}_{v,c})
+\big].
+\end{equation}
+对链路预测等辅助任务，
+记边 $(u,v)$ 的打分为 $s_{uv}$，
+则可以二分类交叉熵形式建模边存在性，其公式如 (2.35) 所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{link}}
+=
+- \mathbb{E}_{(u,v)}
+\big[
+y_{uv} \log \sigma(s_{uv})
++
+(1-y_{uv}) \log (1-\sigma(s_{uv}))
+\big],
+\end{equation}
+其中 $y_{uv} \in \{0,1\}$ 表示边是否存在，$\sigma(\cdot)$ 为 Sigmoid 函数。
+总体监督目标为各任务损失的加权求和，其公式如 (2.36) 所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{task}}
+=
+\alpha_{\mathrm{s}} \mathcal{L}_{\mathrm{cls}}^{\mathrm{single}}
++
+\alpha_{\mathrm{m}} \mathcal{L}_{\mathrm{cls}}^{\mathrm{multi}}
++
+\alpha_{\mathrm{l}} \mathcal{L}_{\mathrm{link}},
+\end{equation}
+用于联合优化节点判别与边关系建模能力。
+
+在训练策略方面，
+阶段三强调参数高效的任务适配：
+固定图编码器 $\mathrm{Enc}_G$、文本编码器与解码器主干以及跨模态对齐网络主体参数，
+仅引入并训练轻量级的任务适配层，
+包括节点分类头、链路预测打分头以及必要的局部投影层。
+通过统一的问答式提示模板，
+将“图结构 + 节点文本”映射为“类别标签 + 简要自然语言解释”，
+在不增加模型规模的前提下完成对节点分类任务的特化。
+该阶段得到面向节点分类场景的图结构大语言基座模型。
+
+\subsubsection{图推理指令微调与强化学习优化}
+\label{sec:training_sft}
+阶段四面向图推理任务，
+通过监督式思维链指令微调（CoT-SFT）和基于可验证奖励的强化学习两步式优化，
+进一步提升模型生成显式、可验证推理链的能力。
+
+\textbf{CoT-SFT 指令微调阶段。}
+在 CoT-SFT 阶段，
+训练目标为条件语言建模损失。
+给定图 $G$、任务查询 $q$ 以及目标输出 $y=(y_1,\dots,y_T)$（包含推理链与最终答案），
+损失可写如公式~(\ref{eq:Standard_supervision_fine_tuning_loss})所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{SFT}}
+=
+- \mathbb{E}_{(G,q,y)}
+\bigg[
+\sum_{t=1}^{T}
+\log p_\theta\big(y_t \mid y_{<t}, G, q\big)
+\bigg].
+\label{eq:Standard_supervision_fine_tuning_loss}
+\end{equation}
+该损失鼓励模型学习标准化的图推理格式以及结构化思维链模式。
+
+在训练策略方面，
+保持图侧编码器 $\mathrm{Enc}_G$ 与跨模态投影层参数冻结，
+仅对 LLM 解码器的高层或全层进行监督微调。
+训练数据由真实图任务样本与 Erdős 合成图论任务样本混合构成，
+以覆盖多种典型图推理类型。
+在阶段三得到的节点分类基座上进行微调，
+可在保持判别性能与语言流畅度的同时，
+为后续强化学习提供良好的初始策略。
+
+\textbf{基于可验证奖励的强化学习阶段。}
+在强化学习阶段，
+将 CoT 推理视作条件策略生成过程，
+采用基于 Group-wise Policy Optimization（GRPO）\cite{Shao2024DeepSeekMathPT}的策略优化目标。
+记策略为 $\pi_\theta(y \mid G,q)$，可验证奖励函数为 $R(G,q,y)$，
+其由答案正确性、路径或结构合法性以及约束满足程度等部分加权组合而成，
+其公式定义如~(\ref{eq:reward_function})所示：
+\begin{equation}
+R(G,q,y)
+=
+\alpha R_{\mathrm{ans}}
++
+\beta R_{\mathrm{path}}
++
+\gamma R_{\mathrm{cons}}.
+\label{eq:reward_function} 
+\end{equation}
+在策略梯度框架下，
+对应的优化目标为最大化期望奖励，
+\(
+J(\theta) = \mathbb{E}_{y \sim \pi_\theta}[R(G,q,y)]
+\)，
+实际训练中采用带基线与 KL 正则的近似目标，其公式如~(\ref{eq:rl_loss})所示：
+\begin{equation}
+\mathcal{L}_{\mathrm{RL}}
+=
+- \mathbb{E}_{y \sim \pi_\theta}
+\big[
+(R(G,q,y) - b) \log \pi_\theta(y \mid G,q)
+\big]
++
+\lambda_{\mathrm{KL}} D_{\mathrm{KL}}\big(\pi_\theta \,\Vert\, \pi_{\theta_{\mathrm{ref}}}\big),
+\label{eq:rl_loss}
+\end{equation}
+其中 $b$ 为基线项，
+$\pi_{\theta_{\mathrm{ref}}}$ 为参考策略（例如 CoT-SFT 后的模型）。
+在 GRPO 框架下，
+上述损失通过 Group-Wise 的方式对高奖励轨迹与参考轨迹进行对比，
+从而偏好逻辑自洽、结构正确且接近参考分布的推理行为。
+
+在训练策略方面，
+继续冻结图编码器与跨模态对齐模块，
+仅对 LLM 解码器执行策略更新。
+以 CoT-SFT 后模型作为初始策略，
+在每轮训练中采样多条推理轨迹，
+基于奖励筛选高质量样本用于更新，
+并结合学习率与更新步长的保守设定避免语言能力退化。
+在实践中，
+交叉熵监督信号与 GRPO 策略梯度可以混合使用，
+形成监督和强化的混合后训练过程，
+在保证输出流畅性与答案正确性的同时，
+显著提升模型在复杂图推理任务上的可验证性与零样本泛化能力。
+
+\section{图基座模型推理生成流程}
+\label{sec:graph_llm_inference}
+
+本研究构建的图基座模型在推理阶段采用统一的"编码-提示-解码"范式，其核心在于将图结构信息与文本语义无缝融合，通过冻结参数的条件生成机制实现多任务推理。
+如图XX所示，该流程包含三个关键组件：
+图结构编码器 \(\mathrm{Enc}_G\)、文本编码器 \(\mathrm{Enc}_T\) 
+以及跨模态对齐与提示模块，共同构成条件表征算子
+\(
+\Phi_\varphi : (G,T,q) \mapsto H_{\mathrm{cond}},
+\)
+其中 \(G=(V,E,A,T)\) 为文本属性图，\(q\) 为自然语言形式的任务指令或查询，
+\(H_{\mathrm{cond}}\) 为当前图结构与任务语义的联合表示。
+在此基础上，共享的语言模型解码器 \(\mathrm{Dec}_T\) 自回归建模条件分布，
+具体计算如公式~(\ref{eq:Autoregressive})所示：
+\begin{equation}
+  p_\theta(y \mid G,T,q)
+=
+p_\theta\big(y \mid H_{\mathrm{cond}}\big),
+\label{eq:Autoregressive}
+\end{equation}
+其中 \(y\) 既可以是节点类别标签对应的自然语言片段，
+也可以是显式推理链与最终答案的组合序列。
+推理阶段所有参数 \((\varphi,\theta)\) 均保持冻结，
+不再进行梯度更新，不同任务仅通过提示模板与后处理规则加以区分。
+下文分别给出垂直领域节点分类与基于强化学习优化的图推理任务上的具体推理生成流程。
+
+\textbf{（1）垂直领域节点分类推理。}
+图基座模型在节点分类任务推理时具体分为三个步骤。
+
+首先，在局部子图抽取与结构编码阶段，
+给定测试图 \(G=(V,E,A,T)\) 中的目标节点 \(v\)，
+按照前文采样策略构造以 \(v\) 为中心的局部子图$S(v)$，
+随后，对 \(S(v)\) 进行半欧拉预处理，构造覆盖子图边集的 (半) 欧拉路径 \(\pi(S(v)) = (e_1,\dots,e_L)\)，并将节点 ID、边类型及离散化属性编码为图 Token 序列
+\(
+z_v = (z_1,\dots,z_L) \in \mathcal{V}_g^L
+\)。
+该序列输入图编码器，
+得到节点为中心的结构表征 \(h_v^{\mathrm{glob}}\)。
+
+其次，在跨模态投影与条件表征构造阶段，
+利用投影层 \(f_{\mathrm{proj}} : \mathbb{R}^{d_g} \rightarrow \mathbb{R}^{d_\ell}\) 将图表征映射到语言嵌入空间，得到
+投影的图表征\(\tilde{h}_v\)；
+同时，文本编码器 \(\mathrm{Enc}_T\) 对节点文本属性 \(t_v\) 以及任务描述/系统提示 \(q_{\mathrm{cls}}\) 进行编码，获得文本嵌入序列
+\(E_{\mathrm{text}} \)，
+参考 Zhang\cite{Zhang2024GraphTranslatorAG}等人和
+Chen等人 \cite{Chen2024LLaGALL} 的做法，
+本文将 \(\tilde{h}_v\) 视为一组结构伪 Token 的嵌入插入到文本序列中，
+构造统一条件输入
+\(
+x_v = [E_{\mathrm{text}};\, \tilde{h}_v],
+\)
+其中“;”表示在序列维度上的拼接，使语言模型能够在同一表示空间内联合利用图结构与文本语义信息。
+
+最后，在生成式分类与标签决策阶段，
+解码器 \(\mathrm{Dec}_T\) 在条件输入 \(x_v\) 上建模类别描述的条件分布
+\(p_\theta(a \mid x_v)\)，
+其中 \(a\) 为关于节点类别的简短自然语言片段。
+为每个类别 \(c\in\mathcal{C}\) 预先定义类别描述模板 \(s_c\)，并将
+\(f^{\mathrm{node}}_\theta(G,v)_c\)
+视为节点 \(v\) 属于类别 \(c\) 的非归一化置信度，经归一化后得到概率分布，
+最终预测标签为\(\hat{y}_v\)。
+
+\textbf{（2）基于强化学习优化的图推理与链式生成。}
+第~2.1.2 节中，图推理任务被形式化为学习图基础模型 \(F_\theta\)，输出推理链 \(c=(c_1,\dots,c_T)\) 与答案 \(a\)。在经过 CoT 监督微调与 GRPO 强化学习优化后，推理阶段将参数固定为 \(\theta^\ast\)，整体流程可概括为“条件构造—自回归生成—可验证重排序”三个步骤。
+
+在条件构造阶段，给定测试图 \(G\) 与自然语言查询 \(q\)，
+首先按照训练阶段相同的欧拉化与编码方式，将 \(G\) 序列化为图 Token 序列并经图编码器与投影层得到结构条件矩阵
+\(
+\tilde{H} 
+\)，
+同时将查询编码为
+\(
+E_q 
+\)，
+构造联合条件输入
+\(
+x = [\tilde{H};\, E_q],
+\)
+并馈入解码器作为上下文。
+
+在链式生成阶段，固定参数 \(\theta^\ast\) 后，
+图基座模型的语言解码器对输入的联合表征条件\(
+x = [\tilde{H};\, E_q]
+\)采用标准自回归方式生成推理链与答案的联合序列。
+本文使用带温度的采样策略得到候选轨迹
+ \(y^{(1)}=(c^{(1)},a^{(1)})\)，并通过预定义的输出模板
+ 解析出最终答案 \(\hat{a}=\Gamma_{\mathrm{ans}}(y^{(1)})\)。
+
+在对正确性要求更高的场景下，
+本文进一步在推理阶段复用训练时的可验证奖励函数进行候选重排序。
+具体而言，从策略 \(\pi_{\theta^\ast}\) 中采样 \(K\) 条轨迹，
+并计算对应奖励，奖励由答案正确性验证器、路径拓扑一致性度量以及约束满足度等可计算指标加权构成
+最终输出选择奖励最高的轨迹作为输出推理结果。
+
 
 \section{本章小结}
-本章简单描述了\LaTeX 排版的基本概念和本模板的源码结构，
-通过同步实例介绍了最基本语义单元的编写。
-现在，您可以尝试开始编写自己的论文，
-当遇到无法排版的元素或无法解决的问题时，
-欢迎继续阅读下一章。
+本章节深入阐述了本论文的研究目标与整体研究框架，系统梳理了研究的
+核心思路。首先，本章明确了研究的主要目标，并基于该目标构建了清晰的问题
+描述；其次，针对研究中涉及的三个关键子任务进行了详细解析，阐述了其具体
+内容、相互关系及在整体研究框架中的作用；再次，本章梳理了整体流程框架，
+对整个研究流程及各子任务进行了科学、合理的描述；本章还介绍了该领域内
+常用的评价体系，包括客观评价指标和主观评价指标，并探讨了其适用性。
+最后，本章介绍了本研究所使用的主要数据集，涵盖节点分类和图推理两个方面，
+为后续实验提供了坚实的数据基础。
+
+接下来的章节将集中讨论三个子任务，深入介绍面向节点分类的图表征改进和跨模态对齐优化方案和面向图推理的大模型后训练增强体系
+及其本文研究工作在风控垂直领域的原型系统的设计与实现。

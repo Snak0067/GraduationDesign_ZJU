@@ -14,6 +14,9 @@ Created: 2014.09.15 by Sky and Hamburger,  Modified by Kwen String at 2016.04.08
 \LoadClass[cs4size,fancyhdr,fntef,openright,cap]{ctexbook}
 
 %---------- 加载宏包 ----------
+\usepackage{tabularx}  % 用于创建自适应宽度的表格
+\usepackage{booktabs}  % 可选，用于更美观的三线表（替换\hline）
+\usepackage{multirow}
 % 数学公式
 \RequirePackage{amsmath,amssymb}
 % 公式中的粗体
