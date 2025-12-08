@@ -1,2 +1,32 @@
 # zhangteng/main.pdf
 # Thesis-SE-ZJU-LaTeX/main.pdf
+# --- LaTeX 编译产生的中间文件 (必须忽略) ---
+*.aux
+*.log
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.dvi
+*.xdv
+*.lof
+*.lot
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.spl
+
+# --- VS Code 配置文件 (可选) ---
+# 如果你想保留项目的特定设置（如编译命令）给其他人用，可以不忽略这一行
+.vscode/
+
+# --- 操作系统生成的垃圾文件 ---
+.DS_Store
+Thumbs.db
+
+# --- PDF 文件 (视情况而定) ---
+# 通常不建议上传生成的 PDF，因为它是二进制大文件且容易变动
+# 如果你需要保留最终版 PDF，可以在这里把 *.pdf 前面的 # 号去掉，或者用 !main.pdf 强制保留特定文件
+# *.pdf
