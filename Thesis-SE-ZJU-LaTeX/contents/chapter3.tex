@@ -1134,7 +1134,7 @@ SMTP 掩码比例从 15\% 线性增加到 30\%，并对同一节点在欧拉序�
 
 {阶段二：跨模态对齐实验细节：}
 阶段二文本编码器 \(\mathrm{Enc}_T\) 采用 RoBERTa-base，隐藏维度 \(d_t = 768\)，
-与图侧一同更新。跨模态投影头 \(f_G:\mathbb{R}^{d_g}\rightarrow\mathbb{R}^{d_z}\)、\(f_T:\mathbb{R}^{d_t}\rightarrow\mathbb{R}^{d_z}\) 及局部匹配线性层从随机初始化开始训练，公共语义空间维度设为 \(d_z = 768\)。\(\mathrm{Dec}_T\) 采用 Qwen2.5-14B-Instruct，在本阶段保持冻结。
+与图侧一同更新。跨模态投影头 \(f_G:\mathbb{R}^{d_g}\rightarrow\mathbb{R}^{d_z}\)、\(f_T:\mathbb{R}^{d_t}\rightarrow\mathbb{R}^{d_z}\) 及局部匹配线性层从随机初始化开始训练，公共语义空间维度设为 \(d_z = 768\)。\(\mathrm{Dec}_T\) 采用 Qwen2.5-7B-Instruct，在本阶段保持冻结。
 LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
 节点文本在输入 \(\mathrm{Enc}_T\) 时截断至 256 token 并聚合为节点级表示。
  联合优化全局图–文对比损失 \(\mathcal{L}_{\mathrm{global}}\)、
@@ -1273,7 +1273,7 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
 \subsection{欧拉路径图表征的对比和消融实验}
 \label{subsec:ablation_encoding}
 \subsubsection{不同序列表征机制对下游节点分类任务的性能影响}
-为了进一步探究图结构表征模块中不同序列化机制对模型性能的具体影响，并验证本章所采用的欧拉路径（Eulerian Path）编码在捕获拓扑完整性方面的优势，本节设计了针对图结构编码方式的消融实验。在保持语言模型主干（Qwen2.5-14B）与跨模态对齐策略不变的实验控制条件下，本文选取了三种代表性的图到序列（Graph-to-Sequence）编码范式进行对比分析。
+为了进一步探究图结构表征模块中不同序列化机制对模型性能的具体影响，并验证本章所采用的欧拉路径（Eulerian Path）编码在捕获拓扑完整性方面的优势，本节设计了针对图结构编码方式的消融实验。在保持语言模型主干（Qwen2.5-7B）与跨模态对齐策略不变的实验控制条件下，本文选取了三种代表性的图到序列（Graph-to-Sequence）编码范式进行对比分析。
 
 具体而言，对比基准包括：(1) \textbf{朴素线性化（Naive Linearization）}，即采用广度优先搜索（BFS）策略遍历子图节点，将其展平为序列并添加位置编码，该方法仅保留了节点集合信息而丢失了显式的边连接结构；(2) \textbf{邻域采样编码（Neighbor Sampling）}，复现了 LLaGA 框架中的 ND 与 HO 模板策略，以目标节点为中心采样固定数量邻居构建描述，这是当前 Graph-LLM 的主流做法；(3) \textbf{欧拉路径编码（Ours）}，即本章提出的通过构造覆盖子图所有边的半欧拉路径，将图结构转换为可逆 Token 序列的方法。表 \ref{tab:ablation_encoding} 展示了上述不同策略在 OGB-Arxiv（大规模图）与 Cora（高聚类图）数据集上的性能对比结果。
 

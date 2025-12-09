@@ -975,28 +975,20 @@ CoT-SFT 后的策略
 \subsection{实验设置与评测目标}
 \textbf{1)\ 实验目标}
 
-针对现有图基座模型在复杂推理任务中对高质量标注数据依赖度高、泛化性能受限等瓶颈问题，
-本章提出一种结合思维链冷启动与可验证奖励强化学习的图推理框架。
-本实验旨在系统测评该框架在合成与真实图数据上的推理性能，
-验证基于GRPO的策略优化算法能否在无人工偏好反馈的条件下，
-引导模型习得符合图论公理的通用推理范式 。具体而言，实验目标聚焦于以下三个关键维度
+针对现有图基座模型在复杂推理任务中对高质量标注数据依赖严重、泛化性能受限等瓶颈问题，
+本章在前文构建的图基座模型基础上结合思维链监督微调并通过可验证奖励强化学习进行调优学习。
+因此，本实验将在公开的合成图和真实图数据集上测评强化学习调优后的图基座模型推理性能。
+具体而言，实验目标聚焦于以下三个关键维度：
 \begin{itemize}
-  \item {复杂图推理能力的量化测评（Effectiveness）：}
-  基于Erdős合成图论基准及真实场景图推理任务，系统测评模型的综合性能 。实验不仅关注最终答案的准确率，
-  将进一步通过路径合法性与逻辑自洽性指标，量化测评引入可验证奖励机制后，模型在多步逻辑推导中的过程正确性
+  \item 测评强化学习调优的图基座模型在公开图推理数据集上的性能表现。
+  \item 测评强化学习调优的图基座模型在节点分类任务上的零样本表现。
 
-  \item {跨域零样本泛化能力的验证（Generalization）：} 
-  考察模型从合成图任务中习得的结构推理策略向真实文本属性图迁移的有效性 。
-  重点测评模型在未见图结构与未见查询类型下的零样本表现。
-
-  \item {强化学习机制的消融与归因分析（Mechanism）：} 采用解耦实验设计，
-  定量分离思维链监督微调与强化学习优化阶段各自的性能贡献。
-  深入剖析奖励函数分量对策略更新的具体影响机制，
-  从实验角度阐明可验证奖励在提升模型推理能力、提升任务泛化性中的核心作用。
+  \item 探究思维链冷启动和可验证奖励强化学习各自的性能贡献以及
+  超参数最优设置。
 \end{itemize}
 
-围绕上述目标，本节设计了四组实验分别对以上三点目标展开实验，对改
-进方案进行全面测评。
+围绕上述目标，本节设计了实验分别对以上三点目标展开实验，
+对结合强化学习微调的图推理方案进行全面测评。
 
 \textbf{2)\ 环境配置}
 
@@ -1039,17 +1031,16 @@ CoT-SFT 后的策略
 \textbf{3)\ 数据集配置}
 
 为系统测评图推理框架在不同学习阶段的性能，
-本实验构建了包含思维链的冷启动监督微调与强化学习优化的多阶段训练数据集，
-旨在平衡模型对图论公理的掌握与在真实语义场景下的泛化能力。
+本实验采用了包含思维链的冷启动监督微调与强化学习优化的多阶段训练数据集。
 
-在冷启动阶段，为了赋予基座模型规范化的思维链生成能力，
+在冷启动阶段，
 本文构建了总规模约为 $2.0 \times 10^4$ 的高质量指令微调数据集 $\mathcal{D}_{CoT}$。
-该数据集由合成图论任务与真实文本属性图任务按特定比例混合而成，
-经由教师模型（Qwen2.5-32B-Instruct）生成的拒绝采样筛选，确保了推理路径的逻辑严密性。
-% [新增] 数据划分描述
-为了防止过拟合并不偏不倚地评估微调效果，我们将 $\mathcal{D}_{CoT}$ 按照 \textbf{9:0.5:0.5} 
+该数据集由合成图论任务与真实图推理任务按特定比例混合而成，
+经由教师模型（Qwen2.5-32B-Instruct）生成的拒绝采样筛选，
+确保了推理路径的逻辑严密性。
+本文将 $\mathcal{D}_{CoT}$ 按照 \textbf{9:0.5:0.5} 
 的比例随机划分为训练集18,000 条、验证集1,000 条和测试集1,000 条。验证集用于SFT阶段的模型早停监控，
-测试集用于评估冷启动模型的思维链生成质量。
+测试集用于测评冷启动模型的思维链生成质量。
 表 \ref{tab:cot_dataset_config} 详细展示了 $\mathcal{D}_{CoT}$ 的具体构成、任务类型及样本规模分布。
 
 \begin{table}[htbp]
@@ -1064,9 +1055,9 @@ CoT-SFT 后的策略
     \midrule
     \multicolumn{4}{l}{\textit{\textbf{Part A: 合成图论推理任务 (Synthetic Graph Tasks)}}} \\
     \multirow{3}{*}{\shortstack[l]{{Synthetic Erd\H{o}s-Subsets}\\(随机游走子图采样)}} 
-      & {基础属性} (节点度数、图半径等) & $\approx 3,500$ & 17.5\% \\
-      & {连通性与结构} (欧拉路径判定、连通分量等) & $\approx 3,000$ & 15.0\% \\
-      & {组合优化} (最大独立集、最短路径等) & $\approx 3,500$ & 17.5\% \\
+      & {基础属性} (节点度数、图半径等) & 3,500 & 17.5\% \\
+      & {连通性与结构} (欧拉路径判定、连通分量等) &3,000 & 15.0\% \\
+      & {组合优化} (最大独立集、最短路径等) & 3,500 & 17.5\% \\
     \cmidrule(l){2-4}
     \textit{Subtotal} & & \textit{10,000} & \textit{50.0\%} \\
     \midrule
@@ -1082,19 +1073,36 @@ CoT-SFT 后的策略
   \end{tabular}
 \end{table}
 
-在强化学习阶段，为支撑基于GRPO的策略探索，本文采用了更大规模的任务池 $\mathcal{D}_{RL}$。该任务池以Erd\H{o}s基准为主体，
-涵盖从线性时间复杂度到NP-hard的四个难度层级，并按 4:1 的比例混入真实图任务以防止策略对合成规则的过拟合。
-% [新增] 数据划分描述 - RL部分
-$\mathcal{D}_{RL}$ 共包含{100,000} 个唯一的图-问题对作为训练环境供图基座模型训练交互。
-此外，我们额外构建了一个独立包含5，000条样本的测试集，
-覆盖 50 类任务，每类 100 个，用于最终评估强化学习模型的泛化能力。在训练过程中，另从训练池外预留 {2,000} 个样本作为验证集，
-用于实时监控奖励值的收敛情况。
-表 \ref{tab:rl_task_distribution} 展示了RL阶段训练任务的难度分层与具体分布情况，表\ref{tab:erdos_taxonomy}展示了所用的图论任务数据中的体系分类以及验证逻辑。
+在强化学习阶段，本实验选用三个公开数据集进行模型训练与多维度评测，
+具体包含：大型图推理基准 Erd\H{o}s \cite{Guo2025G1TL}、
+面向计算复杂度的 GraphWiz 数据集 \cite{Chen2024GraphWizAI}，
+以及聚焦高难度 NP 完全问题的 GraphArena \cite{Tang2024GraphArenaBL}。
+详细的数据集配置如表 \ref{tab:rl_data_config} 所示。
+表中“OOD”为 Out-Of-Distribution 的缩写，
+即{分布外测试}，旨在验证模型在未见过的任务分布上的零样本迁移能力。
+图推理基准 Erd\H{o}s \cite{Guo2025G1TL}具体细节见表~\ref{tab:rl_task_distribution}。
+
+\begin{table}[htbp]
+  \centering
+  \caption{强化学习阶段数据集配置与规模统计}
+  \label{tab:rl_data_config}
+  \renewcommand{\arraystretch}{1.2} % 增加行高
+  \setlength{\tabcolsep}{10pt} % 增加列间距
+  \begin{tabular}{lcccc}
+  \toprule
+  \textbf{数据集} & \textbf{任务类型} & \textbf{训练集} & \textbf{验证集} & \textbf{测试集} \\
+  \midrule
+  Erd\H{o}s \cite{Guo2025G1TL} & 合成图论推理 & 100,000 & 2,000 & 5,000 \\
+  GraphWiz \cite{Chen2024GraphWizAI} & 复杂度泛化评测 & - & - & 900 \\
+  GraphArena \cite{Tang2024GraphArenaBL} & 极限难度评测 & - & - & 10 \\
+  \bottomrule
+  \end{tabular}
+\end{table}
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{强化学习阶段训练任务的难度分层与任务分布详情}
+  \caption{图推理基准 Erd\H{o}s \cite{Guo2025G1TL}的难度分层与任务分布详情}
   \label{tab:rl_task_distribution}
   \renewcommand{\arraystretch}{1.2}
   \begin{tabular}{llccl}
@@ -1118,36 +1126,16 @@ $\mathcal{D}_{RL}$ 共包含{100,000} 个唯一的图-问题对作为训练环�
   \end{tabular}
 \end{table}
 
-\begin{table}[htbp]
-  \centering
-  \caption{图论数据集任务分类体系与验证逻辑}
-  \label{tab:erdos_taxonomy}
-  \renewcommand{\arraystretch}{1.3}
-  % 保持小号字体，使中文排版更紧凑
-  \small 
-  \begin{tabular}{p{0.15\textwidth}p{0.30\textwidth}p{0.45\textwidth}}
-    \toprule
-    \textbf{任务类别} & \textbf{代表性任务} & \textbf{答案形式与验证逻辑} \\
-    \midrule
-    {局部性质} & 节点度数、边存在性、邻居查询 & {数值/布尔值}。通过邻接矩阵直接查询验证，考察局部感知能力。 \\
-    {全局性质} & 图半径、图直径、中心与边缘点 & {数值}。需遍历全图计算路径长度，考察全局拓扑理解。 \\
-    {拓扑判定} & 欧拉图判定、连通性、树结构判定 & {布尔值+理由}。需验证图论定义（如连通性、无环性）。 \\
-    {路径搜索} & 最短路径、环检测 & {节点序列}。验证路径连续性、无重复性及长度最优性。 \\
-    {组合优化} & 最大独立集、最小顶点覆盖 & {节点集合}。验证集合合法性及大小，NP难问题采用近似解验证或小图精确验证。 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
 实验中，所有图数据均经过第3章所述的欧拉路径编码处理，真实图数据集的节点文本属性（如论文标题、摘要）保留原始语义信息，以支持跨模态推理能力的测评。
 
 \textbf{4)\ 实验细节配置}
 
-本研究的实验流程遵循监督式冷启动与强化学习优化两阶段范式。所有实验均采用DeepSpeed ZeRO-2 分布式训练策略，基础语言模型解码器选用 Qwen2.5-14B-Instruct，图结构编码器沿用第 3 章预训练完成的 GET-Base24 权重。
+本研究的实验流程遵循监督式冷启动与强化学习优化两阶段范式。所有实验均采用DeepSpeed ZeRO-2 分布式训练策略，基础语言模型解码器选用 Qwen2.5-7B-Instruct，图结构编码器沿用第 3 章预训练完成的 GET-Base24 权重。
 
 {阶段一：思维链监督微调：}
-为了解决强化学习在复杂推理任务中的冷启动难题，我们首先在 $\mathcal{D}_{CoT}$ 的包含18,000个样本的训练集上进行监督微调，
+为了解决强化学习在复杂推理任务中的冷启动难题，本文首先在 $\mathcal{D}_{CoT}$ 的包含18,000个样本的训练集上进行监督微调，
 以规范化模型的思维链格式并注入基础图论知识。本阶段冻结图欧拉路径编码器Enc$_G$与跨模态投影层$f_{proj}$，
-仅对 LLM 解码器实施参数高效微调。具体而言，我们在所有线性层（Query, Key, Value, Output, MLP）注入 LoRA 适配器，
+仅对 LLM 解码器实施参数高效微调。具体而言，本文在所有线性层（Query, Key, Value, Output, MLP）注入 LoRA 适配器，
 设置秩 $r=64$，缩放系数 $\alpha=128$，Dropout 率为 $0.05$。优化器采用 AdamW，全局批次大小设为 64。
 学习率调度遵循带预热的余弦退火策略，初始最大学习率设为 $\eta_{SFT} = 1 \times 10^{-5}$，预热步数占总步数的 3\%。为了容纳完整的推理路径，
 最大序列长度限制为 3072 tokens。训练持续 2 个 Epoch，以{验证集}上的 Token 准确率与格式合规率作为早停指标。
@@ -1179,8 +1167,8 @@ $\mathcal{D}_{RL}$ 共包含{100,000} 个唯一的图-问题对作为训练环�
     \midrule
     \multicolumn{6}{l}{\textit{Open-Source Baselines (开源基线)}} \\
     Llama-3.1-8B-Instruct & 49.21 & 30.45 & 13.69 & 1.43 & 25.10 \\
-    Qwen2.5-14B-Instruct (Base) & xx.xx & xx.xx & xx.xx & xx.xx & xx.xx \\
-    DeepSeek-R1-Distill-Qwen-14B & xx.xx & xx.xx & xx.xx & xx.xx & xx.xx \\
+    Qwen2.5-7B-Instruct (Base) & xx.xx & xx.xx & xx.xx & xx.xx & xx.xx \\
+    DeepSeek-R1-Distill-Qwen-7B & xx.xx & xx.xx & xx.xx & xx.xx & xx.xx \\
     \midrule
     \multicolumn{6}{l}{\textit{Ablation Variants (本章方法变体)}} \\
     Ours-SFT (仅 CoT 微调) & 65.xx & 55.xx & 25.xx & 5.xx & 40.xx \\
@@ -1205,8 +1193,8 @@ $\mathcal{D}_{RL}$ 共包含{100,000} 个唯一的图-问题对作为训练环�
           & \textbf{Cora} & \textbf{PubMed} & \textbf{Cora} & \textbf{PubMed} &  \\
     \midrule
     Llama-3.1-8B-Instruct & 65.xx & 70.xx & 50.xx & 46.xx & 58.xx \\
-    Qwen2.5-14B-Instruct (Base) & 72.xx & 75.xx & 60.xx & 58.xx & 66.xx \\
-    DeepSeek-R1-Distill-Qwen-14B & 78.xx & 81.xx & 70.xx & 78.xx & 76.xx \\
+    Qwen2.5-7B-Instruct (Base) & 72.xx & 75.xx & 60.xx & 58.xx & 66.xx \\
+    DeepSeek-R1-Distill-Qwen-7B & 78.xx & 81.xx & 70.xx & 78.xx & 76.xx \\
     \midrule
     Ours-SFT (CoT Only) & 75.xx & 80.xx & 72.xx & 70.xx & 74.xx \\
     \textbf{Ours-RL (GRPO)} & \textbf{80.xx} & \textbf{86.xx} & \textbf{85.xx} & \textbf{90.xx} & \textbf{85.xx} \\
@@ -1246,8 +1234,8 @@ $\mathcal{D}_{RL}$ 共包含{100,000} 个唯一的图-问题对作为训练环�
     \toprule
     \textbf{模型 (Model)} & \textbf{Linear} & \textbf{Polynomial} & \textbf{NP-Complete} & \textbf{Average} \\
     \midrule
-    Qwen2.5-14B-Instruct (Base) & 45.xx & 15.xx & 70.xx & 43.xx \\
-    DeepSeek-R1-Distill-Qwen-14B & 60.xx & 32.xx & 72.xx & 54.xx \\
+    Qwen2.5-7B-Instruct (Base) & 45.xx & 15.xx & 70.xx & 43.xx \\
+    DeepSeek-R1-Distill-Qwen-7B & 60.xx & 32.xx & 72.xx & 54.xx \\
     \midrule
     Ours-SFT & 55.xx & 25.xx & 70.xx & 50.xx \\
     \textbf{Ours-RL} & \textbf{70.xx} & \textbf{35.xx} & \textbf{75.xx} & \textbf{60.xx} \\
@@ -1263,8 +1251,8 @@ $\mathcal{D}_{RL}$ 共包含{100,000} 个唯一的图-问题对作为训练环�
     \toprule
     \textbf{模型 (Model)} & \textbf{GSM8K (Math)} & \textbf{MATH (Hard Math)} & \textbf{MMLU-Pro} \\
     \midrule
-    Qwen2.5-14B-Instruct (Base) & 88.xx & 72.xx & 50.xx \\
-    DeepSeek-R1-Distill-Qwen-14B & 90.xx & 88.xx & 55.xx \\
+    Qwen2.5-7B-Instruct (Base) & 88.xx & 72.xx & 50.xx \\
+    DeepSeek-R1-Distill-Qwen-7B & 90.xx & 88.xx & 55.xx \\
     \midrule
     Ours-SFT & 85.xx & 68.xx & 48.xx \\
     \textbf{Ours-RL} & \textbf{89.xx} & \textbf{75.xx} & \textbf{52.xx} \\
