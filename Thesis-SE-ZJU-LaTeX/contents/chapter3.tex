@@ -1174,26 +1174,26 @@ LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
 \begin{enumerate}
     \item \textbf{传统图神经网络基准（GNNs）}：
     包括 MLP、GCN\cite{Kipf2016SemiSupervisedCW}、
-    GraphSAGE\cite{Li2024SimilaritybasedNS} 和 RevGAT等经典架构，
+    GraphSAGE\cite{Li2024SimilaritybasedNS} 和 RevGAT\cite{Li2024SimilaritybasedNS}等经典架构，
     代表了基于消息传递机制的经典监督学习方法；
-    \item \textbf{图大语言模型基准（Graph-LLMs）}：
+    \item \textbf{图基座模型基准（GFMs）}：
     涵盖以 LLaGA (ND/HO)\cite{Chen2024LLaGALL}、
     GraphGPT\cite{Tang2023GraphGPTGI}、
     GraphPrompter\cite{Lv2025GraphPrompterMA} 为代表的主流方法，
     代表了当前将 LLM 应用于图数据的SOTA（State-of-the-Art）水平；
     \item \textbf{本文提出的改进方法}：为剖析各模块贡献，本文将完整模型解耦为三种配置：
     \begin{itemize}
-        \item {改进1 (Eulerian Path)}：在 LLaGA 框架下，引入基于欧拉路径的无损图序列化机制替代邻域采样模板，并结合 SMTP 自监督目标进行结构预训练。
-        \item {改进2 (Multi-level Alignment)}：引入包含全局对比、局部匹配及生成式重建的多层次跨模态对齐损失，强化图-文语义空间的融合。
-        \item {改进1+改进2 (Graph Foundation Model)}：
+        \item {方案1 (Eulerian Path)}：在 LLaGA 框架下，引入基于欧拉路径的无损图序列化机制替代邻域采样模板，并结合 SMTP 自监督目标进行结构预训练。
+        \item {方案2 (Multi-level Alignment)}：引入包含全局对比、局部匹配及生成式重建的多层次跨模态对齐损失，强化图-文语义空间的融合。
+        \item {方案3 (Graph Foundation Model)}：
         集成上述两项改进，构建结构保真且语义对齐的通用图基座模型。
     \end{itemize}
 \end{enumerate}
 
 \subsubsection{实验结果与分析}
 
-表 \ref{tab:node_cls_results} 展示了各方法在三个数据集上的测试准确率（Test Accuracy）。
-整体而言，本文提出的完整模型（改进1+改进2）在所有基准上均取得了最优性能。
+表 \ref{tab:node_cls_results} 展示了各方法在三个数据集上的准确率（Test Accuracy）。
+整体而言，本文提出的完整模型（方案3）在所有基准上均取得了最优性能。
 
 \begin{table}[htbp]
   \centering
@@ -1221,30 +1221,30 @@ LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
       & GraphICL\cite{Sun2025GraphICLUG} & 93.18 & 83.58 & 73.68 \\
     \midrule
     \multirow{3}{*}{\textbf{本章改进方法}} 
-      & 改进1    & 92.27 & 89.97 & 76.12 \\
-      & 改进2          & 91.74 & 88.34 & 75.58 \\
-      & \textbf{改进1+改进2} & \textbf{94.48} & \textbf{91.27} & \textbf{77.36} \\
+      & 方案1    & 92.27 & 89.97 & 76.12 \\
+      & 方案2          & 91.74 & 88.34 & 75.58 \\
+      & \textbf{方案3（方案1+方案2）} & \textbf{94.48} & \textbf{91.27} & \textbf{77.36} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 
-{拓扑保真性对表征质量的提升（改进1分析）：}
-实验结果显示，单独引入基于欧拉路径的图表征（改进1）相对优于传统图模型及基于采样的 Graph-LLMs。具体而言，在 PubMed、Cora 和 OGB-Arxiv 上，改进1分别达到了 92.27\%、89.97\% 和 76.12\% 的准确率。
-与最优传统图模型（RevGAT\cite{Li2024SimilaritybasedNS} /SAGE\cite{Sun2021ScalableAA}）相比，改进1实现了 2.79\% $\sim$ 15.76\% 的显著提升，
+{拓扑保真性对表征质量的提升（方案1分析）：}
+实验结果显示，单独引入基于欧拉路径的图表征相对优于传统图模型及基于采样的 GFMs。具体而言，在 PubMed、Cora 和 OGB-Arxiv 上，方案1分别达到了 92.27\%、89.97\% 和 76.12\% 的准确率。
+与最优传统图模型（RevGAT\cite{Li2024SimilaritybasedNS} /SAGE\cite{Sun2021ScalableAA}）相比，方案1实现了 2.79\% $\sim$ 15.76\% 的显著提升，
 表明基于序列生成的预训练范式比单纯的消息传递机制具备更强的特征抽取能力。
-与主流 Graph-LLM 基线（LLaGA-HO）\cite{Chen2024LLaGALL}相比，改进1在三个数据集上分别提升了 3.50\%、1.41\% 
+与主流 Graph-LLM 基线（LLaGA-HO）\cite{Chen2024LLaGALL}相比，方案1在三个数据集上分别提升了 3.50\%、1.41\% 
 和 2.10\%。这种性能增益主要归因于{拓扑结构的无损解析}。
 传统的邻域模板（如 ND/HO）本质上是对图结构的局部采样，
 极易丢失长程依赖以及环、桥接边等关键拓扑模式。相反，
 欧拉路径编码遍历了子图中的所有边，在同构意义下保留了完整的结构信息。
 值得注意的是，在聚类系数较高（0.23）的 Cora 数据集上，
-改进1相对于 LLaGA-HO \cite{Chen2024LLaGALL}的提升尤为稳健，这进一步证实了精确的局部结构编码对于
+方案1相对于 LLaGA-HO \cite{Chen2024LLaGALL}的提升尤为稳健，这进一步证实了精确的局部结构编码对于
 捕捉引文网络中紧密社团结构的重要性。
 
 
-{跨模态对齐对语义理解的增强（改进2分析）：}
-引入多层次跨模态对齐机制（改进2）后，模型在三个数据集上分别获得了
+{跨模态对齐对语义理解的增强（方案2分析）：}
+引入多层次跨模态对齐机制，模型在三个数据集上分别获得了
  2.16\%、1.76\% 和 2.98\% 的性能提升（相较于未对齐基线）。
 这种提升在 {OGB-Arxiv} 数据集上最为显著（+2.98\%）。
 OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的文本密集型图。
@@ -1254,10 +1254,10 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
 局部 Token 级匹配及生成式重建——强制图编码器在特征空间中内化了文本的细粒度语义。
 这使得模型在进行节点分类时，能够协同利用拓扑信号与文本语义信号，而非仅依赖单一模态。
 
-{结构与语义的协同效应（改进1+改进2综合分析）：}
-集成上述两项改进的完整图基座模型（改进1+改进2）在所有测试任务中均展现出优异的性能，
+{结构与语义的协同效应（方案32综合分析）：}
+集成上述两项改进的完整图基座模型在所有测试任务中均展现出优异的性能，
 其性能提升幅度超过了单一改进的简单叠加，呈现出明显的协同效应。
-在 Cora 数据集上，组合方案比“改进1”提升了 1.30\%，比“改进2”提升了 2.93\%；在 OGB-Arxiv 上，最终性能达到 77.36\%，超越了此前最佳 Graph-LLM 基线（GraphICL, 73.68\%）约 3.68个百分点。
+在 Cora 数据集上，组合方案比“方案1”提升了 1.30\%，比“方案2”提升了 2.93\%；在 OGB-Arxiv 上，最终性能达到 77.36\%，超越了此前最佳 Graph-LLM 基线（GraphICL, 73.68\%）约 3.68个百分点。
 这种协同效应揭示了图理解任务的双重依赖性：
 欧拉路径编码提供了高保真的结构先验，
 而多层次对齐机制填充了丰富的语义细节。
@@ -1266,7 +1266,7 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
 从而在处理类别不平衡或结构复杂的样本时表现出更强的鲁棒性。
 
 综上所述，实验证据表明，通过构建结构保真的序列化表征并实施深度的跨模态对齐，
-可以有效突破现有 Graph-LLMs 在表征质量与语义融合上的瓶颈，
+可以有效突破现有 GFMs 在表征质量与语义融合上的瓶颈，
 为图基座模型在通用场景下的应用提供了坚实的实证基础。
 
 
@@ -1286,7 +1286,7 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
   \renewcommand{\arraystretch}{1.2}
   \begin{tabular}{lcccc}
     \toprule
-    \multirow{2}{*}{\textbf{编码策略}} & \textbf{结构覆盖范围} & \textbf{序列可逆性} & \multicolumn{2}{c}{\textbf{测试准确率 (Accuracy)}} \\
+    \multirow{2}{*}{\textbf{编码策略}} & \textbf{结构覆盖范围} & \textbf{序列可逆性} & \multicolumn{2}{c}{\textbf{准确率 (Accuracy)}} \\
     \cmidrule(lr){4-5}
     & (Structure Scope) & (Reversibility) & \textbf{Cora} & \textbf{OGB-Arxiv} \\
     \midrule
@@ -1384,7 +1384,7 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
   \label{tab:ablation_reindexing}
   \begin{tabular}{lccc}
     \toprule
-    重索引策略 & 索引构造机制 & 测试准确率 (\%) & 性能增益 \\
+    重索引策略 & 索引构造机制 & 准确率 (\%) & 性能增益 \\
     \midrule
     静态索引 (Static) & $\pi(v)$ (固定顺序) & 75.32 & - \\
     循环索引 (Cyclic) & $(\pi(v) + r) \pmod N$ & {76.12} & {+0.80\%} \\
