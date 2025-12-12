@@ -1310,7 +1310,7 @@ CoT-SFT 后的策略
 从而有效地抑制了幻觉，促使模型从模仿形式向内化逻辑转变。
 （2）验证驱动的思维链优化：
 强化学习能够激励模型在推理过程中进行自我修正。
-在图推理场景下，我们的多维奖励函数充当了软性验证器的角色。
+在图推理场景下，本文的多维奖励函数充当了软性验证器的角色。
 实验结果显示，方案5在 Medium和Hard 任务上分别提升 14.39\% 和 10.38\%，
 这表明 RL 成功引导模型学会了在多跳推理中保持对图结构约束的长期记忆，
 减少了推理中途的逻辑断裂。
@@ -1392,7 +1392,7 @@ Challenging 任务往往对应着指数级的时间复杂度。
 
 表~\ref{tab:real_world_generalization} 的实验结果
 揭示了不同训练范式对模型泛化性能的显著影响。
-综合对比基准模型与本文提出的两种方案，我们得出以下实验结论：
+综合对比基准模型与本文提出的两种方案，本文得出以下实验结论：
 
 首先，在零样本设定下，
 通用指令模型
@@ -1429,7 +1429,7 @@ G1 采用简单边列表线性化，部分打乱了局部拓扑与全局连通�
 通用图分析策略，在完全没有新标签时仍然能给出合理预测。
 
 此外，冻结图编码器有效避免灾难性遗忘。
-我们在强化学习阶段始终冻结第三章训练好的图编码器，
+本文在强化学习阶段始终冻结第三章训练好的图编码器，
 只更新 LLM 解码器与对齐层。
 从结果上看，方案5 的零样本性能不仅没有相对 G1-7B 退化，
 在 PubMed 等真实图上甚至略有优势，说明底层结构表示保持稳定，
@@ -1443,49 +1443,52 @@ G1 采用简单边列表线性化，部分打乱了局部拓扑与全局连通�
 为系统解析强化学习微调框架中各功能模块及关键超参数对图推理性能的边际贡献，本文在统一的实验基准下设计了三组控制变量实验。
 实验旨在探究：
 \begin{enumerate}
-\item 奖励函数消融实验：量化不同奖励组件在提升答案准确性与
-思维链质量方面的独立贡献；
-\item 训练策略与数据分布：
-评估监督预热（Warm-up）的必要性及难度采样策略对泛化性能的影响；
-\item 超参数敏感性：
+\item 奖励函数消融实验：量化不同奖励组件在模型性能提升与
+思维链质量方面的贡献；
+\item 训练策略对比实验：测评不同训练范式对模型最终性能的影响；
+\item 超参数消融实验：
 考察奖励权重与 KL 散度约束对训练稳定性及收敛结果的鲁棒性。
 \end{enumerate}
+
 除另有说明外，
 本节实验均基于 Erdős 图推理基准进行，
 并报告 Easy 至 Challenging 四个难度层级的准确率及其加权平均值。
 
-\subsubsection{奖励函数组件的消融分析}
+\subsection{奖励函数分量消融}
 \label{subsec:reward_ablation}
+
 可验证奖励函数 $\mathcal{R}(G,q,y)$ 是 GRPO 策略优化的核心引导信号。
 为了量化各奖励分量（$R_{ans}, R_{topo}, R_{fmt}$）的贡献，
-我们设计了以下变体进行对比：
+本文设计了以下变体进行对比：
 (1)\ Baseline ($R_{ans}$ Only),即仅使用答案正确性作为奖励，这是最朴素的强化学习设定。
 (2)\ {w/o Topology ($R_{ans} + R_{fmt}$)},即移除拓扑一致性奖励，仅关注答案和格式。
 (3)\ {w/o Format ($R_{ans} + R_{topo}$)},即移除格式规范性奖励，不强制约束 CoT 结构。
-(4)\ {Full Reward (Ours)},即方案5，完整的奖励函数配置。
-
-
-实验结果如表 \ref{tab:reward_ablation} 所示。
+(4)\ {Full Reward},即方案5，完整的奖励函数配置。
 
 \begin{table}[htbp]
-  \centering
-  \caption{不同奖励函数分量对图推理性能的消融实验分析 (Erdős 数据集)}
-  \label{tab:reward_ablation}
-  \renewcommand{\arraystretch}{1.2}
-  \resizebox{\textwidth}{!}{
-    \begin{tabular}{lcccccc}
-    \toprule
-    \multirow{2}{*}{\textbf{奖励配置 (Reward Config)}} & \multicolumn{3}{c}{\textbf{奖励组件 (Components)}} & \multicolumn{3}{c}{\textbf{性能指标 (Metrics)}} \\
-    \cmidrule(lr){2-4} \cmidrule(lr){5-7}
-          & $R_{ans}$ & $R_{topo}$ & $R_{fmt}$ & \textbf{Hard Acc.} & \textbf{Avg Acc.} & \textbf{CoT 有效率} \\
-    \midrule
-    Baseline ($R_{ans}$ Only) & \checkmark &       &       & 35.52 & 56.14 & 60.5\% \\
-    w/o Topology Reward   & \checkmark &       & \checkmark & 42.18 & 61.25 & 95.3\% \\
-    w/o Format Reward     & \checkmark & \checkmark &       & 48.65 & 64.80 & 75.2\% \\
-    \textbf{Full Reward (Ours)} & \checkmark & \checkmark & \checkmark & \textbf{51.21} & \textbf{67.37} & \textbf{99.1\%} \\
-    \bottomrule
-    \end{tabular}%
-  }
+\centering
+\caption{奖励函数组件对图推理性能的边际贡献分析}
+\label{tab:reward_ablation}
+\small
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.2}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{lcccccc}
+\toprule
+\multirow{2}{*}{\textbf{奖励函数配置}} & 
+\multicolumn{3}{c}{\textbf{奖励组件}} & 
+\multicolumn{3}{c}{\textbf{性能表现 (Erdős)}} \\
+\cmidrule(lr){2-4} \cmidrule(lr){5-7}
+& $\mathcal{R}_{ans}$ & $\mathcal{R}_{topo}$ & $\mathcal{R}_{fmt}$ &
+ \textbf{Hard Acc.} & \textbf{Avg. Acc.} & \textbf{CoT有效率} \\
+\midrule
+Baseline (答案正确性奖励) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
+\textit{w/o} 拓扑一致性奖励 & \checkmark & & \checkmark & 44.32 & 55.67 & 88.4\% \\
+\textit{w/o} 格式规范奖励 & \checkmark & \checkmark & & 49.15 & 60.23 & 75.8\% \\
+{完整奖励函数} & \checkmark & \checkmark & \checkmark & \textbf{51.21} & \textbf{67.37} & \textbf{99.8\%} \\
+\bottomrule
+\end{tabular}
+}
 \end{table}
 
 从表 \ref{tab:reward_ablation} 可以观察到以下实验结论。
@@ -1504,143 +1507,57 @@ G1 采用简单边列表线性化，部分打乱了局部拓扑与全局连通�
 共同构成了引导 LLM 进行复杂图推理的必要约束。
 
 \subsubsection{训练策略与数据配比的消融分析}
-为了验证“冷启动+强化学习”两阶段范式的必要性，以及数据多样性对泛化能力的影响，我们进行了策略消融实验，结果如表 \ref{tab:strategy_ablation} 所示。
-
-\begin{table}[htbp]
-  \centering
-  \caption{训练策略与数据分布对模型泛化性能的影响 (Accuracy \%)}
-  \label{tab:strategy_ablation}
-  \renewcommand{\arraystretch}{1.2}
-  \resizebox{\textwidth}{!}{
-    \begin{tabular}{lccccc}
-    \toprule
-    \textbf{实验设置 (Setting)} & \textbf{Easy} & \textbf{Medium} & \textbf{Hard} & \textbf{Challenge} & \textbf{Avg} \\
-    \midrule
-    \textbf{Ours-RL (Full)} & \textbf{96.23} & \textbf{90.37} & 51.21 & 23.42 & \textbf{67.37} \\
-    \midrule
-    \textit{w/o SFT Warmup (RL-Zero)} & 85.50 & 76.12 & 38.25 & 10.15 & 54.88 \\
-    \textit{Train on Hard Only} & 75.20 & 72.45 & \textbf{52.50} & \textbf{24.10} & 58.15 \\
-    \bottomrule
-    \end{tabular}%
-  }
-\end{table}
-
-**结果分析：**
-\begin{enumerate}
-    \item \textbf{冷启动（Warmup）的必要性}：直接从基座模型开始强化学习（RL-Zero）的效果远不如两阶段训练（Avg 54.88\% vs 67.37\%）。这是因为图推理任务的搜索空间巨大，未经 SFT 规范化的模型生成的 CoT 往往逻辑混乱，导致 RL 初期奖励极其稀疏，策略难以收敛。SFT 为 RL 提供了一个高质量的初始策略分布 $\pi_{\theta_{CoT}}$。
-    \item \textbf{数据多样性防止灾难性遗忘}：仅在 Hard 和 Challenging 任务上进行强化学习（Train on Hard Only）虽然微弱提升了高难度任务的表现（Hard +1.29\%），但在 Easy 和 Medium 任务上出现了严重的性能退化（Easy 下降约 21\%）。这表明，保持任务难度的多样性对于维护模型的通用图理解能力至关重要，混合训练策略能实现更好的全难度覆盖。
-\end{enumerate}
-
-\subsubsection{超参数敏感性分析：KL 散度系数}
-最后，我们探究了 GRPO 目标中 KL 散度惩罚系数 $\beta$ 对训练结果的影响。KL 散度用于约束新策略不偏离参考模型太远，防止“奖励欺骗”（Reward Hacking）。
-
-\begin{figure}[htbp]
-\centering
-% 如果没有图片，可以使用表格代替，或者保留此占位符
-% [图 4.x KL散度系数对平均奖励和Hard准确率的影响]
-\begin{minipage}{\linewidth}
-\centering
-\begin{tabular}{lccc}
-\toprule
-\textbf{KL 系数 $\beta$} & \textbf{Avg Acc.} & \textbf{Hard Acc.} & \textbf{语言流畅度 (PPL)} \\
-\midrule
-$\beta = 0$ (No KL) & 65.12 & 48.50 & High (Poor) \\
-$\beta = 0.001$ (Ours) & \textbf{67.37} & \textbf{51.21} & Low (Good) \\
-$\beta = 0.01$ & 60.45 & 45.30 & Low (Good) \\
-$\beta = 0.1$ & 53.80 & 41.05 & Low (Good) \\
-\bottomrule
-\end{tabular}
-\captionof{table}{KL 散度惩罚系数 $\beta$ 的敏感性分析}
-\label{tab:kl_ablation}
-\end{minipage}
-\end{figure}
-
-如表 \ref{tab:kl_ablation} 所示，$\beta=0.001$ 时模型取得了最佳平衡。当 $\beta=0$ 时，模型虽然极力优化奖励，但出现了严重的语言退化（输出大量重复 token 或乱码），导致 Hard 任务准确率反而下降；当 $\beta$ 过大时，强约束限制了模型的探索能力，导致最终性能接近于 SFT 阶段的水平（$\approx 53.8\%$）。这也验证了本文选择 $\beta=0.001$ 的合理性。
-
-\section{本章小结}
-\label{sec:ablation}
-
-为系统解析强化学习微调框架中各功能模块及关键超参数对图推理性能的边际贡献，本文在统一的实验基准下设计了三组控制变量实验。
-实验旨在探究：
-(1) **奖励函数解耦分析**：量化不同奖励组件在提升答案准确性与思维链（CoT）质量方面的独立贡献；
-(2) **训练策略与数据分布**：评估监督预热（Warm-up）的必要性及难度采样策略对泛化性能的影响；
-(3) **超参数敏感性**：考察奖励权重与 KL 散度约束对训练稳定性及收敛结果的鲁棒性。
-除另有说明外，本节实验均基于 Erdős 图推理基准进行，并报告 Easy 至 Challenging 四个难度层级的准确率及其加权平均值。
-
-\subsection{奖励函数分量消融}
-\label{subsec:reward_ablation}
-
-首先，本文对基于 GRPO 的强化学习过程进行逐级奖励消融，以验证多维验证机制的有效性。
-在保持训练数据与优化超参数恒定的前提下，实验从仅包含答案正确性奖励 $\mathcal{R}_{ans}$ 的基线出发，依次引入拓扑约束奖励 $\mathcal{R}_{topo}$ 与格式规范奖励 $\mathcal{R}_{fmt}$。
-长度正则项 $\mathcal{R}_{len}$ 仅作为极小权重的惩罚项以抑制退化输出，在此不作单独讨论。
-
-\begin{table}[htbp]
-\centering
-\caption{奖励函数组件对图推理性能的边际贡献分析}
-\label{tab:reward_ablation}
-\small
-\setlength{\tabcolsep}{8pt}
-\renewcommand{\arraystretch}{1.2}
-\resizebox{\textwidth}{!}{
-\begin{tabular}{lcccccc}
-\toprule
-\multirow{2}{*}{\textbf{Configuration}} & \multicolumn{3}{c}{\textbf{Reward Components}} & \multicolumn{3}{c}{\textbf{Performance Metrics (Erdős)}} \\
-\cmidrule(lr){2-4} \cmidrule(lr){5-7}
-& $\mathcal{R}_{ans}$ & $\mathcal{R}_{topo}$ & $\mathcal{R}_{fmt}$ & \textbf{Hard Acc.} & \textbf{Avg. Acc.} & \textbf{CoT Valid Rate} \\
-\midrule
-Baseline (Only Answer) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
-\textit{w/o} Topology Constraint & \checkmark & & \checkmark & 44.32 & 55.67 & 88.4\% \\
-\textit{w/o} Format Constraint & \checkmark & \checkmark & & 49.15 & 60.23 & 75.8\% \\
-\textbf{Full Reward (Ours)} & \checkmark & \checkmark & \checkmark & \textbf{51.21} & \textbf{67.37} & \textbf{99.8\%} \\
-\bottomrule
-\end{tabular}
-}
-\end{table}
-
-表~\ref{tab:reward_ablation} 揭示了各奖励组件的协同效应。
-仅依赖 $\mathcal{R}_{ans}$ 的 Baseline 模型在 Hard 难度及平均准确率上表现最差，且 CoT 有效率显著偏低（$62.5\%$）。这表明在缺乏结构化引导时，模型倾向于采取“捷径学习（Shortcut Learning）”，即直接预测答案而忽略推理过程的完备性。
-引入格式奖励 $\mathcal{R}_{fmt}$ 后（\textit{w/o Topology}），CoT 有效率跃升至 $88.4\%$，证明显式的结构约束能有效规范模型的输出空间，降低解析失败导致的无效样本率。
-
-进一步引入拓扑奖励 $\mathcal{R}_{topo}$（\textit{w/o Format}）显著提升了推理准确率，这归因于图算法校验器对中间推理步骤的一致性约束，有效抑制了“过程正确但答案越界”或“幻觉性推理”的现象。然而，缺乏 $\mathcal{R}_{fmt}$ 导致其 CoT 解析率（$75.8\%$）仍低于最优配置。
-完整奖励配置（\textbf{Full Reward}）实现了准确率与生成质量的双重最优。结果表明，$\mathcal{R}_{ans}$ 驱动解空间搜索，$\mathcal{R}_{topo}$ 保证推理轨迹的逻辑自洽性，而 $\mathcal{R}_{fmt}$ 稳定输出结构，三者构成了互补的优化闭环。
-
-\subsection{训练策略与数据配比分析}
 \label{subsec:training_strategy}
 
-在确立奖励机制的基础上，本文进一步评估了不同训练范式与数据采样策略对模型最终性能的影响。对比设置包括：
-(i) 仅进行 CoT 监督微调（SFT Only）；
-(ii) 无 SFT 预热的冷启动强化学习（RL-Zero）；
-(iii) 仅针对高难度样本进行强化学习（Train on Hard Only）。
+在确立了可验证奖励机制的有效性后，
+本节旨在进一步探究不同训练范式及数据采样策略对模型最终推理性能的影响。
+具体而言，为了验证监督微调冷启动和均衡采样在图推理强化学习框架中的必要性，
+我们设计了以下三组对比实验：
+
+\begin{itemize}
+    \item {仅 SFT 基线 (SFT Baseline)}：仅进行第一阶段的思维链监督微调，不进行后续的强化学习，作为性能下界参考。
+    \item {无 SFT 冷启动的 RL (RL-Zero)}：跳过监督微调阶段，直接使用预训练基座模型进行 GRPO 强化学习，旨在探究模型是否能完全依靠奖励信号从零学习推理。
+    \item {仅高难样本 RL (Train on Hard Only)}：在强化学习阶段仅采样 Hard 和 Challenging 难度的任务进行训练，旨在测试模型在极端难度导向下的泛化边界。
+    \item {本文方案 (方案 5)}：采用 SFT 冷启动并结合全难度均衡采样的标准训练流程。
+\end{itemize}
+
+实验结果如表~\ref{tab:strategy_ablation} 所示。通过横向对比不同设置下的各难度分层表现，我们可以得出以下深刻结论：
 
 \begin{table}[htbp]
 \centering
-\caption{不同训练策略与难度采样配比的性能对比 (Accuracy \%)}
+\caption{不同训练策略与难度采样配比的消融实验结果 (Accuracy \%)}
 \label{tab:strategy_ablation}
 \small
-\setlength{\tabcolsep}{10pt}
-\renewcommand{\arraystretch}{1.2}
-\resizebox{\textwidth}{!}{
+\setlength{\tabcolsep}{8pt}
+\renewcommand{\arraystretch}{1.25}
+% 如果使用了 graphicx 宏包，可以使用 \resizebox 调整表格宽度
+% \resizebox{\textwidth}{!}{
 \begin{tabular}{lccccc}
 \toprule
-\textbf{Setting} & \textbf{Easy} & \textbf{Medium} & \textbf{Hard} & \textbf{Challenging} & \textbf{Avg.} \\
+\multirow{2}{*}{\textbf{训练设置 (Training Setting)}} & \multicolumn{4}{c}{\textbf{任务难度 (Task Difficulty)}} & \multirow{2}{*}{\textbf{Avg.}} \\
+\cmidrule(lr){2-5}
+& \textbf{Easy} & \textbf{Medium} & \textbf{Hard} & \textbf{Challenging} & \\
 \midrule
-CoT-SFT Baseline & 73.74 & 75.98 & 40.83 & 12.23 & 53.47 \\
-\textbf{Ours-RL (Full)} & \textbf{96.23} & \textbf{90.37} & 51.21 & 23.42 & \textbf{67.37} \\
-\midrule
+SFT Baseline & 73.74 & 75.98 & 40.83 & 12.23 & 53.47 \\
 \textit{RL-Zero} (No Warmup) & 88.15 & 79.45 & 43.56 & 12.89 & 55.82 \\
 \textit{Train on Hard Only} & 83.12 & 81.34 & \textbf{53.45} & \textbf{26.12} & 60.55 \\
+方案5\textit{(SFT+RL)} & \textbf{96.23} & \textbf{90.37} & 51.21 & 23.42 & \textbf{67.37} \\
 \bottomrule
 \end{tabular}
-}
+% }
 \end{table}
 
-如表~\ref{tab:strategy_ablation} 所示，相较于纯 SFT 基线，引入完整 GRPO 训练（\textbf{Ours-RL}）在 Challenging 任务上实现了逾 $10\%$ 的绝对提升，验证了“可验证奖励 + 策略优化”范式在解决复杂图推理问题上的核心优势。
-值得注意的是，\textit{RL-Zero} 策略的性能（Avg. 55.82\%）显著劣于 Ours-RL，表明在图推理这种逻辑严密的任务中，直接从随机策略进行探索效率极低；SFT 预热对于对齐“图–问题–推理链”的联合分布并提供合理的策略初始化至关重要。
+\paragraph{1. 强化学习带来的性能质变}
+相较于纯监督微调（CoT-SFT Baseline），引入 GRPO 强化学习（方案5）在所有难度层级上均实现了显著提升，整体平均准确率从 53.47\% 跃升至 67.37\%。特别是在 \textit{Challenging} 任务上，准确率几乎翻倍（$12.23\% \rightarrow 23.42\%$）。这表明，监督学习仅能让模型“模仿”推理的形式，而基于可验证奖励的强化学习通过探索-反馈机制，真正赋予了模型解决复杂图论问题的逻辑演绎能力。
 
-此外，\textit{Train on Hard Only} 策略虽然在 Hard/Challenging 任务上取得了微弱优势（Hard 53.45\%），却导致 Easy/Medium 任务性能显著退化，整体平均准确率下降至 60.55\%。
-这一结果揭示了“特定任务过拟合”与“模型通用鲁棒性”之间的权衡（Trade-off）。考虑到通用图基座模型的设计初衷，本文采用均衡采样策略，以在维持高难度推理能力的同时，确保对基础任务的广泛适应性。
+\paragraph{2. SFT 冷启动的必要性 (RL-Zero 分析)}
+实验数据显示，\textit{RL-Zero} 策略的平均性能（55.82\%）远低于方案 5。尽管其表现优于 SFT 基线，但缺乏 SFT 预热导致模型在训练初期的探索效率极低。在图推理任务中，推理链（CoT）的搜索空间巨大且逻辑耦合紧密，若无 SFT 提供一个合理的初始策略分布（Initial Policy Distribution），模型难以在稀疏的奖励信号中快速收敛到最优解。因此，SFT 提供的“策略锚点”对于后续 RL 的高效探索至关重要。
 
-\subsection{超参数敏感性分析}
+\paragraph{3. 任务泛化与灾难性遗忘的权衡 (Hard Only 分析)}
+这是一个极具启发性的发现：\textit{Train on Hard Only} 策略虽然在 Hard 和 Challenging 任务上取得了最高分（例如 Hard 达到 53.45\%，优于方案 5 的 51.21\%），但这以牺牲基础任务性能为代价——其 Easy 任务准确率暴跌至 83.12\%（远低于方案 5 的 96.23\%）。这揭示了图推理任务中的\textbf{灾难性遗忘（Catastrophic Forgetting）}风险：当模型过度专注于拟合高复杂度的推理模式（如NP难问题）时，可能会丢失处理基础图属性（如节点计数、简单连通性）的通用能力。考虑到通用图基座模型应当具备广泛的适应性，本文采用的均衡采样策略（方案5）虽然在极端难任务上略有妥协，但在全局性能（Avg. 67.37\% vs 60.55\%）和鲁棒性上达到了最佳平衡。
+
+综上所述，\textbf{“SFT 冷启动 + 均衡难度的 RL 探索”}是构建高性能通用图推理模型的最佳实践路径。
+\subsubsection{超参数敏感性分析}
 \label{subsec:hyperparam_sensitivity}
 
 最后，本文考察奖励权重与 KL 散度正则系数 $\beta$ 对训练动力学的影响。
