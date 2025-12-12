@@ -1046,7 +1046,7 @@ CoT-SFT 后的策略
 \begin{table}[htbp]
   \centering
   \small
-  \caption{思维链监督微调数据集 ($\mathcal{D}_{CoT}$) 的详细配置与规模分布}
+  \caption{思维链监督微调数据集的详细配置与规模分布}
   \label{tab:cot_dataset_config}
   \renewcommand{\arraystretch}{1.2} % 增加行高，提升可读性
   \begin{tabular}{llcc}
@@ -1102,7 +1102,7 @@ CoT-SFT 后的策略
 \begin{table}[htbp]
   \centering
   \small
-  \caption{图推理基准 Erd\H{o}s \cite{Guo2025G1TL}的难度分层与任务分布详情}
+  \caption{图推理基准 Erd\H{o}s 的难度分层与任务分布详情}
   \label{tab:rl_task_distribution}
   \renewcommand{\arraystretch}{1.2}
   \begin{tabular}{llccl}
@@ -1355,7 +1355,7 @@ Challenging 子集上的提升仍然有限。
 
 \begin{table}[htbp]
   \centering
-  \caption{模型在真实图节点分类任务上的零样本迁移性能对比}
+  \caption{强化学习微调的图基座模型在节点分类任务上零样本性能对比}
   \label{tab:real_world_generalization}
   \resizebox{0.7\textwidth}{!}{
     \begin{tabular}{lccc}
@@ -1424,7 +1424,8 @@ G1 采用简单边列表线性化，部分打乱了局部拓扑与全局连通�
 \subsection{消融实验}
 \label{sec:ablation}
 
-为系统解析强化学习微调框架中各功能模块及关键超参数对图推理性能的边际贡献，本文在统一的实验基准下设计了三组控制变量实验。
+为系统解析强化学习微调框架中各功能模块及关键超参数对图推理性能的边际贡献，
+本文在统一的实验基准下设计了三组控制变量实验。
 实验旨在探究：
 \begin{enumerate}
 \item 奖励函数消融实验：量化不同奖励组件在模型性能提升与
@@ -1451,7 +1452,7 @@ G1 采用简单边列表线性化，部分打乱了局部拓扑与全局连通�
 
 \begin{table}[htbp]
 \centering
-\caption{奖励函数组件对图推理性能的边际贡献分析}
+\caption{强化学习奖励函数组件的消融实验}
 \label{tab:reward_ablation}
 \small
 \setlength{\tabcolsep}{8pt}
@@ -1466,10 +1467,10 @@ G1 采用简单边列表线性化，部分打乱了局部拓扑与全局连通�
 & $\mathcal{R}_{ans}$ & $\mathcal{R}_{topo}$ & $\mathcal{R}_{fmt}$ &
  \textbf{Hard Acc.} & \textbf{Avg. Acc.} & \textbf{CoT有效率} \\
 \midrule
-Baseline (答案正确性奖励) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
-\textit{w/o} 拓扑一致性奖励 & \checkmark & & \checkmark & 44.32 & 55.67 & 88.4\% \\
-\textit{w/o} 格式规范奖励 & \checkmark & \checkmark & & 49.15 & 60.23 & 75.8\% \\
-{完整奖励函数} & \checkmark & \checkmark & \checkmark & \textbf{51.21} & \textbf{67.37} & \textbf{99.8\%} \\
+Baseline ($R_{ans}$ Only) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
+\textit{w/o Topology ($R_{ans} + R_{fmt}$)} & \checkmark & & \checkmark & 44.32 & 55.67 & 88.4\% \\
+\textit{w/o Format ($R_{ans} + R_{topo}$)} & \checkmark & \checkmark & & 49.15 & 60.23 & 75.8\% \\
+{Full Reward($R_{ans} + R_{topo}+ R_{fmt}$)} & \checkmark & \checkmark & \checkmark & \textbf{51.21} & \textbf{67.37} & \textbf{99.8\%} \\
 \bottomrule
 \end{tabular}
 }
@@ -1500,10 +1501,11 @@ Baseline (答案正确性奖励) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
 (2)RL-Zero：跳过监督微调阶段，直接使用预训练基座模型进行 GRPO 强化学习，旨在探究模型是否能完全依靠奖励信号从零学习推理。
 (3){仅高难样本 RL (Train on Hard Only)}：在强化学习阶段仅采样 Hard 和 Challenging 难度的任务进行训练，旨在测试模型在极端难度导向下的泛化边界。
 (4)本文方案：即方案5，采用 SFT 冷启动并结合全难度均衡采样的标准训练流程。
+以上实验均采用(Accuracy \%)作为评价指标。
 
 \begin{table}[htbp]
 \centering
-\caption{不同训练策略与难度采样配比的消融实验结果 (Accuracy \%)}
+\caption{强化学习不同训练策略与难度采样配比的消融实验}
 \label{tab:strategy_ablation}
 \small
 \setlength{\tabcolsep}{8pt}
@@ -1560,7 +1562,7 @@ $\bigl(\lambda_{ans}=1.0,\,\lambda_{topo}=0.5,\,\lambda_{fmt}=0.1,\,\beta=10^{-3
 
 \begin{table}[htbp]
 \centering
-\caption{奖励权重与 KL 正则系数的参数敏感性分析}
+\caption{强化学习奖励权重与 KL 正则系数的超参数消融实验}
 \label{tab:param_sensitivity}
 \small
 \setlength{\tabcolsep}{6pt}
