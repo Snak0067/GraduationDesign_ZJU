@@ -327,6 +327,185 @@ $c$是分步骤的推理过程。例如：“步骤1：检查$User_X$的一度�
 \section{金融风控大模型训练与优化}
 \section{风控决策可视化与解释性模块}
 
+%========================
+% 5.x 风控决策可视化与解释性模块
+%========================
+\section{风控决策可视化与解释性模块}
+\label{sec:vis_explain_module}
+
+本节面向\emph{审计可追溯、决策可解释、分析可复现}的风控落地需求，
+在前述“数据构建—图编码—节点分类—图推理—报告生成—反馈闭环”的技术链路之上，
+实现一个端到端原型系统（Prototype），用于将本文提出的关键改进以可交互方式集成展示。
+系统以 Gradio 为前端承载，联合 NetworkX/Matplotlib 实现图结构可视化，
+并提供结构化证据导出与人工反馈入口，
+从而形成“模型输出 $\rightarrow$ 证据呈现 $\rightarrow$ 人工校验 $\rightarrow$ 策略/数据迭代”的闭环工作流。
+
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.2}
+\caption{原型系统模块与论文技术贡献的对应关系（面向可解释风控落地）}
+\label{tab:prototype_mapping}
+\begin{tabular}{p{2.8cm} p{5.4cm} p{5.4cm}}
+\toprule
+\textbf{系统模块} & \textbf{输入/中间产物} & \textbf{输出/对评审的价值} \\
+\midrule
+批量分析与分层预警 &
+账户列表、风险阈值、采样参数（$K$-hop/seed） &
+风险分层（高/中/低）、批量排序与导出，展示“高吞吐筛查”能力 \\
+\midrule
+图谱展示与多跳探索 &
+目标账户邻域子图（含账户/设备等异构节点与交易边） &
+交互式 $K$-hop 网络图、关键节点高亮，展示“结构证据可视化”能力 \\
+\midrule
+统计分布与异常提示 &
+交易金额、频次、度数等统计量 &
+金额直方图/活动度摘要，辅助解释异常强度与离群性 \\
+\midrule
+推理报告与证据摘要 &
+节点分类分数、图推理结构证据（路径/环/规则命中） &
+Markdown 报告 + JSON 证据（可审计），展示“可解释决策”能力 \\
+\midrule
+数据浏览与可复现导出 &
+节点表/边表（字段、度数、标记位、时间戳等） &
+结构化数据一键导出（GraphML/JSON），支撑复现实验与审计 \\
+\midrule
+人工审核反馈闭环 &
+人工标签（Fraud/Legit/Unknown）与备注 &
+反馈记录与导出，支撑后续规则校准/偏好数据构建/持续学习 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{原型界面总体布局与信息组织}
+\label{subsec:ui_overview}
+
+系统界面采用“\textbf{配置区—可视化区—证据区}”的三段式布局：
+左侧提供数据接入方式（Mock/上传）、采样与阈值配置；
+中部以流式输出呈现推理进度与可读报告；
+右侧固定展示结构化证据摘要（JSON），并在顶部以 KPI 卡片呈现规模与效率指标（节点数、边数、异常节点数、环数量、延迟等），
+便于评审快速理解系统在“规模—结构—时延”三个维度的运行状态。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{5_system/prototype/full_ui.png}
+\caption{原型系统总览界面：集成数据接入、$K$-hop 子图可视化、风险评分与等级、推理报告（流式）、结构化证据摘要与导出入口。}
+\label{fig:gradio_full_ui}
+\end{figure}
+
+\subsection{风险评分呈现与证据级解释框架}
+\label{subsec:risk_and_evidence}
+
+系统将判别式节点分类结果与生成式图推理证据进行融合展示：
+其一，风险评分以 $0$--$100$ 标尺直观呈现，并映射为可配置的风险等级；
+其二，证据层面遵循“\textbf{规则命中 $\rightarrow$ 关键路径 $\rightarrow$ 异常模式 $\rightarrow$ 处置建议}”的组织结构，
+在报告中对每条证据给出可复核的结构依据（如关键设备绑定、环路/分层结构、异常出入度活动等）。
+同时，右侧 JSON 证据摘要同步落盘保存核心字段（评分分量、关键设备、结构统计量、参数与时间戳），
+保证解释不仅“可读”，也“可审计、可复现”。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{5_system/prototype/infer_result.png}
+\caption{推理报告与结构化证据摘要：左侧为面向业务的可读报告（证据、路径与建议），右侧为 JSON 证据（评分分量、关键设备、图统计与运行参数）。}
+\label{fig:prototype_infer_report}
+\end{figure}
+
+\subsection{图谱展示与多跳探索：从“黑盒分数”到“结构证据”}
+\label{subsec:graph_viz}
+
+为降低图推理在风控场景的“理解门槛”，系统提供 $K$-hop 邻域子图的可视化探索能力。
+节点按类型与状态进行视觉编码（中心节点、普通账户、异常账户、设备等），
+边以方向与金额标注交易关系，并支持对“关键设备绑定”“关键路径证据”等进行高亮显示，
+使审查者能够以“从中心辐射—回溯异常连接—定位关键中介”的方式快速建立结构认知。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{5_system/prototype/subgraph.png}
+\caption{$K$-hop 交易网络子图可视化：以目标账户为中心展示邻域扩散结构，并对异常节点与关键设备关系进行标注与高亮。}
+\label{fig:prototype_subgraph}
+\end{figure}
+
+\subsection{统计分布视图：交易金额与离群性提示}
+\label{subsec:histogram}
+
+除结构证据外，系统以轻量统计视图补充“异常强度”的直观解释。
+例如，交易金额直方图用于呈现该子图内的金额分布形态、集中区间与潜在离群点，
+与结构证据（高出度、环路回流、设备聚合）形成互补：前者回答“\emph{异常有多强}”，后者回答“\emph{异常为何发生}”。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{5_system/prototype/amount_hist.png}
+\caption{子图交易金额分布直方图：用于观察集中区间与离群金额，辅助解释异常强度与风险阈值设定。}
+\label{fig:prototype_amount_hist}
+\end{figure}
+
+\subsection{批量分析与风险分层：面向高吞吐筛查的产品化形态}
+\label{subsec:batch}
+
+为贴近真实风控作业流程，系统提供批量账户输入与阈值分层能力：
+支持一次性导入多账户，输出风险概率/分数/等级的汇总表，
+并允许按“高风险阈值/中风险阈值”快速调节预警策略，
+用于展示本文方法在“快速筛查—分层处置—复核解释”的端到端可用性。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{5_system/prototype/batch.png}
+\caption{批量分析界面：输入账户列表与风险阈值，系统输出分层风险结果表，用于模拟线上筛查与工单分流。}
+\label{fig:prototype_batch}
+\end{figure}
+
+\subsection{数据浏览与可复现导出：支撑审计与论文复现实验}
+\label{subsec:data_browser}
+
+考虑风控场景对可追溯与可复现的强需求，系统提供节点表/边表浏览能力，
+并显式展示关键字段（节点类型、中心标记、异常标记、入/出度；边类型、金额、时间戳、高亮标记等）。
+此外，系统支持一键导出报告（Markdown）与子图（GraphML/JSON），
+用于离线复核、审计归档及论文复现实验的证据留存。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{5_system/prototype/data_browser.png}
+\caption{数据浏览界面：节点表与边表提供结构化字段与标记位展示，并支持导出以满足审计与复现需求。}
+\label{fig:prototype_data_browser}
+\end{figure}
+
+\subsection{人工审核反馈闭环：从“可解释”走向“可持续迭代”}
+\label{subsec:human_feedback}
+
+为体现工程系统的闭环能力，原型提供人工审核入口：
+审查者可对指定账户给出 Fraud/Legit/Unknown 标签并补充备注，系统记录时间与操作轨迹，并支持反馈导出（JSON）。
+该设计使模型输出能够转化为可用的“增量监督/偏好信号”，
+为后续策略校准、样本补充、以及结合可验证奖励的强化学习迭代提供接口基础。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=\linewidth]{5_system/prototype/human_feedback.png}
+\caption{人工审核反馈界面：支持标签与备注录入、反馈记录展示与 JSON 导出，用于构建闭环迭代的数据接口。}
+\label{fig:prototype_human_feedback}
+\end{figure}
+
+\subsection{小结：面向评审的“端到端证据链”说明}
+\label{subsec:vis_summary}
+
+综上，本节原型系统并非独立于模型之外的“可视化外壳”，
+而是将本文各环节贡献以\emph{可交互、可导出、可审计}的方式串联：
+批量筛查保证业务吞吐，子图探索与统计视图降低理解成本，
+报告与 JSON 证据保证解释可复核，人工反馈入口提供持续迭代的闭环通路。
+因此，该模块在系统层面补全了从“模型能力提升”到“风控可落地”的关键一环。
+
+%------------------------
+% 图片放置建议（避免中文路径问题）：
+% 5_system/prototype/full_ui.png
+% 5_system/prototype/infer_result.png
+% 5_system/prototype/subgraph.png
+% 5_system/prototype/amount_hist.png
+% 5_system/prototype/batch.png
+% 5_system/prototype/data_browser.png
+% 5_system/prototype/human_feedback.png
+%------------------------
+
+
 
 
 \section{系统测评与场景验证}
