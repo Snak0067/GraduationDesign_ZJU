@@ -3,23 +3,19 @@
 % 定义英文摘要和关键字
 
 \begin{eabstract}
-An abstract of a dissertation is a summary and extraction of research work
-and contributions. Included in an abstract should be description of research
-topic and research objective, brief introduction to methodology and research
-process, and summarization of conclusion and contributions of the
-research. An abstract should be characterized by independence and clarity and
-carry identical information with the dissertation. It should be such that the
-general idea and major contributions of the dissertation are conveyed without
-reading the dissertation.
+Text-attributed graphs (TAGs) are pervasive in real-world applications such as social networks, citation networks, and e-commerce recommendation, where nodes are naturally associated with rich textual attributes. Graph large language models (Graph-LLMs) have become a key approach for TAG understanding, aiming to combine the structural modeling capacity of graph neural networks (GNNs) with the semantic strengths of large language models (LLMs) via graph-to-sequence transformation and cross-modal projection. However, existing Graph-LLMs still face substantial challenges, including structural information loss during graph encoding, a fragmented joint embedding space between graph topology and text semantics, reliance on high-quality human annotations, and limited traceability of the reasoning process. To address these issues, we propose a reinforcement-learning-enhanced Graph-LLM framework with the following contributions:
 
-An abstract should be concise and to the point. It is a misunderstanding to
-make an abstract an outline of the dissertation and words ``the first
-chapter'', ``the second chapter'' and the like should be avoided in the
-abstract.
+\noindent\textbf{1) Improved graph structural representation.}
+To alleviate topology loss introduced by conventional serialization, we introduce a reversible Eulerian-path-based graph serialization method. By incorporating multi-code node identity encoding and a resampling mechanism, the proposed approach enables lossless and invertible serialization, effectively preserving global topological information and providing a unified foundation for node-, edge-, and graph-level tasks. Experiments on OGB-PCQM4Mv2 and ogbl-ppa show an improvement of approximately \textbf{[X]\%} over a strong baseline.
 
-Key words are terms used in a dissertation for indexing, reflecting core
-information of the dissertation. An abstract may contain a maximum of 5 key
-words, with semi-colons used in between to separate one another.
+\noindent\textbf{2) Multi-level cross-modal alignment between graphs and text.}
+To bridge the modality gap between graph embeddings and textual semantic space, we design a multi-level alignment strategy that integrates a global contrastive objective, a generative cross-entropy loss, and fine-grained matching losses. These objectives jointly enhance global semantic consistency, token-level correspondence, and generative completeness, increasing cross-modal similarity to above 0.65 and substantially improving the coherence of graph--text representations.
+
+\noindent\textbf{3) Unified training paradigm with reinforcement learning.}
+To strengthen generalization under complex graph reasoning, we combine supervised fine-tuning and reinforcement learning within a unified HPT training framework. Without requiring human preference annotations, the proposed optimization steers the model to generate logically correct and verifiable chains of reasoning. Extensive results on the Erd\H{o}s graph-theoretic reasoning benchmark as well as real-world datasets (Cora, PubMed, and OGB-Arxiv) demonstrate consistent performance gains, improved zero-shot generalization, and a more traceable, high-confidence reasoning process.
+
+Finally, we integrate the proposed techniques into a unified prototype system that consolidates downstream capabilities such as node classification and link prediction. Functional and performance evaluations further validate the effectiveness and practical utility of the framework in realistic settings.
 \end{eabstract}
 
-\ekeywords{\TeX, \LaTeX, CJK, template, thesis}
+\ekeywords{Graph large language models; text-attributed graphs; cross-modal alignment; reinforcement learning}
+
