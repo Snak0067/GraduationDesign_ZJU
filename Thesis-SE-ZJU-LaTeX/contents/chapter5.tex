@@ -9,7 +9,7 @@
 
 为验证本文提出的结合强化学习推理微调的图结构基座模型在垂直风控领域的有效性与泛化能力，
 本章设计并实现一套面向金融反欺诈的科研原型系统。
-系统以统一的图表征为核心，将\emph{节点分类的风险感知}与\emph{图推理的风险归因}贯通起来，
+系统以统一的预训练图表征为核心，将\emph{节点分类的风险感知}与\emph{图推理的风险归因}结合，
 形成从风险筛查、证据聚合到可解释结论输出的端到端闭环，
 从而为复杂金融网络中的反欺诈研判与事后审计提供可解释、可追溯的技术支撑。
 
@@ -204,7 +204,8 @@
 本节详细阐述如何将该技术适配于金融场景，实现对资金流向的无损序列化。
 具体实现而言，包含以下步骤：
 
-\textbf{资金流向保真的欧拉化预处理}:欧拉路径存在的充要条件是
+\begin{itemize}
+    \item {资金流向保真的欧拉化预处理}:欧拉路径存在的充要条件是
 图中每个节点的入度等于出度或存在两个奇度数节点。
 真实的交易子图往往是不平衡的。直接加虚边可能会混淆真实资金流与虚拟平衡流。
 因此，本文引入以下适配改进：
@@ -215,21 +216,26 @@
 在序列化时， 边会被分配特殊的Mask Token，
 使模型在自注意力计算时能够区分真实交易与补图路径，
 既满足了欧拉路径的数学存在性，又保留了真实资金流向的单向语义。
-
-\textbf{时序优先的深度搜索序列化:}在生成欧拉路径时，
+    \item {时序优先的深度搜索序列化:}在生成欧拉路径时，
 节点遍历的顺序直接决定了序列的语义连贯性。针对金融场景，本文改进了路径搜索策略，
 采用{时序优先的深度搜索}。具体而言：在节点 $u$ 选择下一条边 $(u, v)$ 进行遍历时，不进行随机选择，
     而是对所有出边按交易时间戳 $t$ 进行升序排列，优先遍历发生时间最早的交易。
     从而生成的结果序列 $ User_A -> Trans_1(t1) -> User_B -> Trans_2(t2) -> User_C $
     自然地蕴含了 $t1 < t2$ 的时序约束。这使得Transformer的位置编码
     能够隐式地捕捉到资金流动的因果链条，极大增强了模型对“快进快出”、“分层转账”模式的识别能力。
-
-\textbf{全属性模式序列构建:}为了承载5.3.2节定义的多模态丰富属性，
+    \item {全属性模式序列构建:}为了承载5.3.2节定义的多模态丰富属性，
 系统采用第3章定义的全属性模式进行最终的Token序列构建。
 每个边步长被展开为包含节点、边及其属性的复合序列。
 具体序列结构示例如\autoref{tab:sequence_token_input}所示。
 这种极其稠密的编码方式虽然增加了序列长度，但最大限度地保留了风控所需的全部细节，
 使基座模型能够同时利用拓扑结构和语义特征进行联合推理。
+
+\end{itemize}
+
+
+
+
+
 
 \begin{table}[h]
 \centering
@@ -289,7 +295,7 @@ $User_X$被标记为高风险，请列出3个关键交易和1个关联团伙，�
 \textbf{4)基于教师模型蒸馏的冷启动样本生成}
 
 由于缺乏大规模的专家标注CoT数据，本系统采用
-结合教师模型蒸馏和规则校验的策略生成冷启动样本库（参考章节 \autoref{subsec:grpo_train_detail}）。
+结合教师模型蒸馏和规则校验的策略生成冷启动样本库（参考章节 \ref{subsec:grpo_train_detail}）。
 教师模型配置选用推理能力较强的通用大模型Qwen2.5-32B-Instruct作为教师。
 提示词工程设计包含领域知识的系统提示词：
 
@@ -317,7 +323,125 @@ $User_X$被标记为高风险，请列出3个关键交易和1个关联团伙，�
 该数据集用于后续模型在反欺诈垂直场景的微调训练，并集成于系统中。
 
 \section{金融风控大模型训练与优化}
-%（如需子图排版，请确保导言区已包含：\usepackage{subcaption}）
+
+金融反欺诈任务面临着大海捞针般的挑战：
+在海量的实时交易流中，欺诈行为往往占比极低（通常低于0.1\%）
+，且欺诈者会通过伪装手段混淆视听 。
+单纯依赖图神经网络进行节点分类，难以提供令人信服的判罚依据；
+而直接对全量数据使用大语言模型进行推理，则面临不可承受的计算成本与延迟。   
+
+为此，本系统设计了分类-推理级联协同的训练与推理框架
+。该框架并非两个模型的简单串联，而是在共享底层图语义表征的基础上
+，通过差异化的训练目标实现能力的互补与跃升。
+级联训练框架包含两个核心模块：
+\textbf{图结构感知模块（Graph Perception Module, GPM）}
+与\textbf{逻辑推理归因模块（Reasoning \& Attribution Module, RAM）}。
+两者共享由第3章所述的欧拉路径图编码器提取的底层图结构特征，
+但在训练阶段采用分层优化的策略。
+
+首先，在前文构建的预训练图结构编码器的参数基础上，
+利用大量无标签的金融交易图数据，对图编码器进行微调训练。
+不同于通用领域的掩码预测，
+本阶段引入了资金流向预测和时序交互重建任务，
+迫使编码器捕捉资金流转的拓扑模式
+和时序依赖，形成对金融异构图的通用理解。
+其次，在垂直场景微调的图编码器之上，接入轻量级分类头。
+针对金融样本的极度不平衡性，引入结构化Focal Loss与原型对比学习，
+重点优化模型在低召回率区间的表现。此阶段的目标是训练一个高吞吐、高敏感度的初筛器，
+其输出不仅是风险评分，还包括结构异常度等中间指标，作为触发逻辑推理模块的门控信号。
+对于初筛的高风险或高不确定性样本，
+系统激活LLM解码器进行深度推理。
+利用Fin-CoT数据进行冷启动微调，
+随后通过GRPO强化学习框架，结合金融规则验证器，优化模型的推理策略。
+此阶段的目标是训练一个逻辑严密、能够生成证据链的强推理模型。
+
+在训练过程中，图结构感知模块
+与逻辑推理归因模块并非完全解耦，而是通过难样本挖掘实现协同：
+在前向协同中，图结构感知模块在训练过程中识别出的决策边界样本（即预测概率在0.4-0.6之间的样本），
+会被标记并输送给逻辑推理归因模块模块作为重点训练数据。
+这使得逻辑推理归因模块能够专注于解决那些仅靠结构特征难以判定的复杂案例。
+逻辑推理归因模块经过强化学习优化后，
+其生成的推理链中包含的关键路径，会被提取为显式的结构特征，
+反哺给图结构感知模块模块作为增强输入。
+这种机制使得轻量级的图结构感知模块也能隐式地学习到高阶的推理逻辑，从而提升初筛的准确率。   
+
+\textbf{1)面向金融时序异构图的领域适应性微调}
+
+金融图谱是典型的异构动态图，节点涵盖用户、设备、IP、商户等，
+边包含转账、登录、授权等，且具有严格的时序因果性。
+第3章提出的通用欧拉路径编码在此阶段进行了领域适配改进。
+在构造图遍历序列时，严格遵循资金流向的时间先后顺序（$t_{transaction} < t_{next\_hop}$），
+强制模型学习资金流转的因果逻辑，而非无向的拓扑连接。
+针对金融交易的数值敏感性，我们在序列中引入了专门的金额分桶和时间间隔Token。
+本文进一步增加微调任务适配，除了通用的掩码预测（SMTP）外，
+增加了资金链路预测与异常属性还原任务。
+模型需根据上下文预测资金的下一跳流向，
+或识别被随机篡改的异常交易金额。
+这迫使底层的GET编码器在微调前就已掌握了正常金融交易的统计规律与拓扑模式。
+
+\textbf{2)对抗极度类别不平衡的感知层微调}
+
+金融欺诈样本通常占比极低（往往低于0.1\%），
+导致标准交叉熵损失函数失效，模型易对多数类如正常交易等过拟合。
+在GPM模块的训练中，我们引入了针对图结构的结构化Focal Loss与原型对比学习策略。
+结构化Focal Loss考虑到欺诈节点常通过伪装手段混迹于正常社群中，
+我们改进了传统Focal Loss，引入结构异质性因子 $\alpha_{struct}$
+。对于那些邻域多为正常节点但自身标注为欺诈的高隐蔽性节点，$\alpha_{struct}$ 
+会动态放大其损失权重，迫使模型关注这些难以区分的伪装者，
+而非简单地拟合易分样本。其公式如\ref{eq:loss_sft_focall}所示。
+
+\begin{equation}
+    \mathcal{L}_{S-FL} = - \alpha_{struct} (1 - p_t)^\gamma \log(p_t)
+    \label{eq:loss_sft_focall}
+\end{equation}
+
+
+我们针对类别不平衡问题设计了基于原型的对比增强，在特征空间维护动态更新的欺诈原型与正常原型。
+训练中增加对比正则项，要求欺诈节点的嵌入向量不仅要分类正确，
+还要在流形空间中尽可能靠近欺诈原型中心，
+远离正常原型。这有效缓解了少样本导致的决策边界模糊问题。
+
+\textbf{3)基于Fin-CoT的推理能力冷启动}
+
+对于被GPM筛选出的高风险样本，RAM模块需要生成解释性报告。
+此阶段利用5.3节构建的Fin-CoT数据集进行监督微调。
+训练目标不仅仅是输出标签，
+而是学习从风险定性到路径回溯，从模式匹配到最终判罚的专家思维范式。
+例如，针对洗钱场景，模型被训练去显式地输出：
+“发现账户A在短时间内收到多笔小额转账分散转入，并立即汇聚至账户B，
+符合分层清洗特征”。为了防止灾难性遗忘，我们采用了混合指令微调策略，
+在Fin-CoT数据中掺入20\%的通用逻辑推理数据，
+确保模型在学习金融领域知识的同时，保持通用的语言理解与生成能力。
+
+\textbf{4)基于可验证合规奖励的策略优化}
+
+这是本系统最核心的优化环节。为解决大模型在专业领域容易捏造交易记录等幻觉问题
+，我们基于第4章的GRPO框架，
+设计了金融特化的可验证奖励函数。
+传统的RLHF依赖人工打分，成本高且主观性强。
+在金融风控中，由于图数据和业务规则是客观存在的，
+我们构建了由规则驱动的自动化奖励体系，该体系包含
+包含拓扑真实性奖励$R_{topo}$、逻辑自洽性奖励$R_{logic}$
+以及合规性约束奖励$R_{compliance}$。具体公式如\ref{eq:Financial_verifier_loss}所示：
+\begin{equation}
+    \mathcal{R}_{fin} = w_1 R_{topo} + w_2 R_{logic} + w_3 R_{compliance}
+    \label{eq:Financial_verifier_loss}
+\end{equation}
+
+
+拓扑真实性奖励$R_{topo}$
+系统解析模型生成的思维链，抽取其中提及的所有交易实体与链路，并实时查询图数据库。
+凡是提及了不存在的边或节点，给予严厉惩罚。这强制模型言必有据，
+确保推理完全基于真实数据。
+逻辑自洽性奖励 $R_{logic}$
+检查推理结论与图算法检测结果的一致性。
+例如，如果模型声称发现了资金闭环，但相关子图中经算法检测并无环路，则给予负奖励。
+合规性约束奖励 $R_{compliance}$
+引入反洗钱业务规则库。如果模型对大额可疑交易未进行必要的风险提示，
+或遗漏了关键的监管要素，则扣除相应分数。通过GRPO算法进行组式策略优化，
+模型在数万次自我博弈与规则校验中，
+逐渐习得了既符合图论事实、又满足金融合规要求的推理策略，实现了从模仿专家到内化规则的质变。
+
 
 \section{风控决策可视化与解释性模块}
 \label{sec:vis_explain_module}
@@ -329,11 +453,10 @@ $User_X$被标记为高风险，请列出3个关键交易和1个关联团伙，�
 
 整体功能界面如\autoref{fig:initial_ui}所示。
 整体功能架构划分为四个紧密耦合的子区域：
-
 \begin{figure}[htbp]
-    \centering  % 让图片在figure环境中居中显示
-    \includegraphics[width=1\linewidth]{5_system/prototype/initial_ui.png}  % 图片宽度设为0.6倍行宽
-    \caption{融合节点分类与图推理的金融反欺诈系统的整体初始界面}
+    \centering
+    \includegraphics[width=1\linewidth]{5_system/prototype/initial_ui.png}
+    \caption{融合节点分类与图推理的金融反欺诈系统的整体界面}
     \label{fig:initial_ui}
 \end{figure}
 
@@ -366,13 +489,13 @@ Mock模式利用内置的生成器实时构造典型的欺诈拓扑，
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[t]{0.49\linewidth}
+    \begin{subfigure}[t]{0.45\linewidth}
         \centering
         \includegraphics[width=\linewidth]{5_system/prototype/initial_input.png}
         \caption{数据上传与参数化配置界面}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[t]{0.49\linewidth}
+    \begin{subfigure}[t]{0.45\linewidth}
         \centering
         \includegraphics[width=\linewidth]{5_system/prototype/initial_mork.png}
         \caption{Mock生成子图界面}
@@ -387,7 +510,7 @@ Mock模式利用内置的生成器实时构造典型的欺诈拓扑，
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.6\linewidth]{5_system/prototype/threshold_setting.png}
+    \includegraphics[width=0.5\linewidth]{5_system/prototype/threshold_setting.png}
     \caption{金融反欺诈系统的可视化阈值滑块组件}
     \label{fig:threshold_setting}
 \end{figure}
@@ -421,7 +544,7 @@ Mock模式利用内置的生成器实时构造典型的欺诈拓扑，
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=0.6\linewidth]
+    \includegraphics[width=0.5\linewidth]
     {5_system/prototype/subgraph.png}
     \caption{金融反欺诈系统的交互式图谱拓扑探索}
     \label{fig:subgraph}
@@ -471,6 +594,22 @@ Mock模式利用内置的生成器实时构造典型的欺诈拓扑，
 \textbf{3)基于强化学习微调的图基座模型的解释性推理与证据看板}
 
 这是本系统最核心的创新模块，集成了第4章所述的强化学习微调图大模型。当点击某个高风险账户时，
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/evidence_low_score_case.png}
+        \caption{低风险样例的风险评分与解释性推理}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/evidence_mid_score_case.png}
+        \caption{中等风险样例的风险评分与解释性推理}
+    \end{subfigure}
+    \caption{金融反欺诈系统中基于图推理模型的决策输出与证据摘要}
+    \label{fig:original_data_review}
+\end{figure}
 系统会实时生成一份包含自然语言解释、风险评分及关键证据链的推理报告。
 
 如\autoref{fig:original_data_review}所示，面板顶部展示了综合风险评分仪表盘，这里显示了风险评分和融合决策。
@@ -488,37 +627,181 @@ Mock模式利用内置的生成器实时构造典型的欺诈拓扑，
 
 \begin{figure}[htbp]
     \centering
-    \begin{subfigure}[t]{0.49\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{5_system/prototype/evidence_low_score_case.png}
-        \caption{低风险样例的风险评分与解释性推理}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.49\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{5_system/prototype/evidence_mid_score_case.png}
-        \caption{中等风险样例的风险评分与解释性推理}
-    \end{subfigure}
-    \caption{金融反欺诈系统中基于图推理模型的决策输出与证据摘要}
-    \label{fig:original_data_review}
-\end{figure}
-
-最后，为了辅助对单一案件的判断，系统还提供了统计维度的辅助分析视图。
-如\autoref{fig:amount_hist}所示，系统自动计算子图内所有交易金额的分布情况。通过
-长尾分布识别直方图可以帮助识别是否存在大量小额测试单或单笔特大金额转账。
-图中显示在2500-3000金额区间存在集中交易（频次为4），
-这可能意味着欺诈团伙采用了固定额度的批量转账策略。
-
-\begin{figure}[htbp]
-    \centering
     \includegraphics[width=0.6\linewidth]
     {5_system/prototype/amount_hist.png}
     \caption{金融反欺诈系统的交易金额分布分析视图}
     \label{fig:amount_hist}
 \end{figure}
 
-
+最后，系统还提供了统计维度的辅助分析视图。
+如\autoref{fig:amount_hist}所示，系统自动计算子图内所有交易金额的分布情况。
+通过直方图识别是否存在大量小额测试单或单笔特大金额转账。
 
 \section{系统测评与场景验证}
+
+本节将介绍原型系统的系统测试过程和示例结果，包括软硬件环境，功能
+测试和性能测试三个方面。
+
+\textbf{1）环境配置}
+
+
+本系统测试的硬件环境如表~\ref{tab:five_hardware_env} 所示，
+软件环境配置见表~\ref{tab:five_software_env}。
+% ================== 硬件环境 ==================
+\begin{table}[htbp]
+  \centering
+  \caption{融合节点分类与图推理的金融反欺诈系统的硬件环境配置}
+  \label{tab:five_hardware_env}
+  \begin{tabularx}{0.9\textwidth}
+    {>{\centering\arraybackslash}p{0.18\textwidth}|>{\centering\arraybackslash}X}
+
+    \hline
+    \textbf{硬件名称} & \textbf{具体信息} \\\hline
+    操作系统 & Ubuntu 22.04 LTS \\ 
+    CPU      & AMD EPYC 7763 64-Core Processor @ 3.17GHz \\
+    GPU      & NVIDIA A100\mbox{-}SXM4\mbox{-}80GB Specs $\times$ 8 \\ 
+    内存     & 1TB \\ \hline
+  \end{tabularx}
+\end{table}
+
+% ================== 软件环境 ==================
+\begin{table}[htbp]
+  \centering
+  \caption{融合节点分类与图推理的金融反欺诈系统的软件环境配置}
+  \label{tab:five_software_env}
+  \begin{tabularx}{0.9\textwidth}
+    {>{\centering\arraybackslash}p{0.18\textwidth}|>{\centering\arraybackslash}X}
+
+    \hline
+    \textbf{软件名称} & \textbf{版本信息} \\ \hline
+    Python   & 3.9 \\ 
+    PyTorch  & 2.3.1 \\ 
+    CUDA     & 11.8 \\ \hline
+  \end{tabularx}
+\end{table}
+
+\textbf{2）功能测试}
+
+功能测试旨在验证系统各模块是否能够按照预期逻辑正确执行。
+
+测试详情界面如\autoref{fig:full_part_1}和\autoref{fig:full_part_2}所示。
+测试覆盖了从数据接入、风险初筛、深度推理到结果可视化的全链路流程。
+本文设计了包含5个关键测试项的测试集，针对Mock数据与部分脱敏的真实金融交易数据进行验证。
+功能测试用例及执行结果如\autoref{tab:functional_test}所示。
+
+\begin{table}[htbp]
+    \centering
+    \caption{金融反欺诈系统核心功能测试用例与结果}
+    \label{tab:functional_test}
+    \small
+    \renewcommand{\arraystretch}{1.3}
+    \begin{tabular}{c p{0.25\textwidth} p{0.4\textwidth} c}
+        \toprule
+        \textbf{用例ID} & \textbf{测试功能项} & \textbf{预期结果} & \textbf{测试结论} \\
+        \midrule
+        FT-01 & 
+        \textbf{多源异构数据接入与构图} & 
+        系统能正确解析CSV格式的节点表与边表，自动识别字段类型，并成功构建内存中的异构图对象，无报错中断。 & 
+        \textcolor{blue}{通过} \\
+        \hline
+        
+        FT-02 & 
+        \textbf{欧拉路径序列化编码} & 
+        针对选定的子图，系统能生成包含资金流向时序约束的Token序列，且金额分桶与时间差值嵌入正确。 & 
+        \textcolor{blue}{通过} \\
+        \hline
+        
+        FT-03 & 
+        \textbf{全量风险感知评分} & 
+        系统能在1分钟内完成千级节点的批量推断，输出0-100的风险评分，并根据设定的阈值（如60分）准确划分风险等级。 & 
+        \textcolor{blue}{通过} \\
+        \hline
+        
+        FT-04 & 
+        \textbf{LLM深度归因推理} & 
+        针对高风险候选节点，模型能生成包含“风险结论+关键证据+处置建议”的结构化文本，且未出现幻觉（如捏造交易）。 & 
+        \textcolor{blue}{通过} \\
+        \hline
+        
+        FT-05 & 
+        \textbf{交互式图谱联动分析} & 
+        前端界面能正确渲染力导向图，点击节点能高亮相关联的一阶/二阶邻居，并实时弹出对应的推理报告侧边栏。 & 
+        \textcolor{blue}{通过} \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+测试结果表明，系统各项功能模块运行逻辑闭环，数据流转通畅。
+特别是在\emph{LLM深度归因推理}（FT-04）环节，得益于第4章引入的合规性奖励函数，
+系统生成的风险报告在逻辑自洽性与事实准确性上均达到了预期标准，有效解决了传统端到端生成模型易产生幻觉的问题。
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]
+    {5_system/prototype/full_part_1.png}
+    \caption{融合节点分类与图推理的金融反欺诈系统的测评界面1}
+    \label{fig:full_part_1}
+\end{figure}
+
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]
+    {5_system/prototype/full_part_2.png}
+    \caption{融合节点分类与图推理的金融反欺诈系统的测评界面2}
+    \label{fig:full_part_2}
+\end{figure}
+
+
+\textbf{3)系统性能测试}
+
+作为面向实际应用场景的科研原型，系统的响应时效性与并发处理能力是评估其实用价值的关键指标。
+性能测试主要关注两个场景：
+一是离线批处理场景，评估感知层模型处理大规模图数据的吞吐量；
+二是在线交互推理场景，评估分析师发起单次深度研判请求时的系统端到端延迟。
+测试数据集选用包含1,000个节点与5,000条边的中等规模金融交易子图。
+我们在单卡A100环境下进行了多次压力测试，取平均值作为最终结果，详细数据记录如\autoref{tab:performance_test}所示。
+
+
+
+\begin{table}[htbp]
+    \centering
+    \caption{系统关键性能指标测试结果}
+    \label{tab:performance_test}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{l l c c c}
+        \toprule
+        \textbf{测试场景} & \textbf{核心指标} & \textbf{平均值} & \textbf{峰值/波动范围} & \textbf{达标情况} \\
+        \midrule
+        \multirow{3}{*}{\shortstack[l]{\textbf{离线批处理}\\(全量筛查)}} 
+        & 图构建耗时 & 1.24 s & $\pm$ 0.15 s & 优 \\
+        & 感知模型推理吞吐量 & 8,500 节点/秒 & Max 9,200 & 优 \\
+        & 显存占用 (VRAM) & 4.8 GB & - & 优 \\
+        \midrule
+        \multirow{4}{*}{\shortstack[l]{\textbf{在线交互推理}\\(单次深度归因)}} 
+        & 子图提取与序列化耗时 & 120 ms & < 200 ms & 优 \\
+        & LLM首字生成延迟 (TTFT) & 0.45 s & - & 良 \\
+        & 完整报告生成耗时 & 3.82 s & 2.5s - 5.1s & 达标 \\
+        & 显存占用 (VRAM) & 28.5 GB & (加载32B模型) & 达标 \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+结果分析：在感知层，得益于轻量级的图编码器设计，系统实现了每秒近万节点的处理吞吐量，这意味着对于百万级日活用户的中小规模金融平台，系统可以在分钟级完成全量风险扫描，满足T+0风控的时效性要求。
+在推理层，虽然加载了32B参数量的大模型，但通过vLLM推理加速技术的应用，单次完整归因报告的生成时间控制在4秒以内（$<5$s的指标要求）。这确保了风控分析师在进行人工复核时，能够获得近乎实时的辅助决策支持，不会因等待模型输出而打断分析思路。
+在双卡A100环境下，系统能够同时驻留图基座模型与大语言模型，且显存占用率控制在合理范围内（约75\%），为后续支持更多并发用户预留了资源空间。
+
+综上所述，本系统在保证功能完备性的前提下，展现了良好的计算性能与资源利用率，具备从实验室环境向准生产环境迁移的潜力。
+
+
 \section{本章小结}
 
+本章立足于验证图结构基座模型在垂直领域的应用价值，设计并实现了一套融合节点分类与图推理的金融反欺诈原型系统。 
+针对金融风控中数据异构性强、黑产对抗性高及决策可解释性弱的痛点，本章完成了从底层数据构建到上层交互决策的端到端落地：
+
+首先，在数据表征层面，将第3章提出的欧拉路径编码技术针对金融场景进行了领域适配，
+通过时序优先遍历与多模态属性嵌入，实现了资金流转拓扑的高保真序列化； 其次，在模型优化层面，集成了第4章基于GRPO的强化学习推理框架，并通过设计拓扑真实性与业务合规性奖励函数，成功将大模型的通用推理能力转化为符合金融逻辑的专业研判能力； 最后，在系统交互层面，构建了“高通量判别筛查—强逻辑生成归因”的双阶段闭环，通过可视化界面将黑盒模型的隐式特征转化为直观的风险传播路径与自然语言证据链。
+
+本章工作不仅有力证明了本文所提图基座模型架构在复杂工业场景下的泛化能力与鲁棒性，
+更为解决高风险决策领域中精准识别与逻辑可信难以兼得的难题，提供了一个具有示范意义的工程范式。
