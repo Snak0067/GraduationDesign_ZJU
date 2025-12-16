@@ -124,15 +124,18 @@
 \textbf{节点类型定义}： 在金融网络中，节点是风险的载体。本文不仅关注账户本身，更关注承载账户的物理媒介与环境。
 
 \begin{enumerate}
-    \item 用户： 交易的主体。不仅包含注册ID，还聚合了如年龄段、职业的静态身份画像与动态风险标签。
+    \item 用户： 交易的主体。
+    包含注册ID、年龄段、职业的静态身份画像与动态风险标签。
 
-    \item 设备： 风险攻防的第一战场。通过设备指纹唯一标识，承载了操作系统、模拟器特征、越狱状态等关键环境属性，是识别团伙作案的核心锚点。
+    \item 设备：设备指纹唯一标识，承载了操作系统、
+    模拟器特征、越狱状态等关键环境属性。
 
-    \item IP地址： 网络环境标识。包含地理归属、运营商类型等属性，用于识别代理攻击与地理位置异常。
+    \item IP地址：网络环境标识。包含地理归属、运营商类型等属性，
+    用于地理位置异常。
 
-    \item 商户： 资金流转的汇聚点。包含商户类别码、经营主体信息，用于识别虚假交易与套现窝点。
+    \item 商户：资金流转的汇聚点。包含商户类别码、经营主体信息，用于识别虚假交易。
 
-    \item 关联实体： 如Wi-Fi MAC地址、加密的身份证号、手机号等，用于构建跨账户的隐性关联。
+    \item 关联实体：如MAC地址、加密的身份证号、手机号等，构建跨账户的隐性关联。
 \end{enumerate}
 
 \textbf{边关系类型定义：}边承载了风险传播的动态语义。
@@ -156,7 +159,7 @@
 \caption{金融反欺诈系统中图谱多模态属性定义与处理规范}
 \label{tab:feature_processing_cn}
 \renewcommand{\arraystretch}{1} % 适当增加行高，中文排版更美观
-\begin{tabular}{p{0.1\linewidth} p{0.15\linewidth} p{0.2\linewidth} p{0.4\linewidth}}
+\begin{tabular}{p{0.1\linewidth} p{0.1\linewidth} p{0.2\linewidth} p{0.4\linewidth}}
 \toprule
 \textbf{节点/边} & \textbf{属性域} & \textbf{代表性数据项} & \textbf{构建与处理策略} \\
 \midrule
@@ -195,24 +198,23 @@
 
 \textbf{2)面向金融交易网络的欧拉路径图编码实现}
 
-第3章提出的欧拉路径编码是本研究的核心技术底座。
-然而，通用算法针对的是无向或简单有向图，而金融交易网络是典型的强有向、多重边且属性密集的图结构。
+第3章提出的欧拉路径编码是本系统的核心技术支撑。
+然而，通用图算法针对的是无向或简单有向图，
+而金融交易网络是典型的强有向、多重边且属性密集的图结构。
 本节详细阐述如何将该技术适配于金融场景，实现对资金流向的无损序列化。
 具体实现而言，包含以下步骤：
 
 \textbf{资金流向保真的欧拉化预处理}:欧拉路径存在的充要条件是
 图中每个节点的入度等于出度或存在两个奇度数节点。
 真实的交易子图往往是不平衡的。直接加虚边可能会混淆真实资金流与虚拟平衡流。
-因此，引入以下适配处理流程：
-\begin{itemize}
-    \item 连通性增强： 引入全局虚拟节点$``$，单向连接至子图中的所有孤立分量核心节点，
-    确保图连通，并作为全局风险上下文信息的注入接口。
-    \item 流向平衡补图： 针对度数不平衡节点，添加标记为 $``$ 的回溯虚边。
-    不同于通用算法的随机加边，本文优先在属于同一资金链路的节点间添加回溯边，
-    在序列化时， 边会被分配特殊的Mask Token，
-    使模型在自注意力计算时能够区分真实交易与补图路径，
-    既满足了欧拉路径的数学存在性，又保留了真实资金流向的单向语义。
-\end{itemize}
+因此，本文引入以下适配改进：
+首先引入全局虚拟节点$``$，单向连接至子图中的所有孤立分量核心节点，
+确保图连通。
+其次，针对度数不平衡节点，添加标记为 $``$ 的回溯虚边。
+不同于通用算法的随机加边，本文优先在属于同一资金链路的节点间添加回溯边，
+在序列化时， 边会被分配特殊的Mask Token，
+使模型在自注意力计算时能够区分真实交易与补图路径，
+既满足了欧拉路径的数学存在性，又保留了真实资金流向的单向语义。
 
 \textbf{时序优先的深度搜索序列化:}在生成欧拉路径时，
 节点遍历的顺序直接决定了序列的语义连贯性。针对金融场景，本文改进了路径搜索策略，
@@ -243,11 +245,13 @@ $t$ & \texttt{UID\_258} & 当前节点ID & 源用户的唯一标识符，经由I
 \midrule
 $t+1$ & \texttt{[NODE\_ATTR]} & 节点离散属性 & 聚合后的结构化特征，经离散化处理后的Token。 \\
 \midrule
-$t+2$ & \texttt{[SEM\_EMB]} & 文本语义向量 & 用户备注信息(\texttt{reg\_memo})经RoBERTa编码后的稠密向量嵌入。 \\
+$t+2$ & \texttt{[SEM\_EMB]} & 文本语义向量 & 
+用户备注信息({reg\_memo})经RoBERTa编码后的稠密向量嵌入。 \\
 \midrule
-$t+3$ & \texttt{[EDGE\_OUT]} & 边类型 & 显式指示关系方向为“资金流出”，区分出入度语义。 \\
+$t+3$ & \texttt{[EDGE\_OUT]} & 边类型 & 显式指示关系方向为资金流出，区分出入度语义。 \\
 \midrule
-$t+4$ & \texttt{[EDGE\_ATTR]} & 边属性特征 & 离散化的交易特征组合（如：\texttt{大额}、\texttt{短时}、\texttt{夜间}）。 \\
+$t+4$ & \texttt{[EDGE\_ATTR]} & 边属性特征 & 离散化的交易特征组合
+（如：{大额}、{短时}、{夜间}）。 \\
 \midrule
 $t+5$ & ``Payment for...'' & 交易附言 & 原始交易文本序列（保留自然语言语义，作为序列的一部分）。 \\
 \midrule
@@ -269,20 +273,18 @@ $t+6$ & \texttt{UID\_996} & 下一跳节点ID & 目标交互对象（Counterpart
 
 因此，本文将金融图推理任务形式化为三元组 $(G, q, y)$：
 $G$表示为经欧拉路径序列化后的风控子图Token序列，
-$q$是自然语言形式的风险排查指令，覆盖三个层次的认知需求：
+$q$是自然语言形式的风险排查指令以及包含思维链与答案的序列 $y = (c, a)$。
+$c$是分步骤的推理过程，$a$代表结构化的结论，通常是JSON格式，便于下游系统解析。
+针对图推理任务，本节的系统提示词覆盖三个方面，具体如下：
 \begin{prompt}{风险感知类的风险排查指令}
 请分析中心用户$User_X$是否存在异常，并给出风险评分（0-100）。
 \end{prompt}
 \begin{prompt}{归因解释类的风险排查指令}
-$User_X$被标记为高风险，请列出导致该判定的3个关键交易和1个关联团伙，并说明理由。
+$User_X$被标记为高风险，请列出3个关键交易和1个关联团伙，并说明理由。
 \end{prompt}
 \begin{prompt}{模式挖掘类的风险排查指令}
 图中是否存在资金闭环或设备共享行为？请输出具体的节点路径$ID$。
 \end{prompt}
-
-以及$y$，包含思维链与答案的序列 $y = (c, a)$。
-$c$是分步骤的推理过程。例如：“步骤1：检查$User_X$的一度邻居，发现与黑名单设备$Dev_9$关联；
-步骤2：追踪资金流向，发现资金汇入$User_Y$后在5分钟内流出...”。$a$代表结构化的结论，通常是JSON格式，便于下游系统解析。
 
 \textbf{4)基于教师模型蒸馏的冷启动样本生成}
 
@@ -325,137 +327,196 @@ $c$是分步骤的推理过程。例如：“步骤1：检查$User_X$的一度�
 集成展示了从全量风险感知到深度推理归因的全过程，通过多视图协同实现对模型决策逻辑的白盒化呈现。
 该模块是本原型系统的核心交互界面，也是本文所提出的图基座模型技术落地能力的最直接体现。
 
-基于上述原则，本模块在功能架构上划分为四个紧密耦合的子区域，整体功能界面如\autoref{fig:initial_ui}所示。
-
+整体功能界面如\autoref{fig:initial_ui}所示。
+整体功能架构划分为四个紧密耦合的子区域：
 
 \begin{figure}[htbp]
     \centering  % 让图片在figure环境中居中显示
-    \includegraphics[width=0.6\linewidth]{5_system/prototype/initial_ui.png}  % 图片宽度设为0.6倍行宽
-    \caption{融合节点分类与图推理的金融反欺诈系统整体初始界面}
+    \includegraphics[width=1\linewidth]{5_system/prototype/initial_ui.png}  % 图片宽度设为0.6倍行宽
+    \caption{融合节点分类与图推理的金融反欺诈系统的整体初始界面}
     \label{fig:initial_ui}
 \end{figure}
 
-
-\subsection{解释目标与三层证据结构}
-\label{subsec:explain_goal}
-
-为避免“只有风险分数、缺少可核验依据”的黑盒观感，本模块将解释信息拆分为三层，并在界面中一一落位：
 \begin{enumerate}
-    \item \textbf{决策层（Decision-level）：} 输出融合风险分数与风险等级（高/中/低），用于快速分流与告警。
-    \item \textbf{结构层（Structure-level）：} 输出图结构证据（关键设备、Top-K 关键路径、环路/模式归纳、规则命中），回答“为何可疑”。
-    \item \textbf{数据层（Data-level）：} 暴露可复核的节点表/边表字段，并提供 GraphML/JSON/Markdown 导出，保证“可审计、可复现”。
+    \item {配置与控制区：} 
+    负责数据接入、参数调优与分析任务调度。
+    \item {全量风险感知区：} 
+    展示基于节点分类模型的批量打分结果与风险分层。
+    \item {图谱拓扑探索区：} 
+    提供基于力导向布局的动态子图可视化，展示交易网络结构。
+    \item 推理归因与报告区：
+    展示基于强化学习微调模型生成的自然语言证据链、风险定性结论及处置建议。
 \end{enumerate}
-后续各图严格按该证据链展开：先给出交互入口与信息流，再给出结构证据与统计补充，最后落到可导出与反馈闭环。
 
-\subsection{界面信息流：从配置到证据生成的端到端串联}
-\label{subsec:ui_flow}
-
-系统的在线分析入口如\autoref{fig:ui_entry_and_full}(a) 所示，
-用户输入目标账户并设置 $K$-hop 采样参数（及随机种子/阈值），即可触发一次完整分析；
-分析完成后，界面将“风险评分卡片—推理报告（流式）—结构化证据摘要（JSON）—子图与统计视图”按固定布局联动呈现，
-形成从\emph{模型推断}到\emph{人可读解释}再到\emph{机器可复核证据}的闭环（\autoref{fig:ui_entry_and_full}(b)）。
+下文将结合系统实现的具体界面，详细阐述各子模块的设计细节与业务价值。
 
 
-\subsection{结构层解释：$K$-hop 子图可视化与关键关系定位}
-\label{subsec:graph_explain}
+\textbf{1)全量数据接入与参数化配置}
 
-在决策层给出风险分数之后，评审最关心的问题是“\emph{结构证据在哪里}”。
-因此系统在同一页面直接渲染目标账户的 $K$-hop 邻域子图，并对中心节点、异常节点与关键设备关系进行视觉区分与高亮。
-如\autoref{fig:subgraph_viz} 所示，中心账户以辐射形态连接多账户节点，同时与关键设备节点存在绑定关系（高亮边），
-该视图将“拓扑形态（中心辐射/聚集/回流）”与“关键实体（设备/异常账户）”显式暴露，
-使审查者能够沿着可疑连接快速回溯证据来源。
+如\autoref{fig:full_data_input_config}所示，系统支持标准化的CSV数据导入，
+明确区分源节点、目标节点及其对应的属性列。
+为了适配第3章所述的欧拉路径图编码器，
+前端配置界面允许用户指定K-hop采样阶数与随机种子。
+K-hop采样阶数控制子图构建的深度。
+较小的 $K$ 值聚焦于直接交易对手，适用于快速筛查；
+较大的 $K$ 值捕获长链路的洗钱路径，适用于深度挖掘。
+系统设计了Mock生成子图与上传数据构建两种模式。
+Mock模式利用内置的生成器实时构造典型的欺诈拓扑，
+用于算法演示与基准测试；真实模式则直接对接业务数据流，支撑实战分析。
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{5_system/prototype/交易网络子图.png}
-    \caption{$K$-hop 子图可视化：展示目标账户邻域结构，并高亮关键设备绑定与异常节点。}
-    \label{fig:subgraph_viz}
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/initial_input.png}
+        \caption{数据上传与参数化配置界面}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/initial_mork.png}
+        \caption{Mock生成子图界面}
+    \end{subfigure}
+    \caption{金融反欺诈系统的全量数据接入与参数化配置界面}
+    \label{fig:full_data_input_config}
 \end{figure}
 
-\subsection{统计层补充：交易金额分布用于离群强度解释}
-\label{subsec:amount_hist}
-
-仅有拓扑证据仍不足以解释“\emph{异常强度}”。
-因此系统在子图视图下方补充交易金额直方图（\autoref{fig:amount_hist}），用于呈现该子图内金额的集中区间与离群尾部。
-该统计视图与\autoref{fig:subgraph_viz} 的结构证据互补：前者回答“异常有多强/是否离群”，后者回答“异常如何形成/由谁连接”。
+为适配业务实际需求，
+为了解决风控中误杀与漏网的权衡问题，
+系统在分析面板见\autoref{fig:threshold_setting}提供了可视化的阈值滑块组件。
 
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{5_system/prototype/交易金额分布.png}
-    \caption{子图交易金额分布：用于辅助解释离群交易与异常强度。}
+    \includegraphics[width=0.6\linewidth]{5_system/prototype/threshold_setting.png}
+    \caption{金融反欺诈系统的可视化阈值滑块组件}
+    \label{fig:threshold_setting}
+\end{figure}
+
+
+\textbf{2)批量风险感知与分层筛选}
+
+在完成数据接入后，系统首先调用第3章训练的节点分类图结构基座模型，
+对输入账户列表进行全量风险评分。
+这一过程对应系统架构分类感知层中的高通量风险评分和风险等级划分阶段。
+如\autoref{fig:batch_score_output}所示，系统以结构化表格形式展示批量分析结果。表格包含以下关键字段：
+\begin{itemize}
+    \item Account：待检测账户ID，例如 $U_{1234}$;
+    \item Prob：输出的初始欺诈概率（0-1区间），反映模型对该节点属于欺诈类别的置信度。
+    \item Score：映射后的信用评分（0-100分制）。通常分数越高代表风险越高，
+    \item Level：依据前述阈值配置自动划分的风险等级。
+\end{itemize}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.6\linewidth]
+    {5_system/prototype/batch_score_output.png}
+    \caption{金融反欺诈系统输出待检测账户的风险等级}
+    \label{fig:batch_score_output}
+\end{figure}
+
+对于被标记为高风险的账户，
+单一的评分数字不足以支撑封号冻结等强处置操作。
+系统提供交互式图谱拓扑探索进行动态的交易结构可视化。
+本模块的图谱展示和多跳探索区域如\autoref{fig:subgraph}所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.6\linewidth]
+    {5_system/prototype/subgraph.png}
+    \caption{金融反欺诈系统的交互式图谱拓扑探索}
+    \label{fig:subgraph}
+\end{figure}
+
+系统采用力导向算法对目标账户的K-hop子图进行渲染。
+中心节点为蓝色：位于几何图的中心，表示待分析的目标账户。
+异常节点为红色，表示为模型识别出的高危关联节点。
+正常节点为灰色，用于还原完整的交易上下文。
+设备媒介节点为紫色或者其他色，代表物理设备或IP环境。
+
+系统同时实现了交易链路的可视化，
+节点之间的连线代表交易或关联关系，
+连线上的数值直接展示了交易金额或频次权重。箭头指示了资金流向。
+在\autoref{fig:subgraph}中可以清晰地看到以 $U_{1234}$ 为核心的星状或发散状结构，
+大量资金从中心节点流向四周（如 $U_{1234}$ -> $U_{4517}$, $U_{1234}$ -> $U_{2542}$）
+。同时，右下角的红色设备节点$D_{5678}$通过虚线与中心节点相连，代表弱关联或设备共用关系。
+这种视觉结构强有力地暗示了团伙作案或设备关联的风险模式。
+
+为了防止可视化带来的信息丢失，
+系统在图谱下方提供了原始数据浏览面板，具体如\autoref{fig:original_data_review}所示。
+节点表展示每个节点的入度、出度、
+是否中心节点及是否异常。
+例如，$U_{9313}$ 的 is\_anomaly=1，与其在图谱中的红色显示对应。
+边表展示每笔交易的源、目、类型、设备绑定、
+金额及时间戳。 
+这种图表联动的设计，
+确保既能获得拓扑直觉，又能核实底层数据的准确性，符合可信AI的设计要求。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/data_review_of_node.png}
+        \caption{节点表原始数据浏览面板}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/data_review_of_edge.png}
+        \caption{边列表原始数据浏览面板}
+    \end{subfigure}
+    \caption{金融反欺诈系统的原始数据的透明化查阅}
+    \label{fig:original_data_review}
+\end{figure}
+
+\textbf{3)基于强化学习微调的图基座模型的解释性推理与证据看板}
+
+这是本系统最核心的创新模块，集成了第4章所述的强化学习微调图大模型。当点击某个高风险账户时，
+系统会实时生成一份包含自然语言解释、风险评分及关键证据链的推理报告。
+
+如\autoref{fig:original_data_review}所示，面板顶部展示了综合风险评分仪表盘，这里显示了风险评分和融合决策。
+风险评分与上述介绍一致，KPI摘要则
+列出了子图的关键统计指标，
+如节点数、边数、异常点数、环路数等，
+帮助使用者快速建立对案件复杂度的认知。
+此外，系统利用微调后的大模型，生成了结构化的推理报告，对应
+\autoref{fig:original_data_review}左侧文本区，包含三部分要素：（1）
+结论先行：直接给出账户反欺诈风险等级的定性结论。
+（2）可解释证据（Evidence）：报告列出了支撑结论的关键发现，
+每一条发现都对应图谱中的具体子结构。
+（3）关键路径征据：系统详细列出了具体的资金链路，
+路径级的解释能够直接追踪资金去向。
+
+\begin{figure}[htbp]
+    \centering
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/evidence_low_score_case.png}
+        \caption{低风险样例的风险评分与解释性推理}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.49\linewidth}
+        \centering
+        \includegraphics[width=\linewidth]{5_system/prototype/evidence_mid_score_case.png}
+        \caption{中等风险样例的风险评分与解释性推理}
+    \end{subfigure}
+    \caption{金融反欺诈系统中基于图推理模型的决策输出与证据摘要}
+    \label{fig:original_data_review}
+\end{figure}
+
+最后，为了辅助对单一案件的判断，系统还提供了统计维度的辅助分析视图。
+如\autoref{fig:amount_hist}所示，系统自动计算子图内所有交易金额的分布情况。通过
+长尾分布识别直方图可以帮助识别是否存在大量小额测试单或单笔特大金额转账。
+图中显示在2500-3000金额区间存在集中交易（频次为4），
+这可能意味着欺诈团伙采用了固定额度的批量转账策略。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.6\linewidth]
+    {5_system/prototype/amount_hist.png}
+    \caption{金融反欺诈系统的交易金额分布分析视图}
     \label{fig:amount_hist}
 \end{figure}
 
-\subsection{决策层落地：评分分层与可审计证据摘要（报告+JSON 双通道）}
-\label{subsec:report_json}
-
-为同时满足“人读得懂”与“机器可复核”，系统采用双通道输出：
-左侧生成面向业务的推理报告（包含规则命中、关键路径、模式归纳与处置建议），
-右侧输出结构化 JSON 证据（包含数据源、参数、节点分类分数、图异常分量、融合分数、关键设备、环路计数等）。
-\autoref{fig:decision_and_evidence} 给出了低风险与中风险两种样例界面，便于评审直观看到阈值分层与证据字段的一致性。
-
-\begin{figure}[htbp]
-    \centering
-    \begin{subfigure}[t]{0.49\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{5_system/prototype/图推理结果.png}
-        \caption{低风险样例：报告与 JSON 同步给出证据要素。}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.49\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{5_system/prototype/中等风险.png}
-        \caption{中风险样例：分层变化与证据字段保持可复核。}
-    \end{subfigure}
-    \caption{决策输出与证据摘要：报告（人可读）+ JSON（可审计）双通道。}
-    \label{fig:decision_and_evidence}
-\end{figure}
-
-\subsection{面向作业流程：批量筛查与风险分层输出}
-\label{subsec:batch_mode}
-
-除单账户在线分析外，系统提供批量分析入口以贴合真实风控作业的“先筛查、再复核”流程。
-如\autoref{fig:batch_ui} 所示，用户一次性输入账户列表并配置高/中风险阈值，
-系统输出风险概率、分数与等级表格，用于工单分流与优先级排序；
-对其中高风险账户，可进一步跳转至在线分析页生成\autoref{fig:subgraph_viz}--\autoref{fig:decision_and_evidence} 所示的结构化证据链。
-
-\begin{figure}[htbp]
-    \centering
-    \includegraphics[width=\linewidth]{5_system/prototype/批量分析.png}
-    \caption{批量分析：多账户筛查与风险分层输出，用于工单分流与复核入口。}
-    \label{fig:batch_ui}
-\end{figure}
-
-\subsection{数据层与闭环：数据浏览复现与人工审核反馈}
-\label{subsec:data_and_feedback}
-
-最后，为保证论文展示的“可复现”与系统迭代的“可闭环”，本模块提供两类能力：
-其一，数据浏览页展示节点表/边表及关键字段（如中心标记、异常标记、入/出度、交易金额与高亮边标记），便于逐条复核（\autoref{fig:data_and_feedback}(a)）；
-其二，人工审核页支持 Fraud/Legit/Unknown 标签与备注录入，并将反馈记录导出为 JSON，用于后续规则校准与数据迭代（\autoref{fig:data_and_feedback}(b)）。
-二者共同保证：模型结论不仅“可解释”，而且“可追溯、可落盘、可迭代”。
-
-\begin{figure}[htbp]
-    \centering
-    \begin{subfigure}[t]{0.49\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{5_system/prototype/数据浏览.png}
-        \caption{数据浏览：节点表/边表字段用于可复核与复现。}
-    \end{subfigure}
-    \hfill
-    \begin{subfigure}[t]{0.49\linewidth}
-        \centering
-        \includegraphics[width=\linewidth]{5_system/prototype/人工反馈.png}
-        \caption{人工审核：标签与备注回流，支持反馈导出。}
-    \end{subfigure}
-    \caption{数据层复现与人工反馈闭环：从“证据可核验”走向“策略可迭代”。}
-    \label{fig:data_and_feedback}
-\end{figure}
-
-\paragraph{小结.}
-本节原型系统围绕“决策层—结构层—数据层”构建证据链路，
-并以在线分析、批量筛查与人工反馈三类入口将前文方法落到可交互展示中。
-由此，评审可按统一路径复核：\emph{分数$\rightarrow$结构证据$\rightarrow$字段明细$\rightarrow$导出与反馈}，
-避免将模型贡献停留在抽象描述层面。
 
 
 \section{系统测评与场景验证}
