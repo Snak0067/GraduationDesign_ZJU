@@ -16,8 +16,8 @@
 \section{问题描述}
 
 本研究面向文本属性图（Text-Attributed Graphs, TAGs）上的图结构理解与推理任务，
-旨在构建一个统一的图—语言模型框架，使模型在处理图数据时同时兼顾预测性能、
-推理可解释性与跨任务泛化能力。
+旨在构建一个统一的图—语言模型框架。
+该框架需在处理图数据时，兼顾预测准确性、推理过程的可解释性以及跨任务的泛化能力。
 
 形式化地，给定一张文本属性图
 \(
@@ -31,191 +31,126 @@ G = (V,E,A,T),
 \(
 F_{\theta} : (G,q) \rightarrow (c,a),
 \)
-其中 \(q\) 为关于图的自然语言指令或问题，\(a\) 为模型给出的答案，
-\(c=(c_1,\dots,c_L)\) 为可选的链式思维推理过程，
-用于刻画模型在图上的多步推理轨迹。
-目标是在不同类型的图任务 \(\mathcal{T}\) 上，
-使 \(F_{\theta}\) 在准确性、可解释性和泛化能力之间取得合理平衡。
+对于给定的自然语言指令 $q$，
+模型需生成答案 $a$ 以及显式的推理思维链 $c=(c_1,\dots,c_L)$，以刻画图上的多步逻辑路径。
 
-针对上述总体目标，本文将整体问题拆解为以下四个的子科学问题:
+针对上述总体目标，本文将整体问题拆解为以下四个子科学问题：
 
-\textbf{1）图编码器自监督表征学习问题：}
-给定局部子图 \(S(v) = (V_v,E_v,A_v,T_v) \subseteq G\)，
-通过半欧拉路径构造可逆序列 \(\pi(S(v)) = (e_1,\dots,e_L)\) 
-并离散化为图 token 序列 \(z_v \in \mathcal{V}_g^L\)，
-学习图编码器 \(\mathrm{Enc}_G: \mathcal{V}_g^L \rightarrow \mathbb{R}^{L \times d_g}\)，
-通过池化算子得到子图级表征，如公式~(\ref{eq:graph_encoder_pooling})所示：
+\textbf{1）结构保真表征学习问题：}
+给定文本属性图 $G$，对目标节点 $v$ 采样得到局部子图 $S(v)\subseteq G$，并通过序列化算子得到图序列 $z_v=\pi(S(v))$。
+学习图编码器参数 $\theta_G$，其优化目标如公式~\ref{eq:prob1_repr_simple}所示：
 \begin{equation}
-h_v^{\mathrm{glob}} = \mathrm{Pool}(\mathrm{Enc}_G(z_v))
-\label{eq:graph_encoder_pooling}
+\theta_G^{\ast}
+=
+\arg\min_{\theta_G}\ 
+\mathbb{E}_{(G,v)\sim\mathcal{D}}
+\Big[\mathcal{L}_{\mathrm{repr}}\big(\mathrm{Enc}_G(z_v;\theta_G),\,S(v)\big)\Big].
+\label{eq:prob1_repr_simple}
 \end{equation}
-以 SMTP 任务为自监督目标，
-最小化表征损失，如公式~(\ref{eq:smtp_loss})所示：
-\begin{equation}
-    \mathcal{L}_{\mathrm{repr}} = \mathbb{E}_{(G,v)}\big[ \ell_{\mathrm{repr}}\big(\mathrm{Enc}_G(z_v), S(v)\big) \big]
-    \label{eq:smtp_loss}
-\end{equation}
-其中 \(\ell_{\mathrm{repr}}\) 为拓扑一致性度量函数，
-目标是学习满足 \(\min_{\mathrm{Enc}_G} \mathcal{L}_{\mathrm{repr}}\) 的最优图编码器。
 
-\textbf{2）图-语义跨模态优化建模问题：}
-在获得图结构表征 \(h_v^\mathrm{glob}\)的基础上，解决图拓扑特征与文本语义特征在表示空间中的割裂问题，实现从异构特征空间到统一语义空间的投影，保证相同语义概念在跨模态空间中具有高相似度。
-形式化描述如下：设图表征维度为 \(d_g\)，语言模型嵌入维度为 \(d_\ell\)，引入映射层 \(f_{\mathrm{proj}}: \mathbb{R}^{d_g} \rightarrow \mathbb{R}^{d_\ell}\) 得到投影表征 \(\tilde{h}_v = f_{\mathrm{proj}}(h_v^{\mathrm{glob}})\)；通过文本编码函数 \(\phi_{\mathrm{text}}\) 得到描述文本的池化表征 \(s_v = \mathrm{Pool}(\phi_{\mathrm{text}}(t_v))\)。
-设计三维度对齐损失函数\(\mathcal{L}_{\mathrm{align}}\)，
-其公式定义如~(\ref{eq:Contrastive_loss})所示：
+\textbf{2）结构--语义跨模态对齐问题：}
+令 $h_v=\mathrm{Pool}(\mathrm{Enc}_G(z_v;\theta_G))$ 为图结构表征，$s_v=\mathrm{Pool}(\phi_{\mathrm{text}}(t_v))$ 为文本语义表征，
+学习映射层参数 $\theta_{\mathrm{proj}}$ 得到 $\tilde h_v=f_{\mathrm{proj}}(h_v;\theta_{\mathrm{proj}})$，
+并最小化跨模态对齐损失，其目标函数如公式~\ref{eq:prob2_align_simple}所示：
 \begin{equation}
-\mathcal{L}_{\mathrm{align}} = \lambda_1 \mathcal{L}_{\mathrm{con}} + \lambda_2 \mathcal{L}_{\mathrm{match}} + \lambda_3 \mathcal{L}_{\mathrm{gen}}
-\label{eq:Contrastive_loss}
+(\theta_G^{\ast},\theta_{\mathrm{proj}}^{\ast})
+=
+\arg\min_{\theta_G,\theta_{\mathrm{proj}}}\ 
+\mathbb{E}_{(G,v)\sim\mathcal{D}}
+\Big[\mathcal{L}_{\mathrm{align}}\big(\tilde h_v,\ s_v\big)\Big],
+\qquad \theta_{\mathrm{LLM}}\ \text{frozen}.
+\label{eq:prob2_align_simple}
 \end{equation}
-其中,\(\mathcal{L}_{\mathrm{con}}\) 为 InfoNCE 全局对比损失，约束 \(\tilde{h}_v\) 与 \(s_v\) 的相似度；\(\mathcal{L}_{\mathrm{match}}\) 为局部匹配损失，通过跨模态注意力实现图结构单元与文本片段的细粒度对齐；\(\mathcal{L}_{\mathrm{gen}}\) 为交叉熵损失，约束图表征重建对应文本的能力；\(\lambda_1,\lambda_2,\lambda_3\) 为权重系数且满足归一化条件。优化目标为 \(\min_{\mathrm{Enc}_G, f_{\mathrm{proj}}} \mathcal{L}_{\mathrm{align}}\)（冻结语言模型参数）。
 
- \textbf{3）图推理任务调优学习问题：}
-针对图推理任务中模型缺乏结构化推理能力的问题，
-需基于高置信度链式思维（CoT）数据集，通过监督微调为模型注入推理先验。
-核心目标是在冻结图编码与跨模态对齐模块的约束下，优化语言模型参数，
-使其能够生成结构一致、语义合理的推理链与答案，实现推理能力的冷启动。
-数学表达：
-设冻结模块将整图 G 映射为条件表征\(\tilde{H}\)，
-其公式定义如~(\ref{eq:Graph_inference_task_tuning_learning})所示：
+\textbf{3）图推理监督调优问题：}
+给定推理数据集 $\mathcal{D}_{\mathrm{CoT}}=\{(G,q,y)\}$，其中 $y=(c,a)$，
+在冻结图编码与对齐模块参数 $(\theta_G,\theta_{\mathrm{proj}})$ 的条件下，对语言模型进行监督微调。
+令条件输入 $x=[\tilde H;\phi_{\mathrm{LLM}}(q)]$，其中 $\tilde H=f_{\mathrm{proj}}(\mathrm{Enc}_G(G))$。
+最小化条件语言建模损失，其优化目标如公式~\ref{eq:prob3_sft_simple}所示：
 \begin{equation}
-    \tilde{H} = f_{\mathrm{proj}}(\mathrm{Enc}_G(G)) \in \mathbb{R}^{N \times d_\ell}
-    \label{eq:Graph_inference_task_tuning_learning}
+\theta_{\mathrm{LLM}}^{\ast}
+=
+\arg\min_{\theta_{\mathrm{LLM}}}
+\Big(
+-\mathbb{E}_{(G,q,y)\sim\mathcal{D}_{\mathrm{CoT}}}
+\log p_{\theta_{\mathrm{LLM}}}(y\mid x)
+\Big),
+\qquad \theta_G,\theta_{\mathrm{proj}}\ \text{frozen}.
+\label{eq:prob3_sft_simple}
 \end{equation}
-语言模型嵌入函数 \(\phi_{\mathrm{LLM}}\) 
-将问题 q 编码为 \(\phi_{\mathrm{LLM}}(q) \in \mathbb{R}^{|q| \times d_\ell}\)，联合输入为 \(x = [\tilde{H}; \phi_{\mathrm{LLM}}(q)]\)。模型需生成推理链 - 答案序列 \(y = (c,a)\)，
-优化目标为最小化条件语言建模损失\(\mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) \)，
-其公式定义如~(\ref{eq:sft_loss})所示：
-\begin{equation}
-    \mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}}) = - \mathbb{E}_{(G,q,y)\sim\mathcal{D}_{\mathrm{CoT}}} \left[ \sum_{t=1}^{T} \log p_{\theta_{\mathrm{LLM}}} \big( y_t \mid x,\ y_{<t} \big) \right]
-    \label{eq:sft_loss}
-\end{equation}
-其中 \(\theta_{\mathrm{LLM}}\) 为语言模型参数，\(\mathcal{D}_{\mathrm{CoT}}\) 为拒绝采样与图论校验器构造的高质量数据集，最优参数求解为：\(\theta_{\mathrm{LLM}}^{\ast} = \arg\min_{\theta_{\mathrm{LLM}}} \mathcal{L}_{\mathrm{SFT}}(\theta_{\mathrm{LLM}})\)。
 
-\textbf{4）图结构推理策略优化建模问题：}
-为提升图基础模型的泛化性与推理能力，构建基于可验证奖励机制的强化学习范式优化模型推理策略。
-核心目标是在无需人工偏好标注的前提下，利用组式策略优化算法，
-使模型聚焦于结构合法、逻辑自洽且答案正确的推理模式，
-最大化奖励加权的策略目标。
-形式化描述如下：将模型形式化为条件策略生成器
- \(\pi_\theta(y \mid G, q) = p_\theta((c,a) \mid G, q)\)，
-设计可验证奖励函数\(\mathcal{R}(G,q,y)\)，
-其公式定义如~(\ref{eq:VerifiableRrewardFunction})所示：
+\textbf{4）可验证奖励驱动的强化学习优化问题：}
+将模型视为条件策略 $\pi_{\theta}(y\mid G,q)$，定义可验证奖励函数 $R(G,q,y)$，
+通过最大化期望回报对策略进行优化，并采用 KL 正则约束策略漂移，
+其目标函数如公式~\ref{eq:prob4_rl_simple}所示：
 \begin{equation}
-\mathcal{R}(G,q,y) = \alpha \cdot \mathbb{I}\big[\mathcal{V}_{\mathrm{ans}}(G,q,a)=\mathrm{true}\big] + \beta \cdot \mathrm{PathScore}(G,c) + \gamma \cdot \mathrm{ConstraintSat}(q,c)    
-\label{eq:VerifiableRrewardFunction}
+\theta^{\ast}
+=
+\arg\max_{\theta}\ 
+\mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}},\ y\sim\pi_{\theta}(\cdot\mid G,q)}
+\Big[
+R(G,q,y)
+-\beta\,\mathrm{KL}\big(\pi_{\theta}(\cdot\mid G,q)\ \|\ \pi_{\mathrm{ref}}(\cdot\mid G,q)\big)
+\Big].
+\label{eq:prob4_rl_simple}
 \end{equation}
-其中 \(\alpha+\beta+\gamma=1\)，\(\mathcal{V}_{\mathrm{ans}}\) 为答案验证器，
-\(\mathrm{PathScore}\) 为拓扑一致性得分，\(\mathrm{ConstraintSat}\) 为约束满足度。
-采用 GRPO \cite{Shao2024DeepSeekMathPT}算法最大化策略目标，
-其公式表示如~(\ref{eq:GRPO_objective})所示：
-\begin{equation}
-\mathcal{J}_{\mathrm{GRPO}}(\theta) =
- \mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}}} 
- \left[ \frac{1}{|\mathcal{Y}^+|} \sum_{y\in\mathcal{Y}^+} 
- \sum_{t=1}^{T_y} \log \pi_\theta(y_t \mid G, q, y_{<t}) \cdot
-  \big(r(y) - b(G,q)\big) \right]
-  \label{eq:GRPO_objective}
-\end{equation}
-其中 \(\mathcal{Y}^+\) 为高奖励轨迹集，
-\(b(G,q) = \frac{1}{K}\sum_{k=1}^K r^{(k)}\) 为基线函数，
-参数更新通过梯度上升实现：
-\(\theta \leftarrow \theta + \eta \nabla_\theta \mathcal{J}_{\mathrm{GRPO}}(\theta)\)，优化目标为 \(\max_{\theta} \mathcal{J}_{\mathrm{GRPO}}(\theta)\)，其中 \(\eta\) 为学习率。
+
+上述四个子问题分别对应结构表征预训练、跨模态语义对齐、推理监督调优与强化学习策略优化四个阶段，
+共同支撑模型在不同图任务上的统一建模与泛化能力。
+
 
 \subsection{节点分类问题描述}
 
-节点分类任务旨在基于图结构及其文本属性，对指定节点赋予语义类别标签。给定一张文本属性图
-\(
-G = (V,E,A,T)
-\)
-及类别集合
-\(
-\mathcal{C} = \{1,\dots,C\}
-\)，在标注子集
-\(
-V_L \subseteq V
-\)
-上，每个节点 \(v \in V_L\) 关联有真实标签 \(y_v \in \mathcal{C}\)。
-模型需要在利用图结构与文本属性的前提下，
-学习一个判别函数\(f_{\theta}^{\mathrm{node}}\)，
-其公式表示如~(\ref{eq:discriminant_function})所示：
+节点分类任务旨在在文本属性图上学习可泛化的判别规则，
+使模型能够综合利用图拓扑关系与节点文本语义，为目标节点预测其类别标签。
+给定一张文本属性图 $G=(V,E,T)$ 及类别集合 $\mathcal{C}=\{1,\dots,C\}$，
+其中部分节点集合 $V_L\subseteq V$ 提供监督标注 $y_v\in\mathcal{C}$。
+本文关注学习一个参数化分类器 $f_{\theta}^{\mathrm{node}}$，
+将节点 $v$ 在图 $G$ 下映射为类别分布，其形式如公式~\ref{eq:node_cls_macro}所示：
 \begin{equation}
-    f_{\theta}^{\mathrm{node}} : (G,v) \rightarrow \Delta^{C-1},
-    \label{eq:discriminant_function}
+f_{\theta}^{\mathrm{node}}:\ (G,v)\rightarrow \Delta^{C-1},
+\qquad 
+\hat y_v=\arg\max_{c\in\mathcal{C}} f_{\theta}^{\mathrm{node}}(G,v)_c .
+\label{eq:node_cls_macro}
 \end{equation}
-其中 \(\Delta^{C-1}\) 为 \(C\) 维概率单纯形，\(f_{\theta}^{\mathrm{node}}(G,v)_c\) 表示节点 \(v\) 属于类别 \(c\) 的预测概率，最终预测标签为
-\(
-\hat{y}_v = \arg\max_{c \in \mathcal{C}} f_{\theta}^{\mathrm{node}}(G,v)_c
-\)。
-
-在训练阶段，节点分类可表示为最小化经验风险的优化问题。记训练数据集为
-\(
-\mathcal{D}_{\mathrm{cls}} = \{(G, v, y_v)\}
-\)，则分类损失定义如~(\ref{eq:node_cls_loss})所示：
+训练阶段在标注节点上进行经验风险最小化，以获得在未标注节点及潜在新图分布上的良好泛化能力，其优化目标如公式~\ref{eq:node_cls_er}所示：
 \begin{equation}
-\mathcal{L}_{\mathrm{cls}}(\theta)
-=
-- \mathbb{E}_{(G,v,y_v)\sim\mathcal{D}_{\mathrm{cls}}}
-\big[
-\log f_{\theta}^{\mathrm{node}}(G,v)_{y_v}
-\big],
-\label{eq:node_cls_loss}
-\end{equation}
-目标是求解
-\(
 \theta^{\ast}
 =
-\arg\min_{\theta} \mathcal{L}_{\mathrm{cls}}(\theta)
-\)，从而在未标注节点和新图任务上获得良好的泛化性能。
-
+\arg\min_{\theta}\ 
+\mathbb{E}_{(v,y_v)\in V_L}
+\big[\ell_{\mathrm{cls}}(f_{\theta}^{\mathrm{node}}(G,v),\,y_v)\big],
+\label{eq:node_cls_er}
+\end{equation}
+其中 $\ell_{\mathrm{cls}}(\cdot)$ 为标准分类损失。
 
 \subsection{图推理问题描述}
 \label{sec:problem_graph_reasoning}
 
-图推理任务关注在复杂图结构上执行多步逻辑推理并给出可验证答案。给定一张文本属性图
-\(
-G = (V,E,A,T)
-\)
-以及关于该图的自然语言查询
-\(
-q
-\)（例如询问节点关系、路径约束或全局统计性质），模型需要生成答案
-\(
-a
-\)，并可选地给出显式的链式思维推理过程
-\(
-c = (c_1,\dots,c_T)
-\)，形成完整输出
-\(
-y = (c,a)
-\)。
-记真实答案为 \(a^{\ast}\)，图推理任务可以形式化为条件生成和决策问题：学习一个图基础模型
-\(F_{\theta}\)，其公式表示如~(\ref{eq:graph_Foundation_model})所示：
+图推理任务旨在基于复杂图结构完成多步关系推断与约束满足，并输出可验证的推理结论。
+给定文本属性图 $G=(V,E,T)$ 以及自然语言查询 $q$，
+模型需要生成答案 $a$，并可选地生成显式推理过程 $c$，形成输出 $y=(c,a)$。
+本文将图推理统一刻画为条件生成问题：学习一个参数为 $\theta$ 的图推理模型 $F_{\theta}$，
+其映射关系如公式~\ref{eq:reason_macro_map}所示：
 \begin{equation}
-    F_{\theta} : (G,q) \rightarrow (c,a),
-    \label{eq:graph_Foundation_model}
+F_{\theta}:\ (G,q)\rightarrow y=(c,a),
+\qquad y\sim p_{\theta}(\cdot\mid G,q).
+\label{eq:reason_macro_map}
 \end{equation}
-
-在给定 \((G,q)\) 的条件下最大化生成正确答案的概率，同时推理链 \(c\) 与图结构及问题约束保持一致。设标注数据集为
-\(
-\mathcal{D}_{\mathrm{reason}} = \{(G_i,q_i,a_i^{\ast})\}_{i=1}^N
-\)，则对应的条件语言建模目标可写如~(\ref{eq:graph_reason})所示：
+在监督学习阶段，给定推理数据集 $\mathcal{D}_{\mathrm{reason}}=\{(G_i,q_i,y_i)\}_{i=1}^{N}$，
+通过最小化条件生成损失学习模型参数，其优化目标如公式~\ref{eq:reason_macro_obj}所示：
 \begin{equation}
-\mathcal{L}_{\mathrm{reason}}(\theta)
+\theta^{\ast}
 =
-- \mathbb{E}_{(G,q,a^{\ast})\sim\mathcal{D}_{\mathrm{reason}}}
-\left[
-\sum_{t=1}^{T_a}
-\log p_{\theta}\big(a^{\ast}_t \mid G,q, a^{\ast}_{<t}\big)
-\right],
-\label{eq:graph_reason}
+\arg\min_{\theta}\ 
+\mathbb{E}_{(G,q,y)\sim\mathcal{D}_{\mathrm{reason}}}
+\big[-\log p_{\theta}(y\mid G,q)\big].
+\label{eq:reason_macro_obj}
 \end{equation}
-其中 \(a^{\ast}_t\) 为答案序列第 \(t\) 个 token，\(T_a\) 为答案长度。
-
-在此基础上，图推理性能通常用答案正确率以及推理路径与图拓扑、约束条件的一致性进行评估。理想情形下，模型在满足
-\(
-\arg\max_a p_{\theta}(a \mid G,q) = a^{\ast}
-\)
-的同时，生成的推理链 \(c\) 可被外部验证器证明为结构合法、逻辑自洽，从而同时兼顾预测准确性与推理可解释性。
+评测时，图推理不仅关注答案 $a$ 的正确性，
+还关注推理过程 $c$ 与图结构及查询约束的一致性。
+理想情况下，模型输出应同时满足答案正确与过程可验证两项要求，
+即 $a$ 与真实结论一致，并且 $c$ 能被外部验证器判定为结构合法、逻辑自洽。
 
 
 \section{基于预训练大语言模型的图结构基座大模型架构} 
