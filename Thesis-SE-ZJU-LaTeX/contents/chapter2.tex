@@ -32,9 +32,10 @@ G = (V,E,A,T),
 F_{\theta} : (G,q) \rightarrow (c,a),
 \)
 其中 \(q\) 为关于图的自然语言指令或问题，\(a\) 为模型给出的答案，
-\(c=(c_1,\dots,c_L)\) 为可选的链式思维推理过程（Chain-of-Thought），
+\(c=(c_1,\dots,c_L)\) 为可选的链式思维推理过程，
 用于刻画模型在图上的多步推理轨迹。
-目标是在不同类型的图任务 \(\mathcal{T}\) 上，使 \(F_{\theta}\) 在准确性、可解释性和泛化能力之间取得合理平衡。
+目标是在不同类型的图任务 \(\mathcal{T}\) 上，
+使 \(F_{\theta}\) 在准确性、可解释性和泛化能力之间取得合理平衡。
 
 针对上述总体目标，本文将整体问题拆解为以下四个的子科学问题:
 
@@ -235,6 +236,7 @@ y = (c,a)
 \(h_v^{\mathrm{struc}} \in \mathbb{R}^{d_g}\)，
 并作为跨模态对齐与节点分类的结构语义基底。
 在 LLaGA 范式下，图编码器 \(\mathrm{Enc}_G\) 通过邻域采样模板构建结构序列。
+具体架构如所示。
 
 具体而言，给定中心节点 \(v\)，首先利用 \(h\)-跳邻域采样算子
 \(\mathcal{S}_\tau\)（其中 \(\tau\) 表示 ND、HO 等模板）
@@ -269,9 +271,17 @@ S_\tau(v)=(V_v,E_v,A_v,T_v)\subseteq G
 将子图拓扑在同构意义下近似无损地映射到统一的离散表示空间。
 相关改进编码策略与实现细节将在第~3.3 节中系统阐述。
 
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{2_chapter/graph_encoder_architecture.pdf}
+    \caption{图结构编码器 \(\mathrm{Enc}_G\)架构示意图}
+    \label{fig:graph_encoder_architecture}
+\end{figure}
+
 \textbf{文本特征编码器 \(\mathrm{Enc}_T\)。}
 为了对节点及其上下文的自然语言描述进行编码，
 本文采用预训练语言模型 RoBERTa\cite{Liu2019RoBERTaAR} 作为文本特征编码器。
+具体架构如\ref{fig:text_encoder_architecture}所示。
 形式化地，仍设文本属性图为
 \(G=(V,E,A,T)\)，其中 \(T=\{t_i\}_{i=1}^{N}\) 为节点文本属性集合，
 第 \(i\) 个节点的文本描述记为
@@ -285,6 +295,8 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
 \mathrm{Enc}_T : \mathcal{V}_{\text{text}}^{\ast} \rightarrow \mathbb{R}^{d_t},
 \)
 其中 \(\mathcal{V}_{\text{text}}\) 为文本词表，\(d_t\) 为语言模型隐藏维度，输出为节点级语义向量 \(h_i^{\text{text}}\in\mathbb{R}^{d_t}\)。
+
+
 
 在具体表征范式上，本文通过指令化模板将节点文本与任务说明拼接为统一的语言输入。
 记预训练语言模型的分词器为 \(\tau(\cdot)\)，
@@ -304,6 +316,13 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
     h_i^{\text{text}} = \mathrm{Pool}_t\big(H_i^{(t)}\big) \in \mathbb{R}^{d_t},
 \end{equation}
 其中 \(\mathrm{Pool}_t(\cdot)\) 可实现为对有效 token 的平均或加权池化。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{2_chapter/text_encoder_architecture.pdf}
+    \caption{文本编码器 \(\mathrm{Enc}_T\)架构示意图}
+    \label{fig:text_encoder_architecture}
+\end{figure}
 
 与 LLaGA\cite{Chen2024LLaGALL} 的设计一致，\(\mathrm{Enc}_T\) 
 与后续语言模型编解码器 \(\mathrm{Dec}_T\) 共享同一预训练语言模型参数，
@@ -362,7 +381,14 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
 前两个阶段致力于通用能力的构建，旨在获得兼具高保真图结构表征与跨模态语义对齐能力的共享基座；
 在此基础上，后两个阶段分别面向节点分类与图推理任务实施差异化适配，
 前者聚焦于垂直应用场景下的监督微调，后者则侧重于强化链式推理逻辑与模型的泛化能力。
-如图~XX 所示，这四个阶段有机结合，共同构成了从“统一表征”到“任务特化”的完整技术体系。
+如图~\ref{fig:Overall_process_architecture}所示，这四个阶段有机结合，共同构成了从“统一表征”到“任务特化”的完整技术体系。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{2_chapter/Overall_process_architecture.pdf}
+    \caption{基于预训练大语言模型的图结构基座大模型总体流程框架}
+    \label{fig:Overall_process_architecture}
+\end{figure}
 
 \subsection{通用基座训练阶段}
 通用基座训练阶段旨在为下游多样化任务提供共享的核心能力，
@@ -384,7 +410,7 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
 该方法能够获得既保留原始拓扑结构、又与大语言模型输入形式高度兼容的高质量图表征。
 本阶段的核心产出是一个结构保真型的图表征编码器，为后续任务提供了统一且具备良好迁移能力的图结构输入基座。
 
-\textbf{阶段二：多层次图—语义跨模态对齐预训练}
+\textbf{阶段二：多层次跨模态对齐预训练}
 
 为弥合图结构表征与文本语义表征之间的模态鸿沟，
 第二阶段设计了多层次跨模态对齐损失函数，对图编码器与文本编码器的输出进行联合优化，以响应前文提出的第二子任务。
@@ -427,7 +453,7 @@ t_i = (w_{i,1},\dots,w_{i,L_i}),
 这一阶段的两个关键优势在于：
 （1）通过欧拉路径无损编码与 GET 编码器显著提升节点结构表征质量；
 （2）通过多层次对齐损失将结构特征细粒度嵌入预训练语言模型的语义空间，
-在不增加大模型参数规模的前提下显著提升多个节点分类基准上的监督性能。
+在保持大语言模型主干参数冻结的前提下显著提升多个节点分类基准上的监督性能。
 至此得到的模型可视为面向节点分类场景的图结构大语言基座模型。
 
 \textbf{阶段四：面向图推理任务的强化学习优化}
@@ -528,7 +554,7 @@ F1_{\text{macro}}=\frac{1}{C}\sum_{c=1}^{C} F1_c.
 非常适用于规模化评测及强化学习中的奖励计算。
 \subsubsection{主观测评指标}
 
-针对图推理过程中产生的思维链（Chain-of-Thought），本文在客观指标之外引入人工主观评测，旨在定性分析模型推理过程的可解释性与逻辑完备性，主要涵盖以下三个维度。
+针对图推理过程中产生的思维链，本文在客观指标之外引入人工主观评测，旨在定性分析模型推理过程的可解释性与逻辑完备性，主要涵盖以下三个维度。
 
 \textbf{1)逻辑连贯性（Logical Coherence）\cite{Wang2023CanLM}：}
 该指标重点考察推理步骤的前后衔接性与因果一致性。

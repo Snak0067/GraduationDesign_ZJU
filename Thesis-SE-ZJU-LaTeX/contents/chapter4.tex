@@ -47,6 +47,197 @@
 第~4.6 节对本章工作进行总结。
 
 \section{基于GRPO的强化学习框架}
+\label{subsec:grpo_objective}
+
+本文进一步引入基于
+GRPO（Group Relative Policy Optimization）\cite{Shao2024DeepSeekMathPT}
+的强化学习阶段，对图推理策略进行面向奖励的细化优化。
+如\autoref{fig:overview_rl_framework}所示
+GRPO 通过组内轨迹的相对奖励构造优势信号，同时结合 KL 散度正则项锚定
+CoT-SFT 阶段的基模策略，在提升图推理性能的同时抑制策略退化与语言能力坍缩。
+与 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR} 类似，
+本文将每个图–问题对 \((G_i,q_i)\) 视为一次完整的环境交互回合，模型在条件输入
+\(x_i\)（~\eqref{eq:cot_input_seq}）下自回归生成推理–答案序列
+\(y=(c,a)\)，在序列结束时由可验证奖励函数
+\(\mathcal{R}(G_i,q_i,y)\)（~\eqref{eq:reward_function}）给出单步回合回报。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{4_chapter/基于GRPO的强化学习微调整体框架图.pdf}
+    \caption{基于GRPO的强化学习框架总体流程图}
+    \label{fig:overview_rl_framework}
+\end{figure}
+
+整体过程形式化如算法~\ref{alg:grpo_graph_reasoning}所示，
+\begin{algorithm}[t]
+\caption{基于 GRPO 的图推理强化学习训练流程}
+\label{alg:grpo_graph_reasoning}
+\KwIn{冷启动后图推理基座参数 $\theta_{\mathrm{CoT}}^\ast$；RL 训练任务集 $\mathcal{D}_{\mathrm{RL}}$；组大小 $G$；批次大小 $B$；最大训练步数 $T_{\max}$}
+\KwOut{强化学习后的策略参数 $\theta_{\mathrm{RL}}^\ast$}
+
+初始化当前策略参数 $\theta \gets \theta_{\mathrm{CoT}}^\ast$，旧策略参数 $\theta_{\mathrm{old}} \gets \theta$，参考基模参数 $\theta_{\mathrm{ref}} \gets \theta$\;
+
+\For{$t \gets 1$ \KwTo $T_{\max}$}{
+  从 $\mathcal{D}_{\mathrm{RL}}$ 中采样一个批次图--问题对 $\{(G_i,q_i)\}_{i=1}^B$\;
+  \For{$i \gets 1$ \KwTo $B$}{    % 组内多轨迹采样与奖励计算
+    构造条件输入提示 $x_i$（包含系统提示、任务提示、图编码与查询）\;
+    \For{$g \gets 1$ \KwTo $G$}{
+      用旧策略采样一条推理--答案轨迹 $y_i^{(g)} \sim \pi_{\theta_{\mathrm{old}}}(\cdot \mid x_i)$\;
+      调用规则验证器计算可验证奖励 $r_i^{(g)} \gets \mathcal{R}(G_i,q_i,y_i^{(g)})$\;
+    }
+    由 $\{r_i^{(g)}\}_{g=1}^G$ 计算组内均值与方差，得到标准化优势 $A_i^{(g)}$\;
+    计算序列级比率 $\rho_i^{(g)}$，构造裁剪后的策略损失 $\mathcal{L}_i^{\mathrm{policy}}$\;
+    计算相对参考策略 $\pi_{\theta_{\mathrm{ref}}}$ 的 KL 正则项 $\mathcal{L}_i^{\mathrm{KL}}$\;
+    得到样本级损失 $\mathcal{L}_i^{\mathrm{GRPO}} \gets \mathcal{L}_i^{\mathrm{policy}} + \mathcal{L}_i^{\mathrm{KL}}$\;
+  }
+  计算批次损失 $\mathcal{L}_{\mathrm{GRPO}} \gets \frac{1}{B}\sum_{i=1}^{B} \mathcal{L}_i^{\mathrm{GRPO}}$\;
+  计算梯度 $g \gets \nabla_{\theta} \mathcal{L}_{\mathrm{GRPO}}$，并进行梯度裁剪 $\|g\|_2 \le 1.0$\;
+  按调度器更新学习率，使用 AdamW 更新策略参数 $\theta$\;
+
+  \If{$t \bmod 100 = 0$}{
+    同步旧策略参数：$\theta_{\mathrm{old}} \gets \theta$\;
+  }
+
+  \If{$t \bmod T_{\mathrm{eval}} = 0$}{
+    在验证集上测评平均奖励、答案正确率和 KL 散度等指标，更新并保存最佳模型检查点\;
+  }
+}
+\Return{$\theta_{\mathrm{RL}}^\ast \gets \theta$}\;
+\end{algorithm}
+具体而言，对第 \(i\) 个样本，从当前旧策略
+\(
+\pi_{\theta_{\mathrm{old}}}
+\)
+在同一条件输入 \(x_i\) 上采样一组候选轨迹，
+其定义如~\eqref{eq:grpo_sample}：
+\begin{equation}
+  y_i^{(g)}
+  \sim
+  \pi_{\theta_{\mathrm{old}}}(\cdot \mid x_i),
+  \quad
+  g = 1,\dots,G,
+  \label{eq:grpo_sample}
+\end{equation}
+其中 \(G\) 为组大小（实验中设为 \(G=5\)）。
+对每条轨迹 \(y_i^{(g)}\) 计算奖励
+\(
+r_i^{(g)} = \mathcal{R}(G_i,q_i,y_i^{(g)})
+\)，
+并在组内进行标准化以获得相对优势
+\(A_i^{(g)}\)，其定义如~\eqref{eq:grpo_adv}：
+\begin{equation}
+  A_i^{(g)}
+  =
+  \frac{
+    r_i^{(g)} - \mu_i
+  }{
+    \sigma_i + \epsilon
+  },
+  \quad
+  \mu_i = \frac{1}{G}\sum_{g=1}^G r_i^{(g)},
+  \quad
+  \sigma_i^2 = \frac{1}{G}\sum_{g=1}^G \big(r_i^{(g)} - \mu_i\big)^2,
+  \label{eq:grpo_adv}
+\end{equation}
+其中 \(\mu_i\) 与 \(\sigma_i\) 分别为第 \(i\) 个样本在组内的奖励均值与标准差，
+\(\epsilon=10^{-8}\) 为数值稳定项。
+该设计仅依赖组内奖励的相对排序而非绝对尺度，
+在不同任务奖励区间差异较大时仍能提供稳定的优势信号。
+\(y_1 = (CoT_1, Ans_1)\)
+\(y_G = (CoT_G, Ans_G)\)
+
+为限制策略更新幅度，GRPO 采用与 PPO 一致的裁剪思想。
+记新策略与旧策略在轨迹 \(y_i^{(g)}\) 上的序列级对数概率分别为
+\(\log \pi_\theta(y_i^{(g)}\!\mid x_i)\) 与
+\(\log \pi_{\theta_{\mathrm{old}}}(y_i^{(g)}\!\mid x_i)\)，
+则序列级重要性权重比率定义如~\eqref{eq:grpo_ratio}：
+\begin{equation}
+  \rho_i^{(g)}(\theta)
+  =
+  \frac{
+    \pi_\theta\big(y_i^{(g)} \mid x_i\big)
+  }{
+    \pi_{\theta_{\mathrm{old}}}\big(y_i^{(g)} \mid x_i\big)
+  }
+  =
+  \exp\!\Big(
+    \log \pi_\theta(y_i^{(g)}\!\mid x_i)
+    -
+    \log \pi_{\theta_{\mathrm{old}}}(y_i^{(g)}\!\mid x_i)
+  \Big),
+  \label{eq:grpo_ratio}
+\end{equation}
+其中
+\(
+\log\pi_\theta(y_i^{(g)}\!\mid x_i)
+=
+\sum_t \log p_\theta(y_{i,t}^{(g)} \mid x_i, y_{i,<t}^{(g)})
+\)
+由语言模型的自回归概率沿轨迹累积得到。
+在此基础上，构造裁剪后的策略损失，如~\eqref{eq:grpo_policy_loss}：
+\begin{equation}
+  \mathcal{L}^{\mathrm{policy}}_i(\theta)
+  =
+  -\frac{1}{G} \sum_{g=1}^G
+  \min \Big(
+    \rho_i^{(g)}(\theta)\, A_i^{(g)},
+    \mathrm{clip}\big(\rho_i^{(g)}(\theta), 1-\varepsilon_{\mathrm{clip}}, 1+\varepsilon_{\mathrm{clip}}\big)\, A_i^{(g)}
+  \Big),
+  \label{eq:grpo_policy_loss}
+\end{equation}
+其中 \(\varepsilon_{\mathrm{clip}}=0.2\) 为裁剪阈值。
+当 \(A_i^{(g)}>0\) 时，损失鼓励新策略提高高奖励轨迹的概率，但通过
+\(\mathrm{clip}(\cdot)\) 限制权重过大；
+当 \(A_i^{(g)}<0\) 时，则抑制低奖励轨迹的概率，同时避免过度更新导致策略振荡。
+
+为防止强化学习阶段策略偏离 CoT-SFT 阶段学到的结构化推理范式，本文引入 KL 散度正则项，将
+CoT-SFT 后的策略
+\(\pi_{\mathrm{ref}}=\pi_{\theta_{\mathrm{CoT}}^\ast}\) 作为冻结参考基模，
+约束新策略与之的分布距离。
+借鉴 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR}，本文采用序列级“反向 KL”近似：
+\begin{equation}
+  \mathcal{L}^{\mathrm{KL}}_i(\theta)
+  =
+  \frac{\beta}{G}
+  \sum_{g=1}^G
+  \Bigg(
+    \frac{\pi_{\mathrm{ref}}(y_i^{(g)}\!\mid x_i)}{\pi_\theta(y_i^{(g)}\!\mid x_i)}
+    -
+    \log
+    \frac{\pi_{\mathrm{ref}}(y_i^{(g)}\!\mid x_i)}{\pi_\theta(y_i^{(g)}\!\mid x_i)}
+    - 1
+  \Bigg),
+  \label{eq:grpo_kl}
+\end{equation}
+其中 \(\beta = 1\times10^{-3}\) 控制 KL 惩罚强度。
+该形式可视为对
+\(D_{\mathrm{KL}}(\pi_{\mathrm{ref}}\parallel\pi_\theta)\)
+的一阶近似，便于与重要性采样结合，并有效限制策略“偏离基模”的程度。
+
+综合策略损失与 KL 正则，单个样本的 GRPO 目标写为~\eqref{eq:grpo_obj_single}：
+\begin{equation}
+  \mathcal{L}^{\mathrm{GRPO}}_i(\theta)
+  =
+  \mathcal{L}^{\mathrm{policy}}_i(\theta)
+  +
+  \mathcal{L}^{\mathrm{KL}}_i(\theta),
+  \label{eq:grpo_obj_single}
+\end{equation}
+整个 RL 阶段的优化目标为最小化期望损失，如~\eqref{eq:grpo_obj}：
+\begin{equation}
+  \mathcal{L}_{\mathrm{GRPO}}(\theta)
+  =
+  \mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}}}
+  \big[
+    \mathcal{L}^{\mathrm{GRPO}}_i(\theta)
+  \big],
+  \label{eq:grpo_obj}
+\end{equation}
+其中 \(\mathcal{D}_{\mathrm{RL}}\) 为 RL 阶段使用的图推理任务分布。
+在参数层面，图欧拉路径编码器 \(\mathrm{Enc}_G\)、文本编码器 \(\mathrm{Enc}_T\) 
+以及跨模态对齐模块在整个 RL 过程中保持冻结，
+更新仅作用于语言模型解码器 \(\mathrm{Dec}_T\) 及其轻量适配层，
+实现“在保持基模语义与对齐结构的前提下，对推理策略进行最小干预的强化调整”。
 
 \section{基于思维链监督的冷启动微调}
 \label{sec:cot_sft}
@@ -79,6 +270,14 @@ p_\theta(y \mid G,q)
 以 Qwen2.5-32B-Instruct \cite{Yang2024Qwen25TR}作为教师模型生成候选推理–答案序列，
 再经多维度可验证规则筛选得到最终监督样本。
 本节下文将详细展开数据集构建过程。
+整体思维链合成数据集构建流程如图~\ref{fig:cot_dataset_construction}所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{4_chapter/cot_dataset_construction.pdf}
+    \caption{思维链合成数据集构建流程图}
+    \label{fig:cot_dataset_construction}
+\end{figure}
 
 \subsubsection{图论合成任务与难度分层策略}
 
@@ -360,6 +559,14 @@ Top-p阈值0.95（保留高概率token），
 对其解码器执行基于合成思维链数据集的自回归监督微调（CoT-SFT），
 显式对齐“图结构–查询–推理链–答案”的生成分布，从
 而为后续基于可验证奖励的强化学习阶段提供结构化的初始策略。
+整体的思维链监督微调目标建模调优框架如图~\ref{fig:cot_sft_overview}所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{4_chapter/cot_sft_overview.pdf}
+    \caption{基于思维链的监督微调建模调优框架}
+    \label{fig:cot_sft_overview}
+\end{figure}
 
 为与第~\ref{sec:graph_llm_inference} 节中的推理模板保持一致，
 记第 \(i\) 个训练样本的图–问题对为 \((G_i,q_i)\)，
@@ -452,7 +659,7 @@ Top-p阈值0.95（保留高概率token），
 将作为后续 GRPO 强化学习阶段的初始化，为基于可验证奖励的策略优化提供结构良好、分布合理的起点。
 
 
-\section{可验证奖励与GRPO强化学习训练微调}
+\section{可验证奖励与强化学习训练微调}
 \label{sec:grpo_rl}
 
 在第~\ref{sec:cot_sft} 节中，本文通过思维链监督微调（CoT-SFT）将图基座模型初始化为具备基本“先推理、后作答”行为的条件语言模型，得到参数
@@ -469,7 +676,16 @@ DeepSeek-R1 则在数学、代码等领域通过大规模 RL 与
 区别于传统依赖人类偏好的强化学习方法（如PPO-DPO），
 本框架通过规则化、可程序验证的自动奖励机制引导策略优化，无需人工标注偏好数据即可规模化训练。
 该方法将强化学习目标与图论先验知识深度融合，
-使模型在合成图任务上习得可迁移的通用推理能力，并在真实图任务上展现出卓越的零样本泛化性能。
+使模型在合成图任务上习得可迁移的通用推理能力，
+并在真实图任务上展现出卓越的零样本泛化性能。
+总体框架如\autoref{fig:RL_detail_framework}所示。
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{4_chapter/强化学习框架训练建模.pdf}
+    \caption{可验证奖励与强化学习训练微调总体框架示意图}
+    \label{fig:RL_detail_framework}
+\end{figure}
 
 在本节中，本文首先在
 ~\ref{subsec:rule_reward_design} 节给出面向图推理的可验证奖励设计，
@@ -718,193 +934,6 @@ y = (c,a)
 又通过格式与长度约束维持思维链的可读性与稳定性。
 在后续 GRPO 训练中，这一奖励将作为唯一的环境反馈信号，
 用于驱动策略在图推理空间中不断自我优化。
-
-\subsection{GRPO 策略优化目标与基模约束}
-\label{subsec:grpo_objective}
-
-在 CoT-SFT 阶段获得初始策略
-\(
-\pi_{\theta_{\mathrm{CoT}}^\ast}
-\)
-之后，本文进一步引入基于
-GRPO（Group Relative Policy Optimization）\cite{Shao2024DeepSeekMathPT}
-的强化学习阶段，对图推理策略进行面向奖励的细化优化。
-GRPO 通过组内轨迹的相对奖励构造优势信号，同时结合 KL 散度正则项锚定
-CoT-SFT 阶段的基模策略，在提升图推理性能的同时抑制策略退化与语言能力坍缩。
-与 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR} 类似，
-本文将每个图–问题对 \((G_i,q_i)\) 视为一次完整的环境交互回合，模型在条件输入
-\(x_i\)（~\eqref{eq:cot_input_seq}）下自回归生成推理–答案序列
-\(y=(c,a)\)，在序列结束时由可验证奖励函数
-\(\mathcal{R}(G_i,q_i,y)\)（~\eqref{eq:reward_function}）给出单步回合回报。
-
-整体过程形式化如算法~\ref{alg:grpo_graph_reasoning}所示，
-\begin{algorithm}[t]
-\caption{基于 GRPO 的图推理强化学习训练流程}
-\label{alg:grpo_graph_reasoning}
-\KwIn{冷启动后图推理基座参数 $\theta_{\mathrm{CoT}}^\ast$；RL 训练任务集 $\mathcal{D}_{\mathrm{RL}}$；组大小 $G$；批次大小 $B$；最大训练步数 $T_{\max}$}
-\KwOut{强化学习后的策略参数 $\theta_{\mathrm{RL}}^\ast$}
-
-初始化当前策略参数 $\theta \gets \theta_{\mathrm{CoT}}^\ast$，旧策略参数 $\theta_{\mathrm{old}} \gets \theta$，参考基模参数 $\theta_{\mathrm{ref}} \gets \theta$\;
-
-\For{$t \gets 1$ \KwTo $T_{\max}$}{
-  从 $\mathcal{D}_{\mathrm{RL}}$ 中采样一个批次图--问题对 $\{(G_i,q_i)\}_{i=1}^B$\;
-  \For{$i \gets 1$ \KwTo $B$}{    % 组内多轨迹采样与奖励计算
-    构造条件输入提示 $x_i$（包含系统提示、任务提示、图编码与查询）\;
-    \For{$g \gets 1$ \KwTo $G$}{
-      用旧策略采样一条推理--答案轨迹 $y_i^{(g)} \sim \pi_{\theta_{\mathrm{old}}}(\cdot \mid x_i)$\;
-      调用规则验证器计算可验证奖励 $r_i^{(g)} \gets \mathcal{R}(G_i,q_i,y_i^{(g)})$\;
-    }
-    由 $\{r_i^{(g)}\}_{g=1}^G$ 计算组内均值与方差，得到标准化优势 $A_i^{(g)}$\;
-    计算序列级比率 $\rho_i^{(g)}$，构造裁剪后的策略损失 $\mathcal{L}_i^{\mathrm{policy}}$\;
-    计算相对参考策略 $\pi_{\theta_{\mathrm{ref}}}$ 的 KL 正则项 $\mathcal{L}_i^{\mathrm{KL}}$\;
-    得到样本级损失 $\mathcal{L}_i^{\mathrm{GRPO}} \gets \mathcal{L}_i^{\mathrm{policy}} + \mathcal{L}_i^{\mathrm{KL}}$\;
-  }
-  计算批次损失 $\mathcal{L}_{\mathrm{GRPO}} \gets \frac{1}{B}\sum_{i=1}^{B} \mathcal{L}_i^{\mathrm{GRPO}}$\;
-  计算梯度 $g \gets \nabla_{\theta} \mathcal{L}_{\mathrm{GRPO}}$，并进行梯度裁剪 $\|g\|_2 \le 1.0$\;
-  按调度器更新学习率，使用 AdamW 更新策略参数 $\theta$\;
-
-  \If{$t \bmod 100 = 0$}{
-    同步旧策略参数：$\theta_{\mathrm{old}} \gets \theta$\;
-  }
-
-  \If{$t \bmod T_{\mathrm{eval}} = 0$}{
-    在验证集上测评平均奖励、答案正确率和 KL 散度等指标，更新并保存最佳模型检查点\;
-  }
-}
-\Return{$\theta_{\mathrm{RL}}^\ast \gets \theta$}\;
-\end{algorithm}
-具体而言，对第 \(i\) 个样本，从当前旧策略
-\(
-\pi_{\theta_{\mathrm{old}}}
-\)
-在同一条件输入 \(x_i\) 上采样一组候选轨迹，
-其定义如~\eqref{eq:grpo_sample}：
-\begin{equation}
-  y_i^{(g)}
-  \sim
-  \pi_{\theta_{\mathrm{old}}}(\cdot \mid x_i),
-  \quad
-  g = 1,\dots,G,
-  \label{eq:grpo_sample}
-\end{equation}
-其中 \(G\) 为组大小（实验中设为 \(G=5\)）。
-对每条轨迹 \(y_i^{(g)}\) 计算奖励
-\(
-r_i^{(g)} = \mathcal{R}(G_i,q_i,y_i^{(g)})
-\)，
-并在组内进行标准化以获得相对优势
-\(A_i^{(g)}\)，其定义如~\eqref{eq:grpo_adv}：
-\begin{equation}
-  A_i^{(g)}
-  =
-  \frac{
-    r_i^{(g)} - \mu_i
-  }{
-    \sigma_i + \epsilon
-  },
-  \quad
-  \mu_i = \frac{1}{G}\sum_{g=1}^G r_i^{(g)},
-  \quad
-  \sigma_i^2 = \frac{1}{G}\sum_{g=1}^G \big(r_i^{(g)} - \mu_i\big)^2,
-  \label{eq:grpo_adv}
-\end{equation}
-其中 \(\mu_i\) 与 \(\sigma_i\) 分别为第 \(i\) 个样本在组内的奖励均值与标准差，
-\(\epsilon=10^{-8}\) 为数值稳定项。
-该设计仅依赖组内奖励的相对排序而非绝对尺度，
-在不同任务奖励区间差异较大时仍能提供稳定的优势信号。
-
-为限制策略更新幅度，GRPO 采用与 PPO 一致的裁剪思想。
-记新策略与旧策略在轨迹 \(y_i^{(g)}\) 上的序列级对数概率分别为
-\(\log \pi_\theta(y_i^{(g)}\!\mid x_i)\) 与
-\(\log \pi_{\theta_{\mathrm{old}}}(y_i^{(g)}\!\mid x_i)\)，
-则序列级重要性权重比率定义如~\eqref{eq:grpo_ratio}：
-\begin{equation}
-  \rho_i^{(g)}(\theta)
-  =
-  \frac{
-    \pi_\theta\big(y_i^{(g)} \mid x_i\big)
-  }{
-    \pi_{\theta_{\mathrm{old}}}\big(y_i^{(g)} \mid x_i\big)
-  }
-  =
-  \exp\!\Big(
-    \log \pi_\theta(y_i^{(g)}\!\mid x_i)
-    -
-    \log \pi_{\theta_{\mathrm{old}}}(y_i^{(g)}\!\mid x_i)
-  \Big),
-  \label{eq:grpo_ratio}
-\end{equation}
-其中
-\(
-\log\pi_\theta(y_i^{(g)}\!\mid x_i)
-=
-\sum_t \log p_\theta(y_{i,t}^{(g)} \mid x_i, y_{i,<t}^{(g)})
-\)
-由语言模型的自回归概率沿轨迹累积得到。
-在此基础上，构造裁剪后的策略损失，如~\eqref{eq:grpo_policy_loss}：
-\begin{equation}
-  \mathcal{L}^{\mathrm{policy}}_i(\theta)
-  =
-  -\frac{1}{G} \sum_{g=1}^G
-  \min \Big(
-    \rho_i^{(g)}(\theta)\, A_i^{(g)},
-    \mathrm{clip}\big(\rho_i^{(g)}(\theta), 1-\varepsilon_{\mathrm{clip}}, 1+\varepsilon_{\mathrm{clip}}\big)\, A_i^{(g)}
-  \Big),
-  \label{eq:grpo_policy_loss}
-\end{equation}
-其中 \(\varepsilon_{\mathrm{clip}}=0.2\) 为裁剪阈值。
-当 \(A_i^{(g)}>0\) 时，损失鼓励新策略提高高奖励轨迹的概率，但通过
-\(\mathrm{clip}(\cdot)\) 限制权重过大；
-当 \(A_i^{(g)}<0\) 时，则抑制低奖励轨迹的概率，同时避免过度更新导致策略振荡。
-
-为防止强化学习阶段策略偏离 CoT-SFT 阶段学到的结构化推理范式，本文引入 KL 散度正则项，将
-CoT-SFT 后的策略
-\(\pi_{\mathrm{ref}}=\pi_{\theta_{\mathrm{CoT}}^\ast}\) 作为冻结参考基模，
-约束新策略与之的分布距离。
-借鉴 DeepSeek-R1\cite{DeepSeekAI2025DeepSeekR1IR}，本文采用序列级“反向 KL”近似：
-\begin{equation}
-  \mathcal{L}^{\mathrm{KL}}_i(\theta)
-  =
-  \frac{\beta}{G}
-  \sum_{g=1}^G
-  \Bigg(
-    \frac{\pi_{\mathrm{ref}}(y_i^{(g)}\!\mid x_i)}{\pi_\theta(y_i^{(g)}\!\mid x_i)}
-    -
-    \log
-    \frac{\pi_{\mathrm{ref}}(y_i^{(g)}\!\mid x_i)}{\pi_\theta(y_i^{(g)}\!\mid x_i)}
-    - 1
-  \Bigg),
-  \label{eq:grpo_kl}
-\end{equation}
-其中 \(\beta = 1\times10^{-3}\) 控制 KL 惩罚强度。
-该形式可视为对
-\(D_{\mathrm{KL}}(\pi_{\mathrm{ref}}\parallel\pi_\theta)\)
-的一阶近似，便于与重要性采样结合，并有效限制策略“偏离基模”的程度。
-
-综合策略损失与 KL 正则，单个样本的 GRPO 目标写为~\eqref{eq:grpo_obj_single}：
-\begin{equation}
-  \mathcal{L}^{\mathrm{GRPO}}_i(\theta)
-  =
-  \mathcal{L}^{\mathrm{policy}}_i(\theta)
-  +
-  \mathcal{L}^{\mathrm{KL}}_i(\theta),
-  \label{eq:grpo_obj_single}
-\end{equation}
-整个 RL 阶段的优化目标为最小化期望损失，如~\eqref{eq:grpo_obj}：
-\begin{equation}
-  \mathcal{L}_{\mathrm{GRPO}}(\theta)
-  =
-  \mathbb{E}_{(G,q)\sim\mathcal{D}_{\mathrm{RL}}}
-  \big[
-    \mathcal{L}^{\mathrm{GRPO}}_i(\theta)
-  \big],
-  \label{eq:grpo_obj}
-\end{equation}
-其中 \(\mathcal{D}_{\mathrm{RL}}\) 为 RL 阶段使用的图推理任务分布。
-在参数层面，图欧拉路径编码器 \(\mathrm{Enc}_G\)、文本编码器 \(\mathrm{Enc}_T\) 
-以及跨模态对齐模块在整个 RL 过程中保持冻结，
-更新仅作用于语言模型解码器 \(\mathrm{Dec}_T\) 及其轻量适配层，
-实现“在保持基模语义与对齐结构的前提下，对推理策略进行最小干预的强化调整”。
 
 \subsection{强化学习训练流程与实现配置}
 \label{subsec:grpo_train_detail}
@@ -1340,10 +1369,90 @@ GRPO 通过对同一问题采样多条候选思维链并进行相对优势更新
 因此，即便在更强的图表征和 RL 训练下，
 Challenging 子集上的提升仍然有限。
 
-\textbf{4)\ 定性结果}
+\subsection{定性结果分析}
+\label{subsec:qualitative_analysis}
 
-生成示例XXX
+为了揭示模型在数值指标提升背后的推理机制，本节对模型在五种代表性图任务上的生成轨迹进行了定性分析。
+如图~\ref{fig:qualitative_cases}所示，
+本文将强化学习微调的模型（方法5）和基准模型生成的思维链结果与逻辑及真实图结构进行比对。
+观察结果表明，经过冷启动与强化学习微调后，模型主要涌现出以下三类关键推理能力：
+算法级的路径规划能力、复杂组合优化的约束满足能力，以及融合拓扑与语义的跨模态洞察力。
 
+\textbf{(1)算法保真度与时序规划}
+在依赖严格步进逻辑的路径类任务中，模型展现了高度的{算法保真度}。
+如图~\ref{fig:resoning_task1}所示，在求解两点间最短路径时，模型并未通过死记硬背直接生成答案，
+而是自发涌现出类似 Dijkstra 算法的搜索行为。
+CoT 轨迹清晰地记录了邻居遍历到距离累加到路径优选的决策过程。
+模型准确识别了节点间的连通性，有效规避了图推理中常见的幻觉边问题，
+验证了第三章提出的欧拉路径编码方式在保留局部拓扑结构方面的有效性。
+其次，如图~\ref{fig:resoning_task3}所示，在有向无环图的拓扑排序任务中，模型表现出对边的方向性的敏锐捕捉。
+它成功识别了入度为 0的起始节点，并依据因果依赖关系逐步构建任务序列。
+这一结果表明，本文的编码器克服了传统无向图处理范式对方向信息的丢失，使模型具备了处理严格时序约束和因果推理的能力。
+
+\textbf{(2)NP-难问题中的约束满足}
+
+针对计算复杂度较高的组合优化问题，模型展示了在硬约束下的{启发式搜索能力}。
+如图~\ref{fig:resoning_task2}所示，该任务要求选出的节点集合中任意两点互不相邻，属于典型的 NP-hard 问题。
+模型的思维链展示了一种选择-屏蔽的策略：在选定一个节点后，显式地在推理空间中标记并排除其邻居节点。
+这种对互斥约束的严格遵守，证明了强化学习中的规则奖励有效地抑制了违规采样，
+使大语言模型能够模拟回溯或剪枝算法的逻辑过程。并且，
+在图~\ref{fig:resoning_task4}所示的关键节点识别任务中，
+模型不仅计算了节点的度中心性，还结合了节点的语义角色（如“核心枢纽”、“备用链路”）进行综合判断。
+它成功识别出移除后会导致网络连通性剧烈下降的桥接点，
+表明模型已学会将抽象的图论指标映射到具体的物理意义上。最后，如图~\ref{fig:resoning_task5}所示。
+在引用网络节点分类任务中，模型面对的是具有模糊边界的跨学科论文。
+推理轨迹显示，模型并未单纯依赖文本内容，而是通过分析引用结构来辅助分类决策。
+这种利用同质性与结构模式增强语义理解的行为，有力佐证了跨模态对齐模块在处理异构信息时的协同增益。
+
+综上所述，定性分析证实了本章提出的训练框架不仅提升了模型的预测准确率，更使其习得了可解释、可验证且符合图论规则的通用推理范式。
+
+\begin{figure}[htbp]
+    \centering
+    % 第一行：算法保真度
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{4_chapter/resoning_task1.pdf} % 对应 Shortest Path
+        \caption{最短路径推理：模拟步进式搜索}
+        \label{fig:resoning_task1}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{4_chapter/resoning_task3.pdf} % 对应 Topological Sort
+        \caption{拓扑排序：基于方向性的因果规划}
+        \label{fig:resoning_task3}
+    \end{subfigure}
+    
+    \vspace{0.5em}
+    
+    % 第二行：约束满足与语义分析
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{4_chapter/resoning_task2.pdf} % 对应 Max Independent Set
+        \caption{最大独立集：互斥约束下的选择策略}
+        \label{fig:resoning_task2}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{4_chapter/resoning_task4.pdf} % 对应 Robustness
+        \caption{鲁棒性分析：拓扑割点与物理意义映射}
+        \label{fig:resoning_task4}
+    \end{subfigure}
+    
+    \vspace{0.5em}
+    
+    % 第三行：跨模态
+    \begin{subfigure}[b]{0.98\textwidth}
+        \centering
+        \includegraphics[width=0.6\textwidth]{4_chapter/resoning_task5.pdf} % 对应 Node Classification
+        \caption{跨学科分类：引用结构辅助语义消歧}
+        \label{fig:resoning_task5}
+    \end{subfigure}
+    
+    \caption{结合强化学习微调的图基座模型在多种图推理任务上的\\定性分析结果} 
+    \label{fig:qualitative_cases}
+\end{figure}
 
 \subsection{节点分类任务迁移测评}
 
