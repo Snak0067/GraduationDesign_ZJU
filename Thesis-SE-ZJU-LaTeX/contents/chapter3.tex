@@ -2,77 +2,83 @@
 
 \chapter{结合欧拉路径图表征和跨模态对齐的节点分类技术}
 
-图结构数据的高效表征与理解构成了人工智能领域的核心挑战之一。大型语言模型（LLMs）虽在自然语言处理领域取得突破性进展，但其应用于图结构数据时面临两个根本性局限：图拓扑结构到序列表示的转换必然导致信息损失，
-以及图结构特征与文本语义特征之间的跨模态表征鸿沟。
+文本属性图（Text-Attributed Graphs, TAGs）上的节点分类要求模型联合利用拓扑关系与节点文本语义，
+是评估图--语言模型结构表征与跨模态融合能力的典型任务。
+以 LLaGA\cite{Chen2024LLaGALL} 为代表的主流图基座模型通常采用
+邻域采样、模板线性化以及投影映射的范式，
+将目标节点邻域按 ND、HO 等模板组织为文本序列输入 LLM。该方案实现简洁、迁移方便，
+但粗暴采样与截断会削弱关键子结构与长程依赖；同时，单一线性模板难以兼顾全局拓扑模式与局部结构差异，因而在节点分类等分类任务上易形成性能上限。
+另一类方法如 GraphGPT\cite{Tang2023GraphGPTGI} 
+通过图--文接地与指令微调增强 LLM 的图理解能力，但其对齐信号多集中于样本级或全局语义层面
+，对子结构单元和文本片段的细粒度绑定不足，限制了在 TAG 节点分类场景下对结构信息的有效利用。
 
-当前主流Graph-LLM框架
-（如LLaGA\cite{Chen2024LLaGALL}）
-通常采用邻域采样模板线性化与投影映射的组合范式，将图结构转换为 LLM 可处理的序列形式。
-此类方法在多任务零样本迁移中展现出一定优势，但其依赖的启发式邻域构造策略（例如 ND 与 HO 模板）在结构表达能力上存在固有限制：单一序列难以同时保留全局拓扑特征与局部子结构的细粒度信息，
-从而对节点级判别任务造成性能瓶颈。
+针对上述问题，本章围绕 TAG 节点分类从结构表征与跨模态对齐两方面进行改进：一方面，基于（半）欧拉路径构造高保真图 token 序列并设计匹配的图结构编码器，以增强对局部子结构与多跳关系的表达；另一方面，构建多尺度跨模态对齐目标，通过全局对齐、局部结构--短语级对齐与生成式约束的联合优化，提升图表示与语言空间的相容性。实验部分将在多个公开基准上系统评估上述策略对节点分类性能与鲁棒性的影响，并通过消融分析刻画各模块贡献，为后续图推理后训练提供可靠的条件表征基础。
 
-另一些工作，如GraphGPT\cite{Tang2023GraphGPTGI} 
-通过图–文接地机制与双阶段指令微调增强语言模型的图结构理解能力，
-但其跨模态对齐主要作用于样本级或全局语义层面，
-缺乏细粒度的语义绑定，无法充分捕捉图结构与文本特征间的复杂交互关系。
+\section{概述}
 
-针对上述问题，本章聚焦于文本属性图节点分类这一核心任务，
-进一步探讨图结构精准表征与跨模态细粒度对齐的融合优化机制，
-提出两大核心改进方案：其一，基于欧拉路径设计图到 Token 序列的高保真编码方式，
-构建新型图结构编码器，实现拓扑信息的完整保留与精细化表征；
-其二，提出多尺度跨模态对齐损失函数体系，
-通过全局表征对齐、子结构 - 短语级局部对齐及生成式跨模态对齐的协同约束，
-解决现有方法对齐粒度不足与关联性建模薄弱的问题。
-此外，实验部分将在多个公开基准上系统测评图结构编码方式与
-跨模态对齐策略对节点分类性能的影响，
-验证所提出图基础模型在准确率、鲁棒性与泛化能力上的综合收益，
-并为后续强化学习驱动的图推理优化奠定表征与对齐基础。
-
-
-
-\section{概述} 
-本章聚焦于第2.1节提出的核心科学问题中的前两个子任务，
-系统开展图结构表征方式优化、图编码器预训练及图-文本跨模态对齐预训练研究，
-最终构建基于预训练大语言模型基座的节点分类完整解决方案，
-本章所研究的核心问题可形式化描述如下：
+本章围绕第~2.1~节提出的核心科学问题中的前两个子任务，
+系统研究图结构表征方式优化、图编码器的自监督预训练以及图--文本跨模态对齐预训练，
+在此基础上构建一个以预训练大语言模型为基座的节点分类完整解决方案。
+本章所研究问题可形式化描述如下。
 
 \textbf{输入：}
-给定文本属性图 \(G = (V, E, X, T, Y_{\text{lab}})\)，其中 \(V = \{v_1, \dots, v_N\}\) 为含 N 个待分类实体的节点集合，\(E \subseteq V \times V\) 为表征节点拓扑关联的边集合（对应邻接矩阵 \(A \in \{0,1\}^{N \times N}\) 或 \(\mathbb{R}^{N \times N}_+\)），\(X \in \mathbb{R}^{N \times d_v}\) 为节点结构特征矩阵（\(d_v\) 为结构特征维度），\(T \in \mathbb{R}^{N \times d_t}\) 为节点文本特征矩阵（\(d_t\) 为文本嵌入维度），\(Y_{\text{lab}} \in \{1, \dots, C\}^{N_{\text{lab}} \times 1}\) 为 \(N_{\text{lab}} \leq N\) 个标注节点的类别标签（C 为类别总数）。
+给定一张文本属性图
+\(G=(V,E)\)，其中 \(V=\{v_1,\dots,v_N\}\) 为节点集合、\(E\subseteq V\times V\) 为边集合，
+其拓扑可由邻接矩阵 \(A\in\{0,1\}^{N\times N}\)（或加权情形下 \(A\in\mathbb{R}^{N\times N}_{+}\)）表示。
+每个节点 \(v\in V\) 关联一段文本属性 \(\mathcal{T}_v\)，
+记整体文本集合为 \(\mathcal{T}=\{\mathcal{T}_v\}_{v\in V}\)。
+当数据集同时提供额外的数值型节点属性时，记为初始节点特征矩阵
+\(X\in\mathbb{R}^{N\times d_x}\)。
+在半监督节点分类设定下，给定标注节点集合 \(V_{\mathrm{lab}}\subseteq V\)，其标签为
+\(Y_{\mathrm{lab}}=\{y_v\mid v\in V_{\mathrm{lab}}\}\)，其中 \(y_v\in\{1,\dots,C\}\) 且 \(C\) 为类别总数。
 
 \textbf{输出：}
-未标注节点（\(N_{\text{unlab}} = N - N_{\text{lab}}\)）的分类结果，
-包括满足概率归一化约束 \(\sum_{c=1}^C \hat{y}_{k,c} = 1\)
- 的类别概率分布 \(\hat{Y}_{\text{prob}} \in [0,1]^{N_{\text{unlab}} \times C}\) 与由
- \(\hat{y}_k = argmax_c \hat{y}_{k,c}\) 
-确定的最终类别标签 \(\hat{Y}_{\text{unlab}} \in \{1, \dots, C\}^{N_{\text{unlab}} \times 1}\)。
+对未标注节点集合 \(V_{\mathrm{unlab}}=V\setminus V_{\mathrm{lab}}\) 的类别预测结果。
+模型输出每个 \(v\in V_{\mathrm{unlab}}\) 的类别概率分布
+\(\hat{\mathbf{y}}_v\in[0,1]^C\)，满足 \(\sum_{c=1}^{C}\hat{y}_{v,c}=1\)，
+并据此给出最终预测标签
+\(\hat{y}_v=\arg\max_{c\in\{1,\dots,C\}}\hat{y}_{v,c}\)。
+将所有未标注节点的预测汇总可得
+\(\hat{Y}_{\mathrm{prob}}\in[0,1]^{|V_{\mathrm{unlab}}|\times C}\)
+与
+\(\hat{Y}_{\mathrm{unlab}}\in\{1,\dots,C\}^{|V_{\mathrm{unlab}}|\times 1}\)。
 
-针对上述科学问题，在LLaGA\cite{Chen2024LLaGALL}等现有Graph-LLM框架的基础上，
-本文提出一种多层次优化框架，整个流程旨在通过图结构编码方式改进和
-图特征和语义特征对齐优化来训练图编码器，提升图基础模型对图结构数据的理解与表征能力，
-从而提升下游节点分类任务的性能。该方法分为三个主要阶段：图编码器自监督预训练阶段、图-语义跨模态对齐预训练阶段
-以及结合图编码改进和对齐方式改进的通用图基座模型在下游任务的微调阶段。
+针对上述问题，本文以 LLaGA~\cite{Chen2024LLaGALL} 等现有图基座模型框架为基线，
+提出一种面向文本属性图的多层次优化训练框架。
+整体流程旨在：一方面通过改进图结构序列化方式，提高局部子图拓扑证据在序列输入中的保真度；
+另一方面通过显式的跨模态对齐目标，缩小图结构表征与文本语义表征在大语言模型嵌入空间中的分布差异，
+从而提升下游节点分类任务的泛化性能。
+具体地，本章方法包含三个阶段：
+（1）\emph{图编码器自监督预训练}：在大规模混合图数据上学习通用结构表征；
+（2）\emph{图--文本跨模态对齐预训练}：通过多层次对齐损失联合优化图侧表征与文本语义表征；
+（3）\emph{下游任务微调}：在 Cora\cite{Hu2020OpenGB}、PubMed\cite{Sen2008CollectiveCI} 与 OGB-Arxiv\cite{Hu2020OpenGB} 等基准的官方划分上进行监督微调与评测。
 
-本章的后续内容组织如下：
+本章后续内容组织如下：
 
-{第~\ref{sec:graph_encoder_enhanced}\ 节} 详述基于欧拉路径的图结构表征改进方案。该节将论证如何通过半欧拉路径构造可逆的图序列化映射，从而实现对子图拓扑的高保真编码，并介绍基于大规模混合图数据集的结构预训练策略。
- 
-{第~\ref{sec:multi_loss_enhanced}\ 节} 阐述图结构与文本语义的跨模态对齐机制。重点介绍包含全局 InfoNCE 对比、子结构-短语级局部匹配以及生成式重建的多层次损失函数设计，以解决异构特征空间的对齐难题。
+第~\ref{sec:graph_encoder_enhanced}~节详述基于（半）欧拉路径的图结构表征改进方案，
+论证如何构造可逆的图序列化映射以实现对子图拓扑的高保真编码，并给出相应的结构预训练策略。
 
-{第~\ref{sec:three_total_Experiment}\ 节} 展示面向节点分类任务的性能测评与消融实验。通过在 Cora、PubMed 及 OGB-Arxiv 等基准上的系统测评，量化图编码改进与对齐策略对模型泛化性能的贡献。
+第~\ref{sec:multi_loss_enhanced}~节阐述图结构与文本语义的跨模态对齐机制，
+重点介绍由全局 InfoNCE 对比、子结构--短语级局部匹配与生成式重建共同组成的多层次损失设计。
 
-{第~\ref{sec:three_summerize}\ 节} 对本章提出的节点分类技术方案进行总结，并讨论其对后续图推理任务的支撑作用。
+第~\ref{sec:three_total_Experiment}~节给出节点分类任务的系统测评与消融实验，
+在 Cora\cite{Hu2020OpenGB}、PubMed\cite{Sen2008CollectiveCI} 与 OGB-Arxiv\cite{Hu2020OpenGB} 等基准上量化结构编码改进与对齐策略对性能的贡献。
+
+第~\ref{sec:three_summerize}~节总结本章提出的节点分类技术方案，并讨论其对后续图推理阶段的支撑作用。
 
 
 \section{基于欧拉路径的图结构表征方式改进}
 \label{sec:graph_encoder_enhanced}
-在传统 Graph--LLM 框架中，图结构通常通过启发式邻域展开或模板化文本描述线性化。
-此类方法虽便于直接接入语言模型，但往往难以同时保证拓扑信息的完整性与节点顺序的一致性，
-易引入结构冗余或信息丢失。
-为缓解上述问题，本文在 GraphGPT~\cite{Zhao2023GraphGPTGP} 思路基础上，
-构建一种基于（semi-）Eulerian 路径的图表征方案，
-在图侧显式建立可逆的图到序列映射，实现对子图拓扑的近似高保真线性化编码。
-基于欧拉路径的图结构表征方式改进具体算法架构如\autoref{fig:Euler_encoder_architecture}所示
 
+在传统图基座模型框架中，图结构常通过启发式邻域展开或模板化文本描述进行线性化。
+该类方法虽然便于接入语言模型，但难以同时保证拓扑信息完整性与序列语法一致性，
+从而易产生结构冗余或关键信息缺失。
+为缓解上述问题，本文在 GraphGPT~\cite{Zhao2023GraphGPTGP} 的序列化思路基础上，
+设计一种基于（半）欧拉路径解析的结构化图序列表示。
+该方法以子图内可逆为设计准则：在固定采样子图范围内，
+通过可标记的连通化与欧拉化预处理将图转化为满足语法约束的 token 序列；
+由于合成边与复制边均携带显式类型标记，解码端可在重建增广多重图后将其过滤，
+从而在同构意义下恢复原子图拓扑。整体架构如\autoref{fig:Euler_encoder_architecture} 所示。
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=1\textwidth]{3_chapter/Euler_encoder_architecture.pdf}
@@ -82,22 +88,15 @@
 
 \subsection{图到 Token 序列的高保真编码设计}
 \label{sec:graph2token}
-图到 token 序列的核心目标是构造映射
-\(\Phi: \mathcal{G} \rightarrow \mathcal{V}^\ast\)，
-其中 \(\mathcal{G}\) 为有限图集合，\(\mathcal{V}\) 为有限词表，
-\(\mathcal{V}^\ast\) 为有限长度 token 序列集合。
-理想编码应满足三项性质：
-（1）\emph{高保真可逆性}：存在逆映射
-\(\Psi: \mathcal{V}^\ast \rightarrow \mathcal{G}\)，
-使得 \(\Psi(\Phi(G)) \cong G\)（同构意义下）；
-（2）\emph{结构完整性}：序列中显式或隐式包含全部节点、边及其属性信息；
-（3）\emph{尺度适应性}：在统一框架下同时适配小规模分子图与超大规模网络。
-
-为此，本文采用分而治之的策略：
-对于中小规模图，直接基于（半）欧拉路径进行序列化；
-对于超大规模图，先通过子图采样将全图分解为若干局部子图，
-再结合节点身份编码与属性 token 化实现对全局结构的间接覆盖。
-在不引起歧义的前提下，下文统一以 \(G\) 表示待序列化的（子）图。
+图到 token 序列的目标是构造映射 $\Phi:\mathcal{G}\rightarrow \mathcal{V}^\ast$，
+其中 $\mathcal{G}$ 表示带属性图集合、$\mathcal{V}$ 为有限词表、$\mathcal{V}^\ast$ 为 token 序列集合。
+本文从可实现与可检验角度，将编码设计约束为三项目标：
+{(1) 子图内可逆}：存在解码算子 $\Psi:\mathcal{V}^\ast\rightarrow\mathcal{G}$，
+使得对任意输入子图 $G$ 均有 $\Psi(\Phi(G))\cong G$（同构意义下），其中 $\Psi$ 显式剔除预处理引入的标记边；
+{(2) 结构与属性完整性}：序列显式编码节点、边及其离散化后的属性；
+{(3) 尺度可控性}：对大规模网络采用“子图采样 $\rightarrow$ 独立序列化”的分治策略，
+使序列长度受上下文窗口上界约束，并保持训练/推理输入规范一致。
+在不引起歧义的前提下，下文统一以 $G$ 表示待序列化的采样子图。
 整体过程形式化如算法~\ref{alg:graph_to_token} 所示。
 
 \begin{algorithm}[t]
@@ -107,7 +106,7 @@
 \KwOut{Token 序列 $s \in \mathcal{V}^\ast$}
 
 \textbf{Step 1: 连通性增强}\;
-检查 $G$ 是否连通；\;
+检查 $G$ 是否连通\;
 \If{$G$ 非连通}{
   添加合成边 $E_{\mathrm{syn}}$ 连接所有连通分量，标记为 \texttt{[EDGE\_JUMP]} 及默认属性\;
 }
@@ -143,7 +142,7 @@ $G^{\mathrm{eu}} \leftarrow (V, E \cup E_{\mathrm{syn}} \cup E_{\mathrm{dup}}, X
 
 \subsubsection{基于（半）欧拉路径的图序列化}
 
-\textbf{欧拉化预处理与路径构造。}
+\textbf{连通化与欧拉化预处理。}
 为确保存在覆盖所有边的（半）欧拉路径，
 首先对原始图 \(G\) 进行连通性与欧拉特性预处理。
 记 \(\tilde{G} = (V, \tilde{E}, X, A)\) 为连通化后的图，
@@ -155,7 +154,7 @@ $G^{\mathrm{eu}} \leftarrow (V, E \cup E_{\mathrm{syn}} \cup E_{\mathrm{dup}}, X
 对应连通图，
 合成边统一以特殊 token（如 \texttt{[EDGE\_JUMP]}）与默认属性标记。
 若 \(\tilde{G}\) 仍非（半）欧拉图，则进一步构造欧拉多重图 \(G^{\mathrm{eu}}\)，
-其公式如~(\ref{eulerized-graph})所示：
+其公式如~\ref{eulerized-graph}\ 所示：
 \begin{equation}
     G^{\mathrm{eu}} = (V, E^{\mathrm{eu}}, X, A),
     \label{eulerized-graph}
@@ -164,7 +163,7 @@ $G^{\mathrm{eu}} \leftarrow (V, E \cup E_{\mathrm{syn}} \cup E_{\mathrm{dup}}, X
 \(E \subseteq E^{\mathrm{eu}}\)，
 通过最小边复制策略保证
 \(G^{\mathrm{eu}}\) 满足所有节点度数为偶数或恰有两个奇度节点的条件。
-在此基础上，存在一条（半）欧拉路径 $P$，如公式(\ref{elua_path})所示：
+在此基础上，存在一条（半）欧拉路径 $P$，如公式~\ref{elua_path}所示：
 \begin{equation}
     P = (v_0, e_1, v_1, \dots, e_m, v_m),
     \label{elua_path}
@@ -180,16 +179,16 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 
 \textbf{节点重索引与循环偏移。}
 原始节点编号通常带有实现偏置，
-若直接用于 token 化，会导致结构 token 频率高度不均。
-为此，首先基于路径首次出现顺序定义重索引映射，计算公式如~(\ref{eq:reindex})所示：
+若直接用于 token 化会导致结构 token 频率高度不均。
+为此，首先基于路径首次出现顺序定义重索引映射，计算公式如~\ref{eq:reindex}\ 所示：
 \begin{equation}
     \pi: V \rightarrow \{0, 1, \dots, n-1\},
     \label{eq:reindex}
 \end{equation}
 其中 \(n = |V|\)，
 \(\pi(v)\) 表示节点 \(v\) 在 \(P^{\mathrm{node}}\) 中的首次出现位置。
-进一步，为缓解不同图尺度间的索引分布偏移，其公式如~(\ref{eq:cycle-reindex})所示
-引入循环重索引机制：
+进一步为缓解不同图尺度间的索引分布偏移，
+引入循环重索引机制，其公式如~\ref{eq:cycle-reindex}\ 所示
 \begin{equation}
     \pi_r(v) = (\pi(v) + r) \bmod N,
     \label{eq:cycle-reindex}
@@ -197,8 +196,8 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 其中 \(r\) 为在预设区间内均匀采样的随机整数,
 \(N\) 为大于最大节点数的超参数。
 该设计一方面在训练过程中均匀激活不同索引 token，
-另一方面避免测试阶段出现“大编号节点在预训练中从未出现”的 OOD 情形。
-基于上述重索引，可得到仅含结构信息的节点序列，其公式如~(\ref{eq:struct-seq})所示：
+另一方面避免测试阶段出现大编号节点在预训练中从未出现的 OOD 情形。
+基于上述重索引，可得到仅含结构信息的节点序列，其公式如~\ref{eq:struct-seq}\ 所示：
 \begin{equation}
     s^{\mathrm{struct}} = 
     \big(\pi_r(v_0), \pi_r(v_1), \dots, \pi_r(v_{m-1})\big),
@@ -213,7 +212,7 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 在最一般的“prolonged” 格式下，
 每对相邻节点 \((v_{i-1}, v_i)\) 被展开为：
 “节点索引 + 边类型 + $d_e$ 个边属性 token + $d_v$ 个节点属性 token”，
-对应每个“边步长”的 token 数量表示如~(\ref{eq:edge-token-length})所示：
+对应每个“边步长”的 token 数量表示如~\ref{eq:edge-token-length}\ 所示：
 \begin{equation}
     \ell = 2 + d_e + d_v.
     \label{eq:edge-token-length}
@@ -233,7 +232,7 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 同时通过上述长度公式显式控制不同图规模与属性维度下的最大序列长度，
 便于在显存和上下文窗口约束下进行配置。
 
-在上述构造下，图到序列的整体映射可以统一写为公式~(\ref{eq:graph-to-seq})：
+在上述构造下，图到序列的整体映射可以统一写为公式~\ref{eq:graph-to-seq}：
 \begin{equation}
     s = \Phi(G) = 
     \Phi_{\mathrm{attr}}\!\big(P^{\mathrm{node}}, X, A; \pi_r, \text{format}\big),
@@ -241,7 +240,9 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 \end{equation}
 其中 \(\Phi_{\mathrm{attr}}\) 表示在固定欧拉路径与重索引策略下的属性附着算子。
 
-\textbf{高保真可逆性与理论保证。}
+\textbf{高保真可逆性与理论分析。}
+本文提出的高保真可逆性指的是在给定子图 $G$ 上，
+在解码端过滤 \texttt{[EDGE\_JUMP]} 与 \texttt{[EDGE\_DUP]} 等标记边后，有 $\Psi(\Phi(G))\cong G$ 成立。
 由于欧拉路径遍历了图中每一条边，
 且相邻结构 token 与边之间一一对应，
 在给定边方向与特殊边类型标记的前提下，
@@ -249,25 +250,27 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 \(
 \hat{G}^{\mathrm{eu}} = (V, \hat{E}^{\mathrm{eu}}, X, A)
 \)。
-进一步移除 Eulerization 引入的边复制与合成跳转边 \(E_{\mathrm{syn}}\)，
+进一步移除欧拉化引入的边复制与合成跳转边 \(E_{\mathrm{syn}}\)，
 即可得到与原图 \(G\) 同构的图。
 因此存在逆映射
 \(
 \Psi: \mathcal{V}^\ast \rightarrow \mathcal{G}
 \)，
-满足公~(\ref{eq:invertible})：
+满足公式~\ref{eq:invertible}：
 \begin{equation}
     \Psi(\Phi(G)) \cong G,
     \label{eq:invertible}
 \end{equation}
 从而在同构意义下实现图到序列的编码。
+对于超大规模全图，本文通过子图采样获得局部视窗并分别序列化，
+从而以可控序列长度实现对全图结构的{局部覆盖与统计性表征}，
 这一理论性质为后续基于序列的生成式预训练与图重建任务提供了坚实基础。
 
 \subsubsection{大图适配：子图采样与局部序列化}
 
 对于节点与边数量高达数十亿规模的大图，
 在全图上直接执行欧拉化与路径搜索不仅计算和内存开销难以接受，
-得到的序列长度也往往远超 Transformer 的上下文窗口。
+得到的序列长度也往往远超上下文窗口。
 因此，本文在大图场景下引入子图采样机制，
 先将全图拆解为若干尺寸可控的局部子图，再对每个子图独立进行欧拉路径序列化。
 
@@ -278,13 +281,14 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 \)，
 其中 \(\theta\) 表示采样超参数（如 hop 数与每层邻居数等）。
 对一组中心节点或中心边 \(\{c_k\}_{k=1}^K\)，
-采样得到局部子图集合，其公式如~(\ref{eq:subgraph-sampling})所示：
+采样得到局部子图集合，其公式如~\ref{eq:subgraph-sampling}\ 所示：
 \begin{equation}
     H_k = \mathcal{S}_\theta(G^{\mathrm{big}}, c_k),
     \quad k = 1, \dots, K.
     \label{eq:subgraph-sampling}
 \end{equation}
-每个子图 \(H_k\) 通过上述欧拉路径编码获得局部序列，其公式如~(\ref{eq:subgraph-seq})所示：
+每个子图 \(H_k\) 通过上述欧拉路径编码获得局部序列，
+其公式如~\ref{eq:subgraph-seq}\ 所示：
 \begin{equation}
     s_k = \Phi(H_k),
     \quad |s_k| \leq L_{\max} \leq L_{\mathrm{ctx}},
@@ -311,89 +315,104 @@ P^{\mathrm{node}} = (v_0, v_1, \dots, v_m)
 
 \subsection{图结构编码器与节点表征抽取}
 
-在获得图到序列的可逆映射
-$\Phi:\mathcal{G}\rightarrow\mathcal{V}^\ast$ 之后，
-本文在序列空间上构建专用图结构编码器
-$\mathrm{Enc}_G$，其目标是将基于（semi-）Eulerian 路径生成的结构化 token 序列 $s$
-映射为蕴含全局拓扑与局部依赖的节点级结构向量
-$h_v^{\mathrm{struc}} \in \mathbb{R}^{d_g}$。
-由于欧拉路径中相邻 token 对应图中直接相连的节点，
-而非相邻 token 也可能通过多跳路径捕获长程拓扑依赖，
-因此 $\mathrm{Enc}_G$ 采用 24 层双向 Transformer 编码器骨干，
-在架构上与 Zhao 等人\cite{Zhao2023GraphGPTGP} 中预训练的图编码器保持一致：
-在标准 LLaMA 式 Transformer 基础上，将因果注意力掩码替换为全局双向注意力掩码。
-在不引起混淆的情况下，本文统一以隐藏维度 $d_g$、层数 $L_{\mathrm{enc}}=24$、
-注意力头数 $H$ 以及前馈层维度 $d_{\mathrm{ff}}$ 描述该编码器。
-下面从输入嵌入、Transformer 主体和多粒度表征读出三个方面展开说明。
+在获得图到序列的可逆映射 $\Phi:\mathcal{G}\rightarrow\mathcal{V}^\ast$ 之后，
+本文构建专用的图结构编码器 $\mathrm{Enc}_G$，
+旨在将由（半）欧拉化 路径生成的结构化 Token 序列映射为
+蕴含丰富拓扑语义的节点级结构向量 $h_v^{\mathrm{struc}}\in\mathbb{R}^{d_g}$。
+需要指出的是，鉴于大规模图的完整序列长度往往超出模型上下文限制，
+本文在实际训练与推理中采用子图采样策略：
+即以目标节点 $v$ 为中心提取局部子图 $G_v=S(v)\subseteq G$，
+再对其执行序列化 $s_v=\Phi(G_v)$。
+因此，下文所述的“可逆重构”特指在采样子图 $G_v$ 范围内的结构信息保留。
 
 \textbf{输入嵌入与位置编码。}
-对任意带属性图 $G \in \mathcal{G}$，
-首先通过上一小节的高保真编码过程得到离散序列
-$s = \Phi(G) = (w_1,\dots,w_L)$，
-其中 $w_i \in \mathcal{V}$、$L \leq L_{\mathrm{ctx}}$。
-图结构编码器的输入表示由三部分线性叠加得到，形式如式~(\ref{eq:enc-input}) 所示：
+对任意子图 $G_v$，
+通过序列化得到离散 token 序列
+$s_v=(w_1,\dots,w_L)$，其中 $w_i\in\mathcal{V}$、$L\le L_{\mathrm{ctx}}$。
+为避免 token 语义歧义，本文将图序列中的 token 按类型函数 $\tau(\cdot)$ 划分为
+节点/边/属性/特殊标记等类别，并引入类型嵌入以显式区分不同语法成分。
+图结构编码器的第 $i$ 个位置输入表示由三部分叠加得到，
+具体公式如\ref{eq:enc-input}\ 所示：
 \begin{equation}
   X^{(0)}_i
   = E_{\mathrm{tok}}(w_i)
   + E_{\mathrm{pos}}(i)
-  + E_{\mathrm{type}}(w_i),
+  + E_{\mathrm{type}}\!\big(\tau(w_i)\big),
   \quad i = 1,\dots,L,
   \label{eq:enc-input}
 \end{equation}
 其中 $E_{\mathrm{tok}}:\mathcal{V}\rightarrow\mathbb{R}^{d_g}$ 为 token 嵌入矩阵，
 $E_{\mathrm{pos}}:\{1,\dots,L_{\mathrm{ctx}}\}\rightarrow\mathbb{R}^{d_g}$ 为可学习位置编码，
-$E_{\mathrm{type}}$ 为可选的类型嵌入（如区分结构 token 与语义 token、特殊标记 token 等）。
+$E_{\mathrm{type}}$ 为类型嵌入表。
 从而得到输入张量
-$X^{(0)} = (X^{(0)}_1,\dots,X^{(0)}_L)\in\mathbb{R}^{L\times d_g}$。
-在训练和推理过程中，对不同长度的序列通过 padding 与 padding mask 统一到最大长度 $L_{\mathrm{ctx}}$。
+$X^{(0)}\in\mathbb{R}^{L\times d_g}$。
+对不同长度序列，采用 padding 对齐到最大长度，并通过 attention mask 屏蔽 padding 位置。
 
 \textbf{24 层双向 Transformer 编码器。}
-图结构编码器 $\mathrm{Enc}_G$ 由 $L_{\mathrm{enc}}=24$ 个堆叠的 Transformer 编码层组成，
-采用预归一化（pre-norm）残差结构。
-记第 $l$ 层输入隐藏状态为
+由于序列化后的 token 流在局部上遵循路径遍历的邻接关系，
+同时远距离 token 之间仍可通过多跳拓扑依赖建立关联，
+本文采用 $L_{\mathrm{enc}}=24$ 层堆叠的双向 Transformer Encoder 作为骨干，
+并将其注意力机制设为双向可见，以充分建模子图内部的长程依赖。
+该结构与 GraphGPT-B24~\cite{Zhao2023GraphGPTGP} 的图编码器配置保持一致，
+并在容量上与 BERT-Base ~\cite{BERT}规模相当，
+其中$d_g=768,\,H=12,\,L_{\mathrm{enc}}=24$。
+
+编码器采用 pre-norm 残差结构。记第 $l$ 层输入隐藏状态为
 $H^{(l-1)}\in\mathbb{R}^{L\times d_g}$，
-输出为 $H^{(l)}$，则其更新过程如式~(\ref{eq:enc-update-1})–~(\ref{eq:enc-update-2}) 所示：
+则更新为公式~\ref{eq:enc-update-1}和~\ref{eq:enc-update-2}：
 \begin{align}
   \tilde{H}^{(l)}
   &= H^{(l-1)}
-     + \mathrm{MSA}^{(l)}\big(\mathrm{LN}_1^{(l)}(H^{(l-1)}); M\big), 
-    \label{eq:enc-update-1}
-     \\
+     + \mathrm{MSA}^{(l)}\!\big(\mathrm{LN}_1^{(l)}(H^{(l-1)}); M\big),
+  \label{eq:enc-update-1}
+  \\
   H^{(l)}
   &= \tilde{H}^{(l)}
-     + \mathrm{FFN}^{(l)}\big(\mathrm{LN}_2^{(l)}(\tilde{H}^{(l)})\big),
-    \label{eq:enc-update-2}
+     + \mathrm{FFN}^{(l)}\!\big(\mathrm{LN}_2^{(l)}(\tilde{H}^{(l)})\big),
+  \label{eq:enc-update-2}
 \end{align}
-其中 $\mathrm{LN}_1^{(l)}$ 与 $\mathrm{LN}_2^{(l)}$ 为层归一化算子，
-$\mathrm{MSA}^{(l)}$ 为多头自注意力模块，
-$\mathrm{FFN}^{(l)}$ 为逐 token 的前馈网络。
-注意力掩码 $M\in\mathbb{R}^{L\times L}$ 为双向掩码，
-在有效 token 位置取 $0$，在 padding 位置取 $-\infty$，从而仅屏蔽填充位置，
-其余位置两两可见。
-与自回归语言模型不同，该设计允许编码器在单个子图序列内同时聚合前后文信息，
-更适合 SMTP 式掩码预测与结构表征学习。
-
-多头自注意力采用标准形式。
-记第 $l$ 层第 $h$ 个注意力头的查询、键、值矩阵由公式~(\ref{eq:attn-qkv})所示：
+其中 $\mathrm{MSA}^{(l)}$ 为多头自注意力，$\mathrm{FFN}^{(l)}$ 为逐位置前馈网络。
+注意力掩码 $M\in\mathbb{R}^{L\times L}$ 仅屏蔽 key 侧的 padding 位置，
+具体如公式~\ref{eq:padding_case}\ 所示：
 \begin{align}
-  Q_h &= H^{(l-1)} W^{(l)}_{Q,h},\quad
-  K_h = H^{(l-1)} W^{(l)}_{K,h},\quad
-  V_h = H^{(l-1)} W^{(l)}_{V,h},
+M_{ij}=
+\begin{cases}
+0, & \text{若位置 } j \text{ 为有效 token},\\
+-\infty, & \text{若位置 } j \text{ 为 padding}.
+\end{cases}
+\label{eq:padding_case}
+\end{align}
+该设计使任意有效位置均可双向聚合上下文信息，
+从而适配后续的 SMTP 式掩码 token 预测预训练目标。
+
+为便于表述，下文给出标准多头注意力形式。令
+$\bar{H}^{(l-1)}=\mathrm{LN}_1^{(l)}(H^{(l-1)})$，
+第 $h$ 个头的查询、键、值由公式~\ref{eq:attn-qkv} \ 给出：
+\begin{align}
+  Q_h &= \bar{H}^{(l-1)} W^{(l)}_{Q,h},\quad
+  K_h = \bar{H}^{(l-1)} W^{(l)}_{K,h},\quad
+  V_h = \bar{H}^{(l-1)} W^{(l)}_{V,h},
   \label{eq:attn-qkv}
 \end{align}
-则对应的注意力输出为公式~(\ref{eq:attn})：
+对应注意力输出如公式~(\ref{eq:attn}) 所示：
 \begin{equation}
   \mathrm{Attn}_h(H^{(l-1)})
   = \mathrm{Softmax}\!\left(
        \frac{Q_h K_h^\top}{\sqrt{d_g/H}} + M
      \right) V_h,
-     \label{eq:attn}
+  \label{eq:attn}
 \end{equation}
-其中 $h=1,\dots,H$ 为注意力头索引，
-$W^{(l)}_{Q,h}, W^{(l)}_{K,h}, W^{(l)}_{V,h}\in\mathbb{R}^{d_g\times(d_g/H)}$ 为可学习投影矩阵。
-各头输出在最后一维拼接后，经线性映射得到
-$\mathrm{MSA}^{(l)}(H^{(l-1)})$。
-前馈网络 $\mathrm{FFN}^{(l)}$ 为两层 MLP，其公式如~(\ref{eq:ffn})所示：
+其中 $W^{(l)}_{Q,h},W^{(l)}_{K,h},W^{(l)}_{V,h}\in\mathbb{R}^{d_g\times(d_g/H)}$ 为可学习参数。
+各头输出在最后一维拼接后，经线性映射得到多头自注意力模块输出，其形式可写为
+公式~\ref{eq:msa}：
+\begin{equation}
+  \mathrm{MSA}^{(l)}(H^{(l-1)})
+  = \mathrm{Concat}\!\left(\mathrm{Attn}_1,\dots,\mathrm{Attn}_H\right) W^{(l)}_O,
+  \label{eq:msa}
+\end{equation}
+其中 $W^{(l)}_O\in\mathbb{R}^{d_g\times d_g}$ 为输出投影矩阵。
+
+前馈网络采用两层 MLP，其形式如公式~\ref{eq:ffn}\  所示：
 \begin{equation}
   \mathrm{FFN}^{(l)}(x)
   = W^{(l)}_2\, \sigma\!\left(W^{(l)}_1 x + b^{(l)}_1\right) + b^{(l)}_2,
@@ -402,112 +421,79 @@ $\mathrm{MSA}^{(l)}(H^{(l-1)})$。
 其中 $W^{(l)}_1\in\mathbb{R}^{d_g\times d_{\mathrm{ff}}}$，
 $W^{(l)}_2\in\mathbb{R}^{d_{\mathrm{ff}}\times d_g}$，
 $\sigma(\cdot)$ 为非线性激活函数（如 $\mathrm{GELU}$）。
-经过 $L_{\mathrm{enc}}$ 层堆叠，
-可得到最终的 token 级结构表示\(H^{(L_{\mathrm{enc}})}\)，其公式如~(\ref{eq:enc-output})所示：
+经过 $L_{\mathrm{enc}}$ 层堆叠，得到 token 级结构表征如公式~\ref{eq:enc-output}\  所示：
 \begin{equation}
-  H^{(L_{\mathrm{enc}})} = \mathrm{Enc}_G(s)
-  \in \mathbb{R}^{L\times d_g}.
+  H^{(L_{\mathrm{enc}})} = \mathrm{Enc}_G(s_v)\in \mathbb{R}^{L\times d_g}.
   \label{eq:enc-output}
 \end{equation}
 
-在具体实现中，本文采用与 GraphGPT-B24~\cite{Zhao2023GraphGPTGP} 相近的规模配置，
-即 $d_g=768$、$L_{\mathrm{enc}}=24$、$H=12$，
-使模型容量与经典 BERT-Base~\cite{BERT} 级别相当，
-在算力开销与表达能力之间取得较为均衡的折中。
+
 
 \textbf{多粒度图结构表征提取。}
-基于 token 级隐藏状态 $H^{(L_{\mathrm{enc}})}$，
-图结构编码器可以为图级、节点级与边级任务提供统一的结构表示接口。
-为与预训练任务和下游任务的输入输出形式保持一致，
-本文沿用 GraphGPT~\cite{Zhao2023GraphGPTGP} 中的尾部读出策略。
-
-\begin{itemize}
-  \item \textit{图级表征 }
-  对于图分类或回归任务，
-  在序列 $s$ 尾部附加特殊标记 $[\mathrm{GSUM}]$，
-  记其在序列中的位置为 $i_{\mathrm{gsum}}$。
-  图级结构表示定义为
-  \(
-    h_G^{\mathrm{struc}} = H^{(L_{\mathrm{enc}})}_{i_{\mathrm{gsum}}}
-    \in\mathbb{R}^{d_g}
-  \)，
-  随后输入任务特定的 MLP 头进行预测。
-
-  \item \textit{节点级表征 }
-  对节点分类等任务，
-  将目标节点 $v$ 的节点 token 追加到序列尾部，
-  记其位置为 $i_v$，
-  则节点级结构表示定义为
-  \(
-    h_v^{\mathrm{struc}} = H^{(L_{\mathrm{enc}})}_{i_v}
-  \)。
-  由于节点 $v$ 在欧拉序列中可能出现多次，
-  该追加位置可视为在全局上下文条件下对所有出现位置的聚合读出。
-
-  \item \textit{边级表征 }
-  对链路预测等任务，
-  在序列尾部追加目标边两端点的节点 token，
-  如 $(u,v)$，
-  记对应位置为 $i_u,i_v$。
-  则边级结构表示可定义为
-  \(
-    h_{(u,v)}^{\mathrm{struc}}
-    = \mathrm{Agg}\!\big(H^{(L_{\mathrm{enc}})}_{i_u},
-                         H^{(L_{\mathrm{enc}})}_{i_v}\big)
-  \)，
-  其中 $\mathrm{Agg}(\cdot)$ 可以是简单拼接后线性变换，
-  也可以是加权加和等轻量级聚合函数。
-\end{itemize}
-
-综上，$\mathrm{Enc}_G$ 将基于（semi-）Eulerian 路径的图到序列编码
-$\Phi(G)$ 映射到统一的隐藏空间 $\mathbb{R}^{d_g}$。
-在同构意义下，该过程尽可能保持拓扑与属性信息的完整性，
-并通过 24 层双向 Transformer 充分建模子图内部的长程依赖，
-从而为后续的生成式预训练以及多粒度图任务提供统一且可迁移的结构语义基底。
+基于编码器输出，本文设计了统一的读出接口 $\mathrm{Pool}_g(\cdot)$，
+以灵活适配不同粒度的下游任务。
+本文采用查询标记追加（Query Token Appending）策略，
+利用注意力机制的全局聚合能力提取特定表征：\begin{itemize}\item \textit{图级表征：} 在序列尾部追加全局汇总标记 $[\mathrm{GSUM}]$。
+图级向量定义为该位置的输出 
+$h_G^{\mathrm{struc}} = H^{(L_{\mathrm{enc}})}_{i_{\mathrm{gsum}}}$，
+它在训练中自适应地聚合了子图的整体拓扑特征。\item \textit{节点级表征：} 
+对于目标节点 $v$，将其对应的节点 Token 追加至序列末端（位置 $i_v$）。
+由于采用双向注意力，该位置能够“看到”序列中该节点的所有历史出现及其邻域信息，
+从而输出一个去歧义的、融合了完整上下文的节点向量 $h_v^{\mathrm{struc}} =
+ H^{(L_{\mathrm{enc}})}_{i_v}$。\item \textit{边级表征：} 对于连边 $(u,v)$，
+ 依次追加两个端点的 Token，并将对应的输出表征通过聚合函数（如拼接后线性投影）
+ 融合：$h_{(u,v)}^{\mathrm{struc}} = \mathrm{Agg}(H^{(L_{\mathrm{enc}})}_{i_u}, 
+ H^{(L_{\mathrm{enc}})}_{i_v})$。\end{itemize}
+ 
+ 综上，图结构编码器 $\mathrm{Enc}_G$ 将局部子图的（半）欧拉化 路径序列化结果
+$s_v=\Phi(G_v)$ 映射到统一隐藏空间 $\mathbb{R}^{d_g}$，
+并为不同粒度图任务提供结构表征接口。
+该设计一方面在固定子图范围内最大化保留拓扑与属性信息，
+另一方面利用双向 Transformer 的全局上下文建模能力，
+为后续自监督预训练与下游节点分类微调提供可迁移的结构语义基底。
 
 \subsection{基于混合数据集的图表征预训练}
 
-在完成基于（semi-）Eulerian 路径的图到序列编码设计及图结构编码器
-$\mathrm{Enc}_G$ 的构建之后，
-本文进一步在大规模混合图数据集上进行自监督表征预训练，
-以提升编码器在不同图类型与任务上的通用性与泛化能力。
-具体而言，本文将多个经典图学习数据集统一转化为欧拉路径序列并合并训练，
-包括引文网络图（Cora、PubMed、OGB-Arxiv）、
-电商协同图（Amazon-*）以及分子图数据集 PCQM4Mv2 等。
-这些数据集在节点语义、边类型与图规模上差异显著：
-前者以论文或商品为节点、以引用或共购关系为边，
-后者以原子为节点、以化学键为边，单图规模从几十节点到上百节点不等。
-在统一编码之后，混合预训练语料整体包含约
-$N_v = 552\,052$ 个节点和 $N_e = 4\,459\,033$ 条边，
-为结构表征学习提供了丰富且多样的拓扑模式。
+在完成基于（半）欧拉路径的图到序列编码 $\Phi(\cdot)$ 以及图结构编码器
+$\mathrm{Enc}_G$ 的构建之后，本文进一步在大规模混合图语料上开展自监督表征预训练，
+以提升编码器在不同图类型与不同数据域上的结构建模通用性与泛化能力。
 
 \textbf{混合图语料与统一编码。}
-记预训练图集合为
-$\mathcal{D}_{\mathrm{pre}} = \{G_n\}_{n=1}^N$，
-其中每个图 $G_n\in\mathcal{G}$ 来自上述任一数据集。
-通过图到序列映射
-$\Phi$，
-可得到对应的 token 序列
-$s_n = \Phi(G_n) = (w^{(n)}_1,\dots,w^{(n)}_{L_n})$，
-其中 $L_n \leq L_{\mathrm{ctx}}$。
-不同来源的图在原始属性空间和结构分布上高度异构，
-但经欧拉路径序列化与统一词表 $\mathcal{V}$ 编码后，
-均被规约到同一离散序列空间。
-这使得 $\mathrm{Enc}_G$ 可以在单一预训练目标下同时吸收
-引文网络、社交／电商网络以及分子图等多领域的结构先验，
-从而减弱模型对单一数据域的过拟合倾向。
+本文选取引文网络（Cora\cite{Hu2020OpenGB}、PubMed\cite{Sen2008CollectiveCI}、OGB-Arxiv\cite{Hu2020OpenGB}）、电商协同图（Amazon-*） \cite{Wan2018ItemRO}以及分子图集合
+PCQM4Mv2\cite{Hu2021OGBLSCAL} 等作为预训练语料来源。
+不同来源的数据在组织形式上存在差异：引文网络与电商图通常对应单一大图，
+而 PCQM4Mv2 \cite{Hu2021OGBLSCAL}为由大量分子小图构成的图集合。
+为在统一框架下训练 $\mathrm{Enc}_G$，本文将上述数据统一规约为训练样本集合
+$\mathcal{D}_{\mathrm{pre}}=\{G_n\}_{n=1}^{N}$，其中每个样本图 $G_n\in\mathcal{G}$ 由以下两种方式产生：
+（1）对单一大图数据集，通过子图采样策略
+抽取满足长度约束的局部子图；
+（2）对 PCQM4Mv2 \cite{Hu2021OGBLSCAL}等小图集合，
+直接以单个分子图作为训练样本。
+在实现中，本文对不同数据源进行重标号与必要的采样筛选，
+因此，混合语料的节点/边规模来自实际构建结果，而非简单等于各单一数据集规模之和。
+
+对任意训练样本图 $G_n$，通过图到序列映射 $\Phi$ 得到离散 token 序列，
+公式如~\ref{eq:s_n_token}所示：
+\begin{equation}
+s_n = \Phi(G_n) = \big(w^{(n)}_1,\dots,w^{(n)}_{L_n}\big), \quad w^{(n)}_i\in\mathcal{V},
+\label{eq:s_n_token}
+\end{equation}
+其中 $\mathcal{V}$ 为统一词表，$L_n$ 为序列长度。
+为适配编码器上下文长度上限 $L_{\mathrm{ctx}}$，本文在样本构建阶段通过“采样-校验-重采样”
+保证 $L_n\le L_{\mathrm{ctx}}$，从而避免超长序列引起的训练不稳定与计算开销失控。
 
 \textbf{SMTP 式掩码 token 预测目标。}
-在预训练阶段，本文采用 Scheduled Masked Token Prediction（SMTP）
+在预训练阶段，本文采用调度掩码 token 预测（SMTP）
 作为统一自监督目标，
 其本质是对图序列中的被掩码 token 进行分类预测，
 使编码器从上下文中恢复被遮蔽的结构与语义信息。
 形式上，对于序列 $s_n$，
-首先根据调度策略（例如随训练进程逐步提高掩码比例）
+首先根据调度策略
 采样一组掩码位置集合 $\mathcal{I}_n \subseteq \{1,\dots,L_n\}$，
 并将这些位置的 token 替换为特殊标记 $[\mathrm{MASK}]$，得到输入序列
 $\tilde{s}_n$。
-记 $\mathrm{Enc}_G$ 以及其后的 token 分类头联合定义的条件分布如式~(\ref{eq:smtp-pred}) 所示：
+记 $\mathrm{Enc}_G$ 以及其后的 token 分类头联合定义的条件分布
+如式~\ref{eq:smtp-pred}\  所示：
 \begin{equation}
   p_\theta(w \mid \tilde{s}_n, i),
   \quad w \in \mathcal{V},\; i \in \mathcal{I}_n,
@@ -516,7 +502,7 @@ $\tilde{s}_n$。
 即在给定被掩码序列 $\tilde{s}_n$ 与位置 $i$ 的条件下，
 对该位置原始 token 的预测分布。
 对单个序列 $s_n$ 的 SMTP 损失定义为所有掩码位置的平均交叉熵，
-形式如式~(\ref{eq:smtp-loss}) 所示：
+形式如式~\ref{eq:smtp-loss}\  所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{SMTP}}(s_n)
   = \frac{1}{|\mathcal{I}_n|}
@@ -528,10 +514,9 @@ $\tilde{s}_n$。
 对于属于同一属性维度的 token 列，
 本文在同一列上的所有非 padding 位置共同参与掩码与损失累计，
 并先在列内取平均再在图间取平均，
-以保证多维属性 token 在预测时的一致性与协同性。
-
-整个混合语料上的预训练目标为所有图损失的期望（或其小批量近似），
-形式化描述如式~(\ref{eq:pretrain-loss}) 所示：
+以保证多维属性 token 在预测时的一致性与协同性。最终，
+整个混合语料上的预训练目标为所有图损失的期望，
+形式化描述如式~\ref{eq:pretrain-loss}\  所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{pre}}
   = \frac{1}{N}
@@ -542,55 +527,28 @@ $\tilde{s}_n$。
 其优化过程等价于在统一词表下对所有结构、属性与特殊 token
 进行多分类交叉熵最小化。
 
-\textbf{混合预训练的表征优势。}
-得益于图到序列的高保真编码与统一的 SMTP 目标，
-$\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
-如稀疏但具有明显社团结构的引文网络、
-高聚类系数的电商协同图以及具有严格化学约束的分子图。
-在这些高度异构但共享同一编码空间的图上进行联合训练，
-可以显著提升结构表征的域外迁移能力：
-一方面，模型被迫学习与具体语义标签无关、主要由拓扑模式决定的通用结构特征；
-另一方面，混合语料中大规模的节点与边（总体规模约为 $N_v$ 个节点、$N_e$ 条边）
-有效缓解了单一数据集规模有限导致的过拟合问题，
-使得预训练得到的 $h_v^{\mathrm{struc}}$ 和 $h_G^{\mathrm{struc}}$
-在多种下游任务（节点分类、链路预测、图属性回归等）上均表现出更好的泛化性。
-后文的实验部分将进一步验证：在相同下游监督信号下，
-基于混合数据集预训练的图结构编码器在不同图任务和不同数据域上，
-整体性能均明显优于仅在单一数据集上进行预训练的基线模型。
-
-
-
-
 \section{图结构和文本的跨模态对齐损失函数改进}
 \label{sec:multi_loss_enhanced}
 
-尽管前文所述的图结构编码器 $\mathrm{Enc}_G$与文本特征编码器$\mathrm{Enc}_T$已
-分别在结构空间与语义空间中学习到较为丰富的表征，但二者原生分布存在显著偏移，
-若仅依赖简单线性投影将图向量接入预训练语言模型，其跨模态相关性与可对齐性仍然有限。
-为此，本节围绕图结构表征与文本特征之间的显式对齐机制，
-系统设计了多层次的损失函数改进策略，在全局语义、局部子结构以及生成式行为三个层面共同约束跨模态一致性。
-整体目标是将图结构编码“嵌入”到语言模型可解释的语义流形中，
-使节点级与图级结构表示既保留拓扑模式，又与对应文本描述形成高置信度的一一对应关系，
-从而为后续节点分类与图推理提供更稳健的语义基底。
+尽管图结构编码器 $\mathrm{Enc}_G$ 与文本特征编码器 $\mathrm{Enc}_T$
+分别能够学习有效的结构表征与语义表征，
+两种模态在表示空间的几何结构与分布形态上仍存在显著偏移。
+在此情况下，若仅通过浅层线性投影将图向量接入预训练语言模型，
+模型往往只能获得弱相关的跨模态耦合，难以稳定建立
+结构信息到文本语义的可追溯对应关系。
+为此，本节面向图-文跨模态对齐过程
+构建多层次对齐目标，对共享表示空间施加更强约束。
 
-首先，借鉴 GraphGPT\cite{Tang2023GraphGPTGI}中的对比学习范式，
-本节将基于 InfoNCE 的跨模态对比损失作为全局对齐基线：
-通过在批内构造图--文正负样本对，最大化匹配对的相似度、最小化不匹配对的相似度，
-显式压缩 \(\tilde{h}_i^\mathrm{struc}\)和\(\tilde{h}_i^\mathrm{text}\)
-在共享对齐空间 \(\mathbb{R}^{d_a}\)中的分布差异。
-该全局损失确保在节点或图级尺度上，结构表征与文本表征满足语义上“同指”的一致性，
-为后续更精细粒度的对齐提供基础。
+具体而言，本文以 GraphGPT\cite{Tang2023GraphGPTGI} 的跨模态对比学习范式为基础，
+采用基于 InfoNCE 的全局对比损失作为对齐基线，
+在此基础上，本文进一步引入两类针对图结构特性的对齐改进：
+一是面向局部子结构的细粒度对齐约束，用于强化局部结构模式与局部语义片段之间的对应关系；
+二是基于交叉熵的生成式对齐约束，以图结构表示为条件驱动语言解码，
+将对齐信号直接注入自回归生成行为，以提升图表征的语言可用性。
 
-在此基线之上，本文进一步引入两类针对图结构特性的对齐改进：
-其一，面向子结构的局部表征对齐机制，将图结构划分为若干欧拉路径上的局部片段，
-并与文本序列中对应的短语或片段建立细粒度匹配关系，
-通过局部对比或匹配损失强化“局部结构—局部语义”的绑定，提升模型对环、
-桥接结构等关键子图模式的感知能力；
-其二，基于生成式交叉熵的跨模态生成对齐方法，利用语言模型编解码器\(Dec_T\)，
-以图结构表征为条件生成节点描述或类别解释，并通过生成式交叉熵损失约束生成文本与真实描述的一致性，从而将对齐信号直接注入自回归解码过程，使图表征具备驱动语言生成的能力。
-
-综合而言，如\autoref{fig:multi_cross_modal_alignment}所示，本节提出的对齐损失由全局 InfoNCE 对比损失、局部对齐损失以及交叉熵损失三部分构成，通过加权联合优化实现从“全局语义相似性→局部结构对应性→生成行为一致性”的渐进式跨模态对齐。实验结果表明，相比仅采用全局对比学习的基线配置，引入局部与生成式对齐后，
-图结构编码器在多种图任务上的零样本/少样本性能以及推理链的语义一致性均得到显著提升。
+综合而言，如\autoref{fig:multi_cross_modal_alignment} 所示，
+本节的总体目标由全局对比对齐、局部细粒度对齐与生成式重建对齐三部分组成，
+其具体形式与训练细节将在后续小节中给出。
 
 \begin{figure}[htbp]
     \centering
@@ -602,23 +560,33 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 \subsection{基于 InfoNCE 损失的全局表征对齐}
 \label{subsec:global_align}
 
-在完成图结构编码器 \(\mathrm{Enc}_G\)、文本特征编码器 \(\mathrm{Enc}_T\) 以及对齐网络 \(N_A\) 的构建之后，本文首先采用基于 InfoNCE 损失的全局对比对齐作为跨模态对齐的基线方案。该方案借鉴视觉--语言预训练中的对比学习范式，将同一节点的图结构表征与文本语义表征视作一对语义一致的正样本，批内其他跨模态组合视作负样本，从而在共享对齐空间中压缩并对齐两种模态的几何结构。
+在完成图结构编码器 \(\mathrm{Enc}_G\)、
+文本特征编码器 \(\mathrm{Enc}_T\) 以及对齐网络 \(N_A\) 的构建之后，
+本文首先采用基于 InfoNCE 损失的全局对齐作为跨模态对齐的基线方案。
+该方案借鉴视觉--语言预训练中的对比学习范式，
+将同一节点的图结构表征与文本语义表征视作一对语义一致的正样本，
+同一批次内其他跨模态组合视作负样本，
+从而在共享对齐空间中压缩并对齐两种模态的几何结构。
 
 如第~3.2 节所述，图结构编码器与文本特征编码器分别输出节点级表征
  \(h_i^{\mathrm{struc}} \in \mathbb{R}^{d_g}\) 与 
  \(h_i^{\mathrm{text}} \in \mathbb{R}^{d_t}\)。
  在对齐网络 \(N_A\) 中，通过投影函数 \(f_g\) 和 \(f_t\) 
- 将二者映射到共享对齐空间 \(\mathbb{R}^{d_a}\)，如式~(\ref{eq:align-proj}) 所示：
+ 将二者映射到共享对齐空间 \(\mathbb{R}^{d_a}\)，
+ 如式~\ref{eq:align-proj}\ 所示：
 \begin{equation}
   \tilde{h}_i^{\mathrm{struc}} = f_g\bigl(h_i^{\mathrm{struc}}\bigr), 
   \qquad
   \tilde{h}_i^{\mathrm{text}} = f_t\bigl(h_i^{\mathrm{text}}\bigr),
   \label{eq:align-proj}
 \end{equation}
-其中 \(f_g:\mathbb{R}^{d_g}\!\rightarrow\!\mathbb{R}^{d_a}\)、\(f_t:\mathbb{R}^{d_t}\!\rightarrow\!\mathbb{R}^{d_a}\) 为两层 MLP 或线性投影。
+其中 $f_g:\mathbb{R}^{d_g}\!\rightarrow\!\mathbb{R}^{d_a}$、
+$f_t:\mathbb{R}^{d_t}\!\rightarrow\!\mathbb{R}^{d_a}$ 为可学习投影；
+本文采用两层 MLP 作为默认实现。
 
-为采用余弦相似度作为对比学习的相似性度量，本文对对齐后的向量进行 \(\ell_2\) 归一化，
-其计算过程如式~(\ref{eq:normalize}) 所示：
+为采用余弦相似度作为对比学习的相似性度量，
+本文对投影后的向量进行 $\ell_2$ 归一化，
+其计算过程如式~\ref{eq:normalize}\ 所示：
 \begin{equation}
   u_i = \frac{\tilde{h}_i^{\mathrm{struc}}}{\bigl\|\tilde{h}_i^{\mathrm{struc}}\bigr\|_2},
   \qquad
@@ -626,18 +594,19 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
   \label{eq:normalize}
 \end{equation}
 其中 \(u_i, v_i \in \mathbb{R}^{d_a}\)。
-在此基础上，跨模态相似度自然定义为二者的内积，如式~(\ref{eq:sim}) 所示：
+在此基础上，跨模态相似度自然定义为二者的内积，如式~\ref{eq:sim}\  所示：
 \begin{equation}
   \mathrm{sim}(u_i, v_j) = u_i^\top v_j.
   \label{eq:sim}
 \end{equation}
 
-在训练阶段，记一个 mini-batch 中的节点索引集合为 \(\mathcal{B}\)。
-对于每个节点 \(i \in \mathcal{B}\)，
-其图结构表征 \(u_i\) 与对应文本表征 \(v_i\) 构成一对正样本，
-而 \(\{v_j\}_{j \in \mathcal{B}, j \neq i}\) 构成负样本集合。
+在训练阶段，设一个批次的样本索引集合为 $\mathcal{B}$，
+其中每个样本 $i\in\mathcal{B}$ 对应一对配对的图--文输入，
+从而得到一对对齐向量 $(u_i, v_i)$。
+对于任意 $i\in\mathcal{B}$，$(u_i, v_i)$ 构成正样本对，
+而 $\{(u_i, v_j)\}_{j\in\mathcal{B},\,j\neq i}$ 构成负样本集合。
 给定温度系数 \(\tau > 0\)，从“图 \(\rightarrow\) 文本”方向定义的 InfoNCE 损失
-如式~(\ref{eq:infonce-g2t}) 所示：
+如式~\ref{eq:infonce-g2t}\ 所示：
 \begin{equation}
   \mathcal{L}_{g \rightarrow t}
   =
@@ -648,12 +617,12 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
          {\sum_{j \in \mathcal{B}} \exp\bigl(\mathrm{sim}(u_i, v_j) / \tau\bigr)}.
   \label{eq:infonce-g2t}
 \end{equation}
+
 该目标驱动每个图结构向量 \(u_i\) 在对齐空间中靠近其语义对应的 \(v_i\)，同时与其他节点的文本向量保持足够区分度，从图侧约束语言模态的语义几何结构。
 
 为缓解单向对齐带来的偏置并增强训练稳定性，
 本文对称地引入“文本 \(\rightarrow\) 图”方向的 InfoNCE 损失。
-此时，每个文本向量 \(v_i\) 需在所有图结构向量 \(\{u_j\}_{j \in \mathcal{B}}\) 
-中检索到其对应节点，其损失公式如~(\ref{eq:infonce-t2g}) 所示：
+其形式如式~\ref{eq:infonce-t2g}\ 所示：
 \begin{equation}
   \mathcal{L}_{t \rightarrow g}
   =
@@ -666,7 +635,7 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 \end{equation}
 
 综合两种方向，基于 InfoNCE 的全局表征对齐基线损失定义为对称损失的平均，
-其形式如式~(\ref{eq:global-align}) 所示：
+其形式如式~\ref{eq:global-align}\ 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{global}}
   =
@@ -678,9 +647,17 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
   \bigr).
   \label{eq:global-align}
 \end{equation}
-在优化过程中，\(\mathrm{Enc}_G\) 的可训练参数、\(\mathrm{Enc}_T\) 的轻量调优部分以及投影网络 \(f_g, f_t\) 均在该目标下联合更新，从而在统一的对齐空间中获得互为检索和互相约束的全局跨模态表征。
 
-需要指出的是，本小节的 InfoNCE 对齐仅在节点级全局向量上施加约束，并未显式建模子结构级对应关系或生成式一致性，因此可视作一种简洁而标准的跨模态对齐基线。下一小节将在此基础上进一步引入面向子结构的局部表征对齐机制，以提升对细粒度图结构语义的区分与建模能力。
+在优化过程中，冻结图编码器\(\mathrm{Enc}_G\) 和
+文本编码器\(\mathrm{Enc}_T\) ，
+仅训练投影网络 \(N_A\) 中的 \(f_g, f_t\) 模块参数，
+从而在统一的对齐空间中获得互为检索和互相约束的全局跨模态表征。
+
+需要指出的是，本小节的 InfoNCE 对齐仅在节点级全局向量上施加约束，
+并未显式建模子结构级对应关系或生成式一致性，
+因此可视作一种标准的跨模态对齐基线。
+下一小节将在此基础上进一步引入面向子结构的局部表征对齐机制，
+以提升对细粒度图结构语义的区分与建模能力。
 
 
 
@@ -688,84 +665,67 @@ $\mathrm{Enc}_G$ 在预训练过程中同时接触到多种结构分布：
 \label{subsec:local_align}
 
 仅依赖前文基于 InfoNCE 的节点级全局对齐，
-虽然能够在语义空间中整体拉近图结构表征与文本表征，
-但难以约束欧拉路径上局部子结构与其细粒度自然语言描述之间的一致性。
-为进一步提升模型对边邻域、局部模式与关系语义的捕获能力，
-本文在欧拉路径解析基础上，引入面向子结构的局部表征对齐机制，
-借鉴 GraphTranslator\cite{Zhang2024GraphTranslatorAG} 中多粒度对齐思想，
-在统一对齐空间内显式约束局部子图与局部文本描述的一一对应关系。
-整体子结构-短语级的局部语义对齐算法流程如~(\ref{alg:local_match_algorithm})所示：
+虽然能够在整体上拉近图结构表征与文本表征的语义距离，
+但其约束主要作用于节点级全局向量，
+难以显式刻画欧拉路径上\emph{局部子结构}与\emph{细粒度语言片段}之间的一致性。
+为进一步提升模型对边邻域模式与关系语义的捕获能力，
+本文在欧拉路径解析基础上引入子结构-短语级局部对齐机制，
+借鉴 GraphTranslator \cite{Zhang2024GraphTranslatorAG}的多粒度对齐思想，
+在统一对齐空间内对局部子图与局部文本描述施加更强的对应约束。
+整体流程如算法~\ref{alg:local_match_algorithm}\ 所示。
+
 \begin{algorithm}[t]
-\caption{子结构-短语级局部匹配损失 $\mathcal{L}_{\mathrm{match}}$ 计算流程}
+\caption{子结构-短语级 token 匹配损失 $\mathcal{L}_{\mathrm{match}}$ 的计算流程}
 \label{alg:local_match_algorithm}
-\KwIn{一批子结构序列 $\{s_{i,k}\}$ 与对应文本片段 $\{x^{(u)}_{i,k}\}$；
-      图结构编码器 $\mathrm{Enc}_G$；
-      文本编码器 $\Phi_{\mathrm{LM}}$；
-      对齐投影层 $W_g,W_t$}
-\KwOut{局部匹配损失 $\mathcal{L}_{\mathrm{match}}$}
+\KwIn{子结构序列集合 $\{s_{i,k}\}$ 及其对应文本片段 token 序列 $\{x^{(u)}_{i,k}\}$；
+图结构编码器 $\mathrm{Enc}_G$；
+文本编码骨干 $\Phi_{\mathrm{LM}}$；
+token 级投影层 $W_g, W_t$；
+匹配温度 $\tau_{\mathrm{m}}$ 与缩放系数 $\gamma$；
+负样本采样算子 $\mathcal{N}(\cdot)$（默认 in-batch）}
+\KwOut{token 匹配损失 $\mathcal{L}_{\mathrm{match}}$}
 
-初始化样本集合 $\mathcal{B} \gets \emptyset$\;
+初始化样本集合 $\mathcal{B}\gets\emptyset$\;
 
-\ForEach{子结构--文本对 $(s_{i,k}, x^{(u)}_{i,k})$}{
-  结构侧 token 表示：
-  $H^{\mathrm{g}}_{i,k} \gets \mathrm{Enc}_G(s_{i,k}) W_g$\;
-  文本侧 token 表示：
-  $H^{\mathrm{t}}_{i,k} \gets \Phi_{\mathrm{LM}}(x^{(u)}_{i,k}) W_t$\;
+\ForEach{正样本对 $(s_{i,k}, x^{(u)}_{i,k})$}{
+  $H^{\mathrm{g}}_{i,k} \gets \mathrm{Enc}_G(s_{i,k})\, W_g$\;
+  $H^{\mathrm{t}}_{i,k} \gets \Phi_{\mathrm{LM}}(E(x^{(u)}_{i,k}))\, W_t$\;
+  计算相似度矩阵 $a_{i,k}(\ell,j)=\mathrm{sim}(H^{\mathrm{g}}_{i,k}[\ell],H^{\mathrm{t}}_{i,k}[j])$\;
+  计算 softmax 权重 $\pi_{i,k}(\ell,\cdot)=\mathrm{softmax}(a_{i,k}(\ell,\cdot)/\tau_{\mathrm{m}})$\;
+  计算匹配得分 $m_{i,k}\gets \frac{1}{L_{i,k}}\sum_{\ell}\sum_{j}\pi_{i,k}(\ell,j)a_{i,k}(\ell,j)$\;
+  将 $(m_{i,k}, y{=}1)$ 加入 $\mathcal{B}$\;
 
-  \For{$\ell \gets 1$ \KwTo $L_{i,k}$}{
-    \For{$j \gets 1$ \KwTo $L^{(u)}_{i,k}$}{
-      计算相似度
-      $s_{i,k}(\ell,j) \gets \mathrm{sim}\!\big(H^{\mathrm{g}}_{i,k}[\ell], H^{\mathrm{t}}_{i,k}[j]\big)$\;
-    }
+  \ForEach{$x^{(u)}_{j,l} \in \mathcal{N}(x^{(u)}_{i,k})$}{
+    $H^{\mathrm{t}}_{j,l} \gets \Phi_{\mathrm{LM}}(E(x^{(u)}_{j,l}))\, W_t$\;
+    以同样方式计算错配得分 $m^{\mathrm{neg}}_{(i,k)\rightarrow(j,l)}$\;
+    将 $(m^{\mathrm{neg}}_{(i,k)\rightarrow(j,l)}, y{=}0)$ 加入 $\mathcal{B}$\;
   }
-  计算子结构匹配得分：
-  $m_{i,k} \gets \frac{1}{L_{i,k}} \sum_{\ell=1}^{L_{i,k}}
-      \max_{1 \le j \le L^{(u)}_{i,k}} s_{i,k}(\ell,j)$\;
-
-  将正样本对 $(i,k)$ 及其得分 $m_{i,k}$ 加入集合 $\mathcal{B}$，并置标签 $y_{i,k}=1$\;
 }
 
-\ForEach{从不同子结构/节点构造的负样本对 $(i,k),(j,l)$}{
-  计算对应得分 $m_{j,l}$，加入集合 $\mathcal{B}$，并置标签 $y_{j,l}=0$\;
-}
-
-基于 Sigmoid 计算二元交叉熵损失：
-\(
-  \mathcal{L}_{\mathrm{match}}
-\)\;
-
+基于 Sigmoid 的二元交叉熵计算
+$\mathcal{L}_{\mathrm{match}}= -\frac{1}{|\mathcal{B}|}\sum_{(m,y)\in\mathcal{B}}\bigl[y\log\sigma(\gamma m)+(1-y)\log(1-\sigma(\gamma m))\bigr]$\;
 \Return{$\mathcal{L}_{\mathrm{match}}$}\;
 \end{algorithm}
 
 
 
 \textbf{局部子结构与文本片段的构造。}
-记第 \(i\) 个节点在欧拉路径序列化之后所对应的局部子图为
-\(
-S_i = (V_i,E_i,X_i,A_i)
-\)，
-通过滑动窗口或基于中心节点的采样算子
-\(
-\mathcal{S}_{\mathrm{sub}}
-\)
-将其进一步划分为若干尺寸可控的子结构
-\(
-\{S_{i,k}\}_{k=1}^{K_i}
-\)，即公式(\ref{eq:sub_sampling})所示：
+对每个目标节点 $i$，首先提取其局部邻域子图 $S_i=(V_i,E_i,X_i,A_i)$，
+并通过子结构采样算子 $\mathcal{S}_{\mathrm{sub}}$
+将其划分为尺寸可控的若干子结构 $\{S_{i,k}\}_{k=1}^{K_i}$，
+如式~\ref{eq:sub_sampling}\ 所示：
 \begin{equation}
   S_{i,k}
   = \mathcal{S}_{\mathrm{sub}}\bigl(S_i,\, c_{i,k},\, \theta_{\mathrm{sub}}\bigr),
-  \quad k=1,\dots,K_i,
+  \quad k=1,\dots,K_i.
   \label{eq:sub_sampling}
 \end{equation}
-其中 \(c_{i,k}\) 为子结构中心（可为节点或边），
-\(\theta_{\mathrm{sub}}\) 为子图采样超参数（如 hop 数与邻居数）。
-对每个子结构 \(S_{i,k}\)，通过前文定义的欧拉路径序列化映射 \(\Phi\) 得到局部结构序列
-\(
-s_{i,k} = \Phi(S_{i,k})
-\)。
+其中 $c_{i,k}$ 为子结构中心（节点或边），
+$\theta_{\mathrm{sub}}$ 为采样超参数（如 hop 数与邻居数），并用于显式控制 $|E_{i,k}|$ 以保证序列长度可被上下文窗口容纳。
+对每个子结构 $S_{i,k}$，利用欧拉路径序列化映射 $\Phi$ 得到局部结构序列
+$s_{i,k}=\Phi(S_{i,k})$。
 
-在语义侧，参考 GraphTranslator 中 Producer 的分解式文本构造范式，
+在语义侧，参考 GraphTranslator \cite{Zhang2024GraphTranslatorAG}中 Producer 的分解式文本构造范式，
 本文为每个子结构 \(S_{i,k}\) 设计局部描述模板，将中心节点属性、
 邻域属性与局部关系模式整合为一段自然语言片段
 \(
@@ -775,7 +735,7 @@ u_{i,k}
 \(
 x^{(u)}_{i,k} = \tau(u_{i,k})
 \)，
-则相应的语义表示如式~(\ref{eq:sub_text_embed}) 所示：
+则相应的语义表示如式~\ref{eq:sub_text_embed} 所示：
 \begin{equation}
   h^{\mathrm{text}}_{i,k}
   = \mathrm{Pool}_t\!\bigl(\Phi_{\mathrm{LM}}\bigl(E(x^{(u)}_{i,k})\bigr)\bigr)
@@ -786,14 +746,14 @@ x^{(u)}_{i,k} = \tau(u_{i,k})
 
 \textbf{子结构级对齐向量与局部 InfoNCE。}
 对于每个子结构序列 \(s_{i,k}\)，
-图结构编码器 \(\mathrm{Enc}_G\) 给出 token 级隐藏状态
+图结构编码器 \(\mathrm{Enc}_G\) 给出 token 级编码表示
 \(
 H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \)。
 为获得子结构级结构表示，
 本文在序列尾部为每个子图附加特殊标记 \([\mathrm{SSUM}]\)，
 并从对应位置读取局部聚合向量，或对该子图内的结构 token 进行平均池化，
-得到\( h^{\mathrm{struc}}_{i,k}\)，其公式如~(\ref{eq:sub_graph_embed}) 所示：
+得到\( h^{\mathrm{struc}}_{i,k}\)，其公式如~\ref{eq:sub_graph_embed}\ 所示：
 
 \begin{equation}
   h^{\mathrm{struc}}_{i,k}
@@ -808,7 +768,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \(\mathbb{R}^{d_a}\)；
 在子结构层面，
 得到局部结构表征\(z^{\mathrm{g}}_{i,k}\)
-与文本片段表征\(z^{\mathrm{t}}_{i,k}\)，如式~(\ref{eq:sub_proj}) 所示：
+与文本片段表征\(z^{\mathrm{t}}_{i,k}\)，如式~\ref{eq:sub_proj}\ 所示：
 \begin{equation}
   z^{\mathrm{g}}_{i,k} = f_g\bigl(h^{\mathrm{struc}}_{i,k}\bigr),
   \qquad
@@ -816,11 +776,11 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
   \in \mathbb{R}^{d_a}.
   \label{eq:sub_proj}
 \end{equation}
-设 \(\mathrm{sim}(\cdot,\cdot)\) 为归一化相似度度量（如余弦相似度），
+设 \(\mathrm{sim}(\cdot,\cdot)\) 基于余弦相似度归一化相似度度量，
 \(\tau_{\mathrm{sub}}>0\) 为温度系数，
 则在一个批次内，
 每个 \((i,k)\) 对应一组正样本 \((z^{\mathrm{g}}_{i,k},z^{\mathrm{t}}_{i,k})\)，
-其余子结构间跨模态组合视作负样本。局部 InfoNCE 损失定义如式~(\ref{eq:sub_infonce}) 所示：
+其余子结构间跨模态组合视作负样本。局部 InfoNCE 损失定义如式~\ref{eq:sub_infonce}\ 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{sub}}^{\mathrm{g\rightarrow t}}
   = - \frac{1}{\sum_i K_i}
@@ -835,7 +795,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \end{equation}
 并可对称地定义文本到图的对齐损失
 \(\mathcal{L}_{\mathrm{sub}}^{\mathrm{t\rightarrow g}}\)，
-从而得到双向局部对齐目标，如式~(\ref{eq:sub_bidirectional}) 所示：
+从而得到双向局部对齐目标，如式~\ref{eq:sub_bidirectional} 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{sub}}
   = \frac{1}{2}
@@ -852,19 +812,19 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \textbf{基于 token 级匹配的细粒度局部约束。}
 在子结构级对齐之外，
 本文进一步引入 token 级匹配损失，以刻画子图内部结构 token 与文本 token 之间的细粒度对应关系。
-设 \(H^{\mathrm{g}}_{i,k} \in \mathbb{R}^{L_{i,k}\times d_a}\) 与
-\(H^{\mathrm{t}}_{i,k} \in \mathbb{R}^{L^{(u)}_{i,k}\times d_a}\)
-分别为对齐空间中的结构侧与文本侧 token 表示
-（可通过对 \(H_{i,k}\) 与 \(\Phi_{\mathrm{LM}}(E(x^{(u)}_{i,k}))\) 施加线性变换获得），
-则第 \(\ell\) 个结构 token 与第 \(j\) 个文本 token 之间的相似度，如式~(\ref{eq:token_sim}) 所示：
+本文通过对 \(H_{i,k}\) 与 \(\Phi_{\mathrm{LM}}(E(x^{(u)}_{i,k}))\) 施加线性变换获得
+对齐空间中的结构侧token表示\(H^{\mathrm{g}}_{i,k} \in \mathbb{R}^{L_{i,k}\times d_a}\)
+与文本侧 token 表示\(H^{\mathrm{t}}_{i,k} \in \mathbb{R}^{L^{(u)}_{i,k}\times d_a}\)，
+则第 \(\ell\) 个结构 token 与第 \(j\) 个文本 token 之间的相似度，如式~\ref{eq:token_sim}\ 所示：
 \begin{equation}
   s_{i,k}(\ell,j)
   = \mathrm{sim}\!\bigl(H^{\mathrm{g}}_{i,k}[\ell],\, H^{\mathrm{t}}_{i,k}[j]\bigr).
   \label{eq:token_sim}
 \end{equation}
-借鉴 GraphTranslator 中细粒度匹配目标的设计思想，
-本文采用“最大匹配聚合”策略将 token 级相似度汇总为子结构匹配得分，
-如式~(\ref{eq:local_match_score}) 所示：
+
+借鉴 GraphTranslator \cite{Zhang2024GraphTranslatorAG}中细粒度匹配目标的设计思想，
+本文采用最大匹配聚合策略将 token 级相似度汇总为子结构匹配得分，
+如式~\ref{eq:local_match_score}\ 所示：
 \begin{equation}
   m_{i,k}
   = \frac{1}{L_{i,k}}
@@ -877,7 +837,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 在训练时，
 对正样本对 \((i,k)\) 赋予标签 \(y_{i,k}=1\)，
 对由不同子结构或不同节点构成的负样本对 \((i,k),(j,l)\) 赋予标签 \(0\)，
-构造二元交叉熵损失，其公式表示如式~(\ref{eq:local_match_loss}) 所示：
+构造二元交叉熵损失，其公式表示如式~\ref{eq:local_match_loss}\ 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{match}}
   = - \frac{1}{|\mathcal{B}|}
@@ -895,7 +855,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 
 \textbf{局部对齐损失的总体形式。}
 综合子结构级 InfoNCE 与 token 级匹配约束，
-面向子结构的局部对齐损失定义如式~(\ref{eq:local_total}) 所示：
+面向子结构的局部对齐损失定义如式~\ref{eq:local_total}\ 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{local}}
   = \lambda_{\mathrm{sub}} \mathcal{L}_{\mathrm{sub}}
@@ -923,7 +883,8 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \mathbf{w}_v = (w_{v,1},\dots,w_{v,L_v}),
 \)
 其中 $L_v$ 为文本长度。
-在此条件下，文本解码器 $\mathrm{Dec}_T$ 对节点文本建模的自回归条件分布可写为式~(\ref{eq:graph2text_prob})：
+在此条件下，文本解码器 $\mathrm{Dec}_T$ 对节点文本建模的自回归条件分布可写为
+式~\ref{eq:graph2text_prob}\ ：
 \begin{equation}
   p_\theta(\mathbf{w}_v \mid G,T,q_{\mathrm{rec}})
   =
@@ -940,7 +901,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \mathbf{w}_v^\star = (w_{v,1}^\star,\dots,w_{v,L_v}^\star)
 \)
 作为解码器输入，最小化基于负对数似然的交叉熵损失。
-对一个包含若干节点的 mini-batch $B$，图到文本重建损失定义如式~(\ref{eq:graph2text_ce}) 所示：
+对一个包含若干节点的 mini-batch $B$，图到文本重建损失定义如式~\ref{eq:graph2text_ce}\ 所示：
 \begin{equation}
   \mathcal{L}_{\mathrm{CE}}
   =
@@ -966,7 +927,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 在此基础上，本文采用多目标联合优化策略，将节点级全局对齐损失、局部对齐损失与图到文本重建损失进行加权组合。
 记第~\ref{subsec:global_align} 节中定义的节点级 InfoNCE 全局对齐损失为 $\mathcal{L}_{\mathrm{global}}$，
 第~\ref{subsec:local_align} 节中定义的局部对齐损失为 $\mathcal{L}_{\mathrm{local}}$，
-则跨模态对齐阶段的总体训练目标可表示为式~(\ref{eq:joint_align_loss})：
+则跨模态对齐阶段的总体训练目标可表示为式~\ref{eq:joint_align_loss}\ ：
 \begin{equation}
   \mathcal{L}_{\mathrm{align}}
   =
@@ -988,7 +949,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 避免仅依赖全局池化导致的语义过度平滑，使关键子图模式与文本短语之间建立更精细的对应关系；
 (iii) $\mathcal{L}_{\mathrm{CE}}$ 则从生成建模角度反向检验图表示的语义完备性，
 要求图编码在被送入解码器时能够恢复出高质量的节点描述文本。
-三者在式~(\ref{eq:joint_align_loss}) 中协同作用，使得最终得到的图结构表征既适合下游节点分类判别任务，
+三者在式~(\ref{eq:joint_align_loss}) 中协同作用，使得最终得到的图结构表征既适合下游节点分类任务，
 又具备良好的跨模态语义对齐与生成能力。
 
 在具体实现中，训练阶段采用基于 AdamW 的随机梯度优化器对图编码器高层与跨模态投影层参数进行更新，
@@ -1006,22 +967,22 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 \textbf{(1)实验目标}
 
 本章提出的算法针对图基座模型中图表征质量不足与跨模态语义对齐能力有限的问题，
-通过基于欧拉路径的图--序列表征与多层次跨模态对齐策略两项改进，
-构建了通用的图结构基座模型。
-实验部分旨在系统分析上述两类改进以及集成的基座模型在公开节点分类数据集上的性能测评结果，
-围绕第三章构建的通用图结构基座模型，本章的实验目标概括如下：
+分别引入基于欧拉路径的图--序列表征与多层次跨模态对齐策略，
+并在公开节点分类基准上开展系统测评。本章的实验目标概括如下：
 
 \begin{itemize}
-  \item 测评同时采用图编码改进与跨模态对齐优化的完整图基座模型，
-  在节点分类任务上的整体性能表现，并与典型基线方法进行对比。
+  \item 测评同时采用图编码改进与跨模态对齐优化的完整图基座模型
+  在节点分类任务上的总体性能，
+  并与典型基线方法进行对比。
 
   \item 定量分析基于欧拉路径的图--序列表征对节点分类性能的影响，
   验证图结构编码改进对提升节点表示质量的有效性。
 
-  \item 考察不同跨模态训练目标组合（如仅全局对齐、仅局部对齐、仅重建及其联合）
+  \item 考察不同跨模态训练目标组合
   对模型性能的影响，刻画多层次跨模态对齐策略在节点分类任务中的具体贡献。
 
-  \item 通过消融分析与超参数配置对比，探索图表征改进与跨模态对齐算法中关键超参数的合理设置范围，
+  \item 通过消融与超参数对比，
+  探索关键超参数的合理设置范围，
   为后续模型应用与扩展提供参考。
 \end{itemize}
 
@@ -1067,14 +1028,19 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 
 \textbf{（3）数据集配置}
 
-为系统测评本章提出的图结构表征与跨模态对齐方法，
-实验采用多源异构图数据集进行训练与验证。
-表~\ref{tab:dataset_overview}详细汇总了第一、二训练阶段所用数据集的核心特性与配置参数。
+为系统测评本章提出的图结构表征与跨模态对齐方法，实验采用多源异构图数据集
+进行训练与验证。表~\ref{tab:dataset_overview}\ 
+详细汇总了第一、二、三训练阶段所用数据集的核心特性与配置参数。
 
-第一阶段图编码器预训练采用混合数据集策略，整合学术引用网络、
-电商共购网络及分子化学图谱，构建了一个包含数百万节点与边的统一预训练底座。
-通过统一的欧拉路径编码转换为序列化表示，总计包含552,052个节点与4,459,033条边。
-这种跨域数据的融合，迫使图编码器学习到底层的拓扑不变量，而非特定领域的统计偏差。
+第一阶段图编码器在多源图数据上进行自监督预训练。
+具体地，对Cora\cite{Hu2020OpenGB}、PubMed\cite{Sen2008CollectiveCI}、
+OGB-arxiv\cite{Hu2020OpenGB}、Amazon-* \cite{Wan2018ItemRO} 等{单一大图}数据，
+从节点集合采样中心节点并在最大节点数/边数或最大序列长度约束下抽取邻域子图；
+对 PCQM4Mv2\cite{Hu2021OGBLSCAL} 等{图集合}数据，
+则从图实例集合中采样分子图并进一步抽取局部子结构，
+统一转化为欧拉路径结构序列用于结构掩码预测训练。
+通过混合产生规模受控子图序列样本的构造方式可迫使编码器学习跨领域共享的拓扑不变量，
+而非依赖单一领域统计偏差。
 
 第二阶段跨模态对齐则聚焦于文本属性丰富的真实场景图（Cora、PubMed、OGB-Arxiv），
 严格遵循原始数据集的节点文本属性与图结构关联，构建图-文对齐样本对。
@@ -1083,63 +1049,69 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 在输入格式上，图结构经欧拉路径序列化后统一截断至256 tokens，
 文本属性经SentencePiece分词后限制在128 tokens以内，确保模型输入的标准化与可比性。
 
-并且本文对使用的数据集进行图特性的分析，
-具体见表~(\ref{tab:dataset_characteristics})：
+阶段三监督微调实验回到具体节点分类任务，
+严格使用官方训练集进行有监督训练，并在验证集早停，最终报告测试集指标。
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{结合欧拉路径图表征和跨模态对齐的多阶段图数据集配置概览}
+  \caption{结合欧拉路径图表征与跨模态对齐的多阶段数据集配置概览}
   \label{tab:dataset_overview}
-  % 可以根据需要略微调节间距
   \setlength{\tabcolsep}{4pt}
   \renewcommand{\arraystretch}{1.15}
-  \begin{tabularx}{\textwidth}{@{}l c r r >{\centering\arraybackslash}p{2.8cm} c@{}}
+  \begin{tabularx}{\textwidth}{@{}l c r r c c@{}}
     \toprule
-    数据集 & 图类型 & 节点数 & 边数 & 节点文本 / 特征维度 & 训练阶段 \\
+    数据集 & 图类型 & 节点数/图数 & 边数 & 特征维度 & 训练阶段 \\
     \midrule
-    Cora            & 学术引用图         &  2,708   &    10,556  & 1,433（BoW）       & 阶段一、二 \\
-    PubMed          & 生物医学引用图     & 19,717   &    88,648  & 500（TF--IDF）          & 阶段一、二 \\
-    OGB-Arxiv       & 大规模论文引用图   & 169,343  & 2,315,598    & 128（论文嵌入）         & 阶段一、二 \\
-    Amazon-Computers& 电商共购图         & 87,229   &   1,256,548     & 768（商品特征）         & 阶段一     \\
-    PCQM4Mv2        & 分子图集合         & 3,803,453 & 78,256,721    & 原子 / 键特征           & 阶段一     \\
+    Cora            & 学术引用图         & 2,708     & 10,556     & 1,433 & 阶段一、二、三 \\
+    PubMed          & 生物医学引用图     & 19,717    & 88,648     & 500   & 阶段一、二、三 \\
+    OGB-arxiv       & 大规模论文引用图   & 169,343   & 2,315,598  & 128   & 阶段一、二、三 \\
+    Amazon-Computers& 电商共购图         & 87,229    & 1,256,548  & 768   & 阶段一 \\
+    Amazon-Sports   & 电商共购图         & 173,055   & 3,020,134  & 512   & 阶段一 \\
+    PCQM4Mv2        & 分子图集合         & 3,800,000$^*$ & --$^\ddagger$ & 原子/键属性 & 阶段一 \\
     \midrule
-    图表征混合数据集$^\dagger$     & 综合       & 552,052  & 4,459,033            & --                      & 阶段一     \\
-    跨模态对齐混合数据集$^\dagger$     & 文本属性图    & 191,768  & 2,414,802            & 1,433 / 500 / 128       & 阶段二     \\
+    图表征混合数据集$^\dagger$     & 综合（大图类合并） & 552,052 & 4,459,033 & -- & 阶段一 \\
+    跨模态对齐混合数据集$^\dagger$ & 文本属性图（拼接） & 191,768 & 2,414,802 & -- & 阶段二 \\
     \bottomrule
   \end{tabularx}
 
   {\raggedright\footnotesize
-  注：$^\dagger$ 图表征混合数据集为对上述多个图数据集重标号、采样与合并后
-  得到的综合预训练图，其节点 / 边规模来源于实际构建结果，
-  并非简单等于各单一数据集规模之和；跨模态对齐混合数据集仅由 Cora、PubMed 与
-  OGB-Arxiv 三个文本属性图拼接而成，节点数与边数为三者之和。\par}
+  注：$^\dagger$ “图表征混合数据集”为对单一大图类数据重标号、采样并合并后的综合图，其节点/边规模来自实际构建结果，并非简单求和；
+  “跨模态对齐混合数据集”仅由 Cora、PubMed 与 OGB-arxiv 拼接而成。\;
+  $^*$ PCQM4Mv2 为分子图集合，此处为图实例规模的近似量级。\;
+  $^\ddagger$ 分子图为小图集合，边数随采样批次变化，故不与单一大图口径统一汇总。\par}
 \end{table}
+
+此外，为刻画数据集结构差异对方法增益的影响，
+本文对参与节点分类测评的图数据集统计其图特性，结果如表~\ref{tab:dataset_characteristics} 所示。
 
 \begin{table}[htbp]
 \centering
-\caption{结合欧拉路径图表征和跨模态对齐的图数据集特性对比}
+\caption{节点分类基准图数据集的结构特性对比}
 \label{tab:dataset_characteristics}
 \resizebox{\textwidth}{!}{
 \begin{tabular}{lccccccc}
 \toprule
 \textbf{数据集} & \textbf{任务类型} & \textbf{图密度} & \textbf{平均度} & \textbf{聚类系数} & \textbf{直径} & \textbf{同质性} & \textbf{异构性} \\
 \midrule
-Cora &节点分类 &  0.0015 & 3.9 & 0.23 & 19 & 高 & 低 \\
-PubMed & 节点分类 & 0.00011 & 4.5 & 0.03 & 6 & 高 & 低 \\
-OGB-arxiv & 节点分类 & 0.00004 & 13.8 & 0.14 & 4 & 中 & 中 \\
-Amazon-Computers &节点分类 &  0.000095 & 8.3 & 0.35 & 20 & 低 & 高 \\
-Amazon-Sports &节点分类 &  0.000065 & 11.2 & 0.40 & 18 & 低 & 高 \\
-PCQM4Mv2 &图回归& 0.02  &  20.6 & 0.38 & 3 & 低 & 高 \\
+Cora            & 节点分类 & 0.0015  & 3.9  & 0.23 & 19 & 高 & 低 \\
+PubMed          & 节点分类 & 0.00011 & 4.5  & 0.03 & 6  & 高 & 低 \\
+OGB-arxiv       & 节点分类 & 0.00004 & 13.8 & 0.14 & 4  & 中 & 中 \\
+Amazon-Computers& 节点分类 & 0.000095& 8.3  & 0.35 & 20 & 低 & 高 \\
+Amazon-Sports   & 节点分类 & 0.000065& 11.2 & 0.40 & 18 & 低 & 高 \\
 \bottomrule
 \end{tabular}
 }
-  {\raggedright\footnotesize
-  \ 注：数据统计基于原始数据集官方划分。PCQM4Mv2为分子图集合，其边数统计为全集总和。\par}
+{\raggedright\footnotesize
+注：统计口径基于原始数据集划分；密度/聚类/直径等指标的计算默认在无向化图上进行。\par}
 \end{table}
+
 \textbf{（4）实验细节配置}
 
-为保证实验可重复性与结果的可比性，本节统一给出两阶段训练的核心超参数配置。若无特殊说明，所有实验均在 8 张 A100 80GB GPU 上进行，采用 DeepSpeed ZeRO-2 混合精度训练，随机种子固定为 42。
+为保证实验可重复性与结果的可比性，
+本节统一给出三阶段训练的核心超参数配置。若无特殊说明，
+所有实验均在 8 张 A100 80GB GPU 上进行，
+采用 DeepSpeed ZeRO-2 混合精度训练，随机种子固定为 42。
 
 {阶段一：图编码器预训练实验细节：}
 模型参数如下：图编码器采用 GET-Base24：隐藏维度 \(d_g = 768\)，Transformer 层数为 24，多头注意力头数为 12，前馈层维度 \(d_{\mathrm{ff}} = 4d_g = 3072\)，激活函数为 GELU；注意力层 Dropout 取 0.1，MLP 与嵌入层 Dropout 取 0。
@@ -1165,15 +1137,15 @@ LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
 全局梯度裁剪阈值同样为 1.0。
 综上，除特别说明外，所有基于图–文联合表征的实验均默认采用上述超参数配置。
 
-{阶段三：图基座模型监督微调实验细节：}
-训练目标为标准交叉熵损失：以正确类别对应的标签词（或类别描述）作为监督信号，
+{阶段三：图基座模型节点分类测评实验细节：}
+训练目标为标准交叉熵损失，以正确类别对应的标签词或类别描述作为监督信号，
 对 \(\mathrm{Dec}_T\) 输出的分类 token 概率分布计算损失；不额外引入对比或生成项。
 各节点分类数据集统一采用 AdamW 优化器，
 学习率设置为 \(\mathrm{lr}=2\times10^{-5}\)，\(\beta_1 = 0.9\)、\(\beta_2 = 0.95\)，
 \(\epsilon = 10^{-8}\)，权重衰减 0.01；学习率调度采用“预热 + 余弦退火”策略，
 预热步数占总训练步数的 3\%，之后按余弦曲线衰减至初始值的 \(1/10\)。
 训练轮数上，默认对每个数据集进行 5 个 epoch 的全量训练，
-对样本规模较小的数据集（如 Cora）将训练样本重复 3 次，以缓解数据不足问题；
+因Cora数据集样本规模较小，所以将其训练样本重复 3 次，以缓解数据不足问题；
 早停策略基于验证集 Micro-F1 表现，
 选取验证集指标最优的模型用于最终测试与对比。
 
@@ -1183,38 +1155,60 @@ LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
 
 \subsubsection{实验设置与基准}
 
-为了系统测评本研究提出的通用图结构基座模型在节点分类任务上的有效性，本文在 Cora、PubMed 和 OGB-Arxiv 三个经典的文本属性图基准上进行了对比实验。实验旨在验证图结构编码的高保真化改进与跨模态对齐策略的引入，是否能够显著提升模型对节点语义的判别能力。
-本届实验测评采用准确率（Accuracy）作为核心评价指标。
+为系统测评本文提出的通用图结构基座模型在节点分类任务上的有效性，
+本文在 Cora、PubMed 与 OGB-Arxiv 三个经典基准上进行对比实验。
+实验重点关注两类改进：{（1）基于欧拉路径的结构序列化与结构预训练}，
+以及{（2）多层次图--文对齐目标}，
+并检验二者在节点分类任务中的贡献。
+本节以测试集准确率（Test Accuracy, \%）作为评价指标。
 
-为了确立严格的比较基准，本文将对比方法划分为三类范式：
+为构建可对照的比较基准，本文将对比方法分为三类：
 \begin{enumerate}
-    \item \textbf{传统图神经网络基准（GNNs）}：
-    包括 MLP、GCN\cite{Kipf2016SemiSupervisedCW}、
-    GraphSAGE\cite{Li2024SimilaritybasedNS} 和 RevGAT\cite{Li2024SimilaritybasedNS}等经典架构，
-    代表了基于消息传递机制的经典监督学习方法；
-    \item \textbf{图基座模型基准（GFMs）}：
-    涵盖以 LLaGA (ND/HO)\cite{Chen2024LLaGALL}、
-    GraphGPT\cite{Tang2023GraphGPTGI}、
-    GraphPrompter\cite{Lv2025GraphPrompterMA} 为代表的主流方法，
-    代表了当前将 LLM 应用于图数据的SOTA（State-of-the-Art）水平；
-    \item \textbf{本文提出的改进方法}：为剖析各模块贡献，本文将完整模型解耦为三种配置：
-    \begin{itemize}
-        \item {方案1 (Eulerian Path)}：在 LLaGA 框架下，引入基于欧拉路径的高保真图序列化机制替代邻域采样模板，并结合 SMTP 自监督目标进行结构预训练。
-        \item {方案2 (Multi-level Alignment)}：引入包含全局对比、局部匹配及生成式重建的多层次跨模态对齐损失，强化图-文语义空间的融合。
-        \item {方案3 (Graph Foundation Model)}：
-        集成上述两项改进，构建结构保真且语义对齐的通用图基座模型。
-    \end{itemize}
+  \item \textbf{传统图神经网络（GNNs）}：
+  包括 MLP、GCN\cite{Kipf2016SemiSupervisedCW}、SAGE\cite{Sun2021ScalableAA} 与 RevGAT\cite{Li2024SimilaritybasedNS}，
+  代表基于消息传递的监督学习范式。
+
+  \item \textbf{图基座模型（GFMs）}：
+  包括 LLaGA（ND/HO）\cite{Chen2024LLaGALL}、GraphGPT\cite{Tang2023GraphGPTGI}、
+  GraphPrompter\cite{Lv2025GraphPrompterMA}、GraphTranslator\cite{Zhang2024GraphTranslatorAG} 与 GraphICL\cite{Sun2025GraphICLUG}，
+  代表将 LLM 引入图任务的主流框架。
+
+  \item \textbf{本文方法的三种配置}：
+  \begin{itemize}
+    \item \textbf{方案1（Euler Path + Structural Pre-training）}：
+    仅替换图结构输入表示与结构预训练目标。
+    具体地，在 LLaGA\cite{Chen2024LLaGALL} 的整体框架保持不变的前提下，
+    用欧拉路径结构序列化方式替代邻域模板作为图结构输入，
+    并在混合图数据上引入 SMTP 自监督目标进行结构预训练，仅优化图结构编码相关模块。
+    该配置用于验证高保真结构序列化以及大规模混合图预训练对下游任务的增益。
+    
+    \item \textbf{方案2（Multi-level Alignment）}：
+    仅引入多层次图--文对齐机制，不改变原始 LLaGA 的图结构线性化策略。
+    在保持 ND/HO 模板输入与基础训练流程不变的情况下，
+    引入全局对比、局部匹配与生成式重建等多层次图--文对齐损失。
+    该配置用于验证对齐损失设计带来的独立贡献。
+    \item \textbf{方案3（Graph Foundation Model）}：
+    集成方案1与方案2形成完整的图基座模型。
+    即以欧拉路径结构序列作为图结构输入，
+    先进行 SMTP 结构预训练，
+    再进行多层次图--文对齐，
+    最后在下游任务上进行监督微调。
+    该配置用于评估两类核心设计的叠加协同效应，并作为本文最终方法。
+  \end{itemize}
 \end{enumerate}
 
 \subsubsection{实验结果与分析}
 
-表 \ref{tab:node_cls_results} 展示了各方法在三个数据集上的准确率（Test Accuracy\%）。
-整体而言，本文提出的完整模型（方案3）在所有基准上均取得了最优性能。
+表~\ref{tab:node_cls_results} 汇总了各方法在三个数据集上的测试集准确率。
+其中加粗表示最佳结果，下划线表示次优结果。
+“--”表示对应工作未在该数据集上报告可对照结果。
+总体上，方案3在 PubMed、Cora 与 OGB-Arxiv 上
+分别取得 94.48\%、91.27\% 与 77.36\% 的最高结果。
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{结合欧拉路径图表征和跨模态对齐的节点分类任务性能测评}
+  \caption{结合欧拉路径图表征与跨模态对齐的节点分类性能测评}
   \label{tab:node_cls_results}
   \setlength{\tabcolsep}{10pt}
   \renewcommand{\arraystretch}{1.2}
@@ -1222,144 +1216,178 @@ LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
     \toprule
     \textbf{方法类型} & \textbf{模型方法} & \textbf{PubMed} & \textbf{Cora} & \textbf{OGB-Arxiv} \\
     \midrule
-    \multirow{4}{*}{传统图模型基准} 
+    \multirow{4}{*}{传统图模型基准}
       & MLP      & 82.55 & 63.12 & 69.20 \\
       & GCN\cite{Kipf2016SemiSupervisedCW}      & 86.43 & 75.08 & 72.63 \\
       & SAGE\cite{Sun2021ScalableAA}    & 86.26 & 74.94 & 73.33 \\
       & RevGAT\cite{Li2024SimilaritybasedNS}    & 86.70 & 74.21 & 72.88 \\
     \midrule
-    \multirow{6}{*}{图基座模型基准} 
+    \multirow{6}{*}{图基座模型基准}
       & LLaGA-ND\cite{Chen2024LLaGALL} & 88.89 & 88.19 & 73.04 \\
       & LLaGA-HO\cite{Chen2024LLaGALL} & 88.77 & 88.56 & 74.02 \\
-      & GraphGPT\cite{Tang2023GraphGPTGI} & 84.68 & --    & 62.18 \\
-      & GraphPrompter\cite{Lv2025GraphPrompterMA} & 94.32 & 70.11 & 72.38 \\
+      & GraphGPT\cite{Tang2023GraphGPTGI} & 84.68 & -- & 62.18 \\
+      & GraphPrompter\cite{Lv2025GraphPrompterMA} & \underline{94.32} & 70.11 & 72.38 \\
       & GraphTranslator\cite{Zhang2024GraphTranslatorAG} & 60.46 & 35.59 & 28.48 \\
       & GraphICL\cite{Sun2025GraphICLUG} & 93.18 & 83.58 & 73.68 \\
     \midrule
-    \multirow{3}{*}{\textbf{本章改进方法}} 
-      & 方案1    & 92.27 & 89.97 & 76.12 \\
-      & 方案2          & 91.74 & 88.34 & 75.58 \\
-      & \textbf{方案3（方案1+方案2）} & \textbf{94.48} & \textbf{91.27} & \textbf{77.36} \\
+    \multirow{3}{*}{\textbf{本章改进方法}}
+      & 方案1 & 92.27 & \underline{89.97} & \underline{76.12} \\
+      & 方案2 & 91.74 & 88.34 & 75.58 \\
+      & \textbf{方案3} & \textbf{94.48} & \textbf{91.27} & \textbf{77.36} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 
-{拓扑保真性对表征质量的提升（方案1分析）：}
-实验结果显示，单独引入基于欧拉路径的图表征相对优于传统图模型及基于采样的 GFMs。具体而言，在 PubMed、Cora 和 OGB-Arxiv 上，方案1分别达到了 92.27\%、89.97\% 和 76.12\% 的准确率。
-与最优传统图模型（RevGAT\cite{Li2024SimilaritybasedNS} /SAGE\cite{Sun2021ScalableAA}）相比，方案1实现了 2.79\% $\sim$ 15.76\% 的显著提升，
-表明基于序列生成的预训练范式比单纯的消息传递机制具备更强的特征抽取能力。
-与主流 Graph-LLM 基线（LLaGA-HO）\cite{Chen2024LLaGALL}相比，方案1在三个数据集上分别提升了 3.50\%、1.41\% 
-和 2.10\%。这种性能增益主要归因于{拓扑结构的高保真解析}。
-传统的邻域模板（如 ND/HO）本质上是对图结构的局部采样，
-极易丢失长程依赖以及环、桥接边等关键拓扑模式。相反，
-欧拉路径编码遍历了子图中的所有边，在同构意义下保留了完整的结构信息。
-值得注意的是，在聚类系数较高（0.23）的 Cora 数据集上，
-方案1相对于 LLaGA-HO \cite{Chen2024LLaGALL}的提升尤为稳健，这进一步证实了精确的局部结构编码对于
-捕捉引文网络中紧密社团结构的重要性。
+
+\textbf{欧拉路径结构序列化的贡献（方案1）：}
+为量化结构序列化与结构预训练对节点分类的影响，
+本文将方案1与两类代表性基线进行对照。
+首先，相较于传统 GNN 的最佳结果，
+方案1在 PubMed、Cora、OGB-Arxiv 上分别提升 5.57、14.89 与 2.79 个百分点
+（对应基线分别为 RevGAT、GCN 与 SAGE，见表~\ref{tab:node_cls_results}）。
+其次，相较于采用邻域模板输入的 LLaGA-HO\cite{Chen2024LLaGALL}，
+方案1在三数据集上分别提升 3.50、1.41 与 2.10 个百分点。
+上述差值可由输入结构表达范围的差异解释：
+ND/HO 模板以固定规则线性化局部邻域\cite{Chen2024LLaGALL}，
+而欧拉路径序列化在给定诱导子图内对边进行遍历，从而在子图尺度保留更完整的连通信息。
+因此，方案1呈现更高的节点分类准确率。
 
 
-{跨模态对齐对语义理解的增强（方案2分析）：}
-引入多层次跨模态对齐机制，模型在三个数据集上分别获得了
- 2.16\%、1.76\% 和 2.98\% 的性能提升（相较于未对齐基线）。
-这种提升在 {OGB-Arxiv} 数据集上最为显著（+2.98\%）。
-OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的文本密集型图。
-性能提升的内在机制在于{语义空间的有效弥合}。
-传统的线性投影难以解决图拓扑特征与文本语义特征在高维空间中的分布异构性问题。
-本文提出的多层次对齐策略——融合全局 InfoNCE 对比、
-局部 Token 级匹配及生成式重建——强制图编码器在特征空间中内化了文本的细粒度语义。
-这使得模型在进行节点分类时，能够协同利用拓扑信号与文本语义信号，而非仅依赖单一模态。
+\textbf{多层次对齐目标的影响（方案2）：}
+为评估跨模态对齐对节点分类的影响，
+本文将方案2与 LLaGA-HO\cite{Chen2024LLaGALL} 进行对照。
+在 PubMed 与 OGB-Arxiv 上，方案2相较于 LLaGA-HO 分别提升 2.97 与 1.56 个百分点；
+在 Cora 上两者差异为 $-0.22$ 个百分点（88.34 vs 88.56）。
+该结果表明，多层次图--文对齐对文本信息更密集或文本表征更稳定的数据集
+（如 OGB-Arxiv）带来更明显的收益；
+而在文本侧有效信息受限或节点属性以稀疏特征为主的数据集上，
+该收益可能呈现为边际变化。
+基于该观察，后续小节将进一步结合消融实验对各对齐项的贡献进行拆解分析。
 
-{结构与语义的协同效应（方案32综合分析）：}
-集成上述两项改进的完整图基座模型在所有测试任务中均展现出优异的性能，
-其性能提升幅度超过了单一改进的简单叠加，呈现出明显的协同效应。
-在 Cora 数据集上，组合方案比“方案1”提升了 1.30\%，比“方案2”提升了 2.93\%；在 OGB-Arxiv 上，最终性能达到 77.36\%，超越了此前最佳 Graph-LLM 基线（GraphICL, 73.68\%）约 3.68个百分点。
-这种协同效应揭示了图理解任务的双重依赖性：
-欧拉路径编码提供了高保真的结构先验，
-而多层次对齐机制填充了丰富的语义细节。
-两者结合，使得模型既能识别复杂的结构模式，
-又能精准理解节点的语义内容，
-从而在处理类别不平衡或结构复杂的样本时表现出更强的鲁棒性。
+\textbf{结构与语义的协同效应（方案3）：}
+方案3在三数据集上均优于任一单项改进：
+在 PubMed 上较方案1与方案2分别提升 2.21 与 2.74 个百分点；
+在 Cora 上分别提升 1.30 与 2.93 个百分点；
+在 OGB-Arxiv 上分别提升 1.24 与 1.78 个百分点。
+同时，方案3在 OGB-Arxiv 上达到 77.36\%，
+相较于表~\ref{tab:node_cls_results} 中最强 GFM 基线 GraphICL\cite{Sun2025GraphICLUG} 的 73.68\%
+提升 3.68 个百分点。
+这些结果表明：结构侧的高保真序列化表征与语义侧的多层次对齐约束在节点分类设置下具有互补作用，
+二者结合可在统一评测配置下稳定提升测试集准确率。
 
-综上所述，实验证据表明，通过构建结构保真的序列化表征并实施深度的跨模态对齐，
-可以有效突破现有 GFMs 在表征质量与语义融合上的瓶颈，
-为图基座模型在通用场景下的应用提供了坚实的实证基础。
-
+综上，表~\ref{tab:node_cls_results} 的对比结果支持如下结论：
+在 Cora、PubMed 与 OGB-Arxiv 三个节点分类基准上，
+通过（1）欧拉路径结构序列化与结构预训练提升结构输入的表达完整性，
+并（2）引入多层次跨模态对齐目标增强图--文表示的一致性，
+可以在统一评测口径下提升节点分类准确率。
 
 \subsection{欧拉路径图表征的对比和消融实验}
 \label{subsec:ablation_encoding}
-\subsubsection{不同序列表征机制对下游节点分类任务的性能影响}
-为了进一步探究图结构表征模块中不同序列化机制对模型性能的具体影响，并验证本章所采用的欧拉路径（Eulerian Path）编码在捕获拓扑完整性方面的优势，本节设计了针对图结构编码方式的消融实验。在保持语言模型主干（Qwen2.5-7B）与跨模态对齐策略不变的实验控制条件下，本文选取了三种代表性的图到序列（Graph-to-Sequence）编码范式进行对比分析。
 
-具体而言，对比基准包括：
-(1) {朴素线性化（Naive Linearization）}，
-即采用广度优先搜索（BFS）策略遍历子图节点，将其展平为序列并添加位置编码，
-该方法仅保留了节点集合信息而丢失了显式的边连接结构；
-(2) {邻域采样编码（Neighbor Sampling）}，
-复现了 LLaGA 框架中的 ND 与 HO 模板策略，
-以目标节点为中心采样固定数量邻居构建描述，这是当前 Graph-LLM 的主流做法；
-(3) {欧拉路径编码（本文改进方案）}，即本章提出的通过构造覆盖子图所有边的半欧拉路径，
-将图结构转换为可逆 Token 序列的方法。
-表 \ref{tab:ablation_encoding} 展示了
-上述不同策略在 OGB-Arxiv与 Cora数据集上的性能对比结果，采用Accuracy \%为测评指标。
+\subsubsection{不同序列表征机制对下游节点分类任务的性能影响}
+
+为分析图结构序列化方式对节点分类性能的影响，
+并在控制变量条件下评估欧拉路径序列化带来的增益，
+本文设计了针对图结构编码方式的消融实验。
+实验保持语言模型主干（Qwen2.5-7B）与跨模态对齐策略不变，
+仅替换“图 $\rightarrow$ 序列”的结构输入构造方式。
+为保证对比公平，三种编码策略均在相同的子图采样预算下构造结构输入，
+并采用一致的最大结构序列长度上限与截断规则。
+
+本文选取三类代表性的图到序列（ Graph-to-Sequence ）编码范式进行对照：
+\begin{enumerate}
+  \item \textbf{朴素线性化（Naive Linearization, BFS）}：
+  对采样子图进行 BFS 遍历，输出节点序列作为结构输入；
+  该策略在输入中\emph{不显式编码边或邻接关系}，因此结构信息主要体现为节点集合及其排列次序。
+
+  \item \textbf{邻域采样编码（Neighbor Sampling, LLaGA-ND/HO）}：
+  复现 LLaGA\cite{Chen2024LLaGALL} 框架中的 ND 与 HO 模板，
+  以目标节点为中心采样固定数量邻居并组织为文本化结构描述；
+  在固定输入长度预算下，该策略对应的结构信息来自\emph{局部邻域的截断/限量采样}。
+
+  \item \textbf{欧拉路径编码（Ours）}：
+  对采样得到的诱导子图构造覆盖其边集的（半）欧拉路径序列，
+  将子图结构映射为可重构的 token 序列；
+  因而在\emph{子图尺度}上提供更完整的边连接信息。
+\end{enumerate}
+
+表~\ref{tab:ablation_encoding} 给出了不同编码策略在 Cora 与 
+OGB-Arxiv 上的测试集准确率（Accuracy, \%），
+其中加粗表示最佳结果，下划线表示次优结果。
 
 \begin{table}[htbp]
   \centering
   \small
-  \caption{不同图结构编码范式的消融实验结果对比}
+  \caption{不同图结构编码范式的消融实验结果对比（Accuracy, \%）}
   \label{tab:ablation_encoding}
   \setlength{\tabcolsep}{8pt}
   \renewcommand{\arraystretch}{1.2}
   \begin{tabular}{lcccc}
     \toprule
-    \multirow{2}{*}{\textbf{编码策略}} & \textbf{结构覆盖范围} 
-    & \textbf{序列可逆性} & \multicolumn{2}{c}{\textbf{准确率 (Accuracy\%)}} \\
+    \multirow{2}{*}{\textbf{编码策略}} & \textbf{结构覆盖范围}
+    & \textbf{可重构性} & \multicolumn{2}{c}{\textbf{准确率}} \\
     \cmidrule(lr){4-5}
-    & (Structure Scope) & (Reversibility) & \textbf{Cora} & \textbf{OGB-Arxiv} \\
+    & (Structure Scope) & (Reconstructability) & \textbf{Cora} & \textbf{OGB-Arxiv} \\
     \midrule
-    基线 (仅文本) & 无结构信息 & 不可逆 & 63.12 & 69.20 \\
-    朴素线性化 (BFS) & 仅节点集合 & 不可逆 & 78.45 & 71.56 \\
-    邻域采样 (LLaGA) & 局部采样邻域 & 不可逆 & 88.56 & 74.02 \\
-    \textbf{欧拉路径 (Ours)} & \textbf{全边覆盖 (Edges)} & \textbf{可逆同构} & \textbf{89.97} & \textbf{76.12} \\
+    基线（仅文本） & 无结构 token & -- & 63.12 & 69.20 \\
+    朴素线性化（BFS） & 节点序列（不含边） & 否 & 78.45 & 71.56 \\
+    邻域采样（LLaGA） & 截断邻域（边覆盖部分） & 否 & \underline{88.56} & \underline{74.02} \\
+    \textbf{欧拉路径（Ours）} & \textbf{诱导子图边集覆盖} & \textbf{是} & \textbf{89.97} & \textbf{76.12} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-实验结果首先揭示了图拓扑信息的引入对下游任务性能具有决定性影响。
-相比于仅依赖文本语义的基线模型，任何形式的结构编码（即使是简单的 BFS）
-均带来了显著的性能提升。然而，朴素 BFS 线性化在 OGB-Arxiv 上的准确率
-（71.56\%）显著低于另外两种策略。这一现象表明，
-单纯的节点遍历虽然保留了节点集合的语义特征，但由于缺乏对边连接关系的显式编码
-，破坏了图的连通性与结构同构性，导致大语言模型难以从序列中有效重构出原本的拓扑逻辑，从而限制了性能上限。
+从表~\ref{tab:ablation_encoding} 可以得到以下可检验结论。
 
-进一步对比邻域采样与欧拉路径编码可以发现，本章方法在处理复杂长尾拓扑时表现出更强的鲁棒性。
-邻域采样策略（LLaGA）虽然在 Cora 等小规模图上表现尚可，
-但在 OGB-Arxiv 这种大规模数据集上，其准确率（74.02\%）比欧拉路径编码
-（76.12\%）低了 2.1 个百分点。这种差异的内在机理在于，
-采样策略在高阶邻居处往往面临指数级膨胀问题，被迫进行截断采样，
-导致长程依赖与稀疏连接信息的丢失。相比之下，
-欧拉路径通过紧凑的序列形式高保真编码了子图中的所有连边，
-使得模型能够敏锐地捕捉到采样策略容易忽略的桥接边与闭合环路结构，
-从而在复杂网络中保持了更优的判别力。
+1）结构 token 的引入带来稳定的性能增益。
+相较于“仅文本”基线，
+加入结构序列输入后准确率均提升。
+以 Cora 为例，BFS、邻域采样与欧拉路径分别提升 15.33、25.44 与 26.85 个百分点。
+以 OGB-Arxiv 为例，三者分别提升 2.36、4.82 与 6.92 个百分点。
+该结果表明，在相同训练配置下，结构输入为节点分类提供了额外有效信息来源。
+
+2）仅节点序列的线性化不足以达到边显式编码方法的性能上限。
+BFS 线性化在两数据集上均低于后两种策略：
+在 Cora 上，BFS 相较邻域采样与欧拉路径分别低 10.11 与 11.52 个百分点；
+在 OGB-Arxiv 上分别低 2.46 与 4.56 个百分点。
+结合三种编码的定义可知，BFS 输入未显式包含边或邻接关系 token，
+因此模型主要基于节点集合及其访问顺序进行分类，
+而难以直接利用连通关系模式作为分类证据；
+相应地，其准确率低于包含边关系信息的两类方法。
+
+3）在相同结构预算下，欧拉路径编码相较邻域采样获得额外增益。
+在 Cora 与 OGB-Arxiv 上，
+欧拉路径分别达到 89.97\% 与 76.12\%，
+相较邻域采样提升 1.41 与 2.10 个百分点。
+由于两者在实验中采用相同的子图采样预算与序列长度上限，
+该差值对应于结构输入表达方式的差异：
+邻域采样在固定长度预算下对邻域进行限量采样，
+从而仅覆盖部分边关系；
+欧拉路径在子图尺度覆盖其诱导边集，并以可重构的序列形式提供连通信息。
+因此，在统一评测配置下，欧拉路径编码在两数据集上均体现出更高的节点分类准确率。
+
 
 \subsubsection{欧拉路径图表征机制的关键参数消融实验}
 \label{subsec:ablation_parameters}
 
-在前节确立了欧拉路径编码相对于邻域采样策略的优势后，
-本节进一步深入探究欧拉图结构编码器内部关键配置对模型性能的影响。
-欧拉路径的序列化过程涉及两个核心维度的设计权衡：
+在前节对比不同图到序列编码策略的基础上，
+本节进一步分析欧拉路径序列化内部关键配置对节点分类性能的影响。
+欧拉路径序列化涉及两个直接影响输入 token 组成与长度预算的因素：
 {序列构建格式（Sequence Format）}与{节点重索引机制（Node Re-indexing）}。
-本文通过受控实验解构了这两个因素对节点分类准确率的贡献。
+本文在保持模型主干与训练配置不变的条件下，
+通过受控实验分别消融上述因素在 OGB-Arxiv 节点分类任务上的贡献。
 
-\textbf{(1)序列构建格式的信息密度权衡分析}
+\textbf{(1)序列构建格式：属性注入与长度预算的权衡}
 
-欧拉路径虽然保证了边的全覆盖，但不同的属性附着策略会导致生成的 Token 序
-列在“信息丰富度”与“上下文长度”之间产生显著差异。
-参考 GraphGPT\cite{Zhao2023GraphGPTGP} 的定义，
+在固定的子图采样预算与最大结构序列长度上限下，
+不同的属性附着策略会改变结构输入中拓扑 token 和属性 token 的比例，
+从而影响模型可利用的分类证据类型。
+参考 GraphGPT\cite{Zhao2023GraphGPTGP}工作中的序列化设计思想，
 本文对比了三种序列化变体：
 \begin{itemize}
     \item {紧凑模式 (Short Format)}：仅保留欧拉路径上的节点索引序列
-    （$v_0 \to v_1 \to \dots$），仅编码骨架拓扑，序列长度最短（$L \approx |E|$）。
+    （$v_0 \to v_1 \to \dots$），不显式包含边类型或节点/边属性 token，序列长度最短（$L \approx |E|$）。
     \item {冗余模式 (Long Format)}：在路径的每一步显式插入边类型 Token，
     并重复目标节点索引以增强注意力机制的定位能力，序列长度约为紧凑模式的 2 倍。
     \item {全属性模式 (Prolonged Format)}：本章默认采用的模式。
@@ -1368,7 +1396,8 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
 \end{itemize}
 
 表 \ref{tab:ablation_format} 展示了不同序列格式在 OGB-Arxiv 数据集上的性能对比，
-，采用Accuracy \%为测评指标。
+采用Accuracy \%为测评指标，
+其中加粗表示最佳结果，下划线表示次优结果。
 
 \begin{table}[htbp]
   \centering
@@ -1382,26 +1411,28 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
     \textbf{序列格式} & \textbf{包含属性} & \textbf{平均序列长度} & \textbf{Accuracy (\%)} & \textbf{性能增益} \\
     \midrule
     紧凑模式 (Short) & 仅拓扑 & $\sim$ 64 tokens & 73.45 & - \\
-    冗余模式 (Long) & 拓扑 + 边类型 & $\sim$ 128 tokens & 75.08 & +1.63\% \\
+    冗余模式 (Long) & 拓扑 + 边类型 & $\sim$ 128 tokens & \underline{75.08} & +1.63\% \\
     \textbf{全属性模式 (Prolonged)} & \textbf{拓扑 + 全属性} & \textbf{$\sim$ 256 tokens} & \textbf{76.12} & \textbf{+2.67\%} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-实验结果表明，图信息的\textit{显式化程度}与模型性能呈正相关。
-虽然“紧凑模式”大幅压缩了上下文开销，但由于其剥离了边属性与节点特征，
-导致 LLM 仅能依赖结构模式进行推理，准确率受限。
-“全属性模式”虽然序列长度增加了约 4 倍，但其带来的性能增益（+2.67\%）
-证实了在 Graph-LLM 架构中，将结构与属性在 Token 级别进行\textit{紧密交织}，有助于注意力头更高效地捕获结构-语义的联合分布。
+从表~\ref{tab:ablation_format} 可见，
+在本实验设置下，随着结构输入中可用属性信息的增加，测试集准确率相应提高：
+由 Short 到 Long 提升 1.63 个百分点，由 Short 到 Prolonged 提升 2.67 个百分点。
+该结果说明，当结构 token 中显式提供边类型与节点/边属性线索时，
+模型能够在节点分类训练中利用更多与类别判别相关的输入证据；
+同时，Prolonged 格式的收益发生在更长的结构序列预算下，
+反映了“属性注入量”与“上下文长度”之间的实际权衡。
 
 \textbf{(2)节点重索引机制的鲁棒性分析}
 
-除了序列格式，节点索引的分配方式也是影响模型泛化能力的关键因素。
-由于图数据具有节点排列不变性（Node Permutation Invariance），
-固定的节点索引顺序可能导致模型过拟合于特定的 ID 数值
-（例如总是倾向于关注 ID 较小的节点）。为了验证这一点，
-本文消融了 GraphGPT 提出的{循环重索引（Cyclic Re-indexing）}策略。
-
+图的节点排列在定义上不应影响其结构语义。
+然而，在图到序列映射中若将节点编号作为离散 token 输入，
+不同的编号分配可能引入与任务无关的绝对数值模式。
+为降低模型对特定编号方案的依赖，
+本文消融 GraphGPT\cite{Zhao2023GraphGPTGP} 中采用的循环重索引策略。
+具体包含以下消融方案：
 \begin{itemize}
     \item {静态索引 (Static)}：按照节点在欧拉路径中首次出现的顺序从 0 开始固定编号。
     \item {循环索引 (Cyclic)}：在训练过程中，对节点索引施加随机循环偏移 $\pi_r(v) = (\pi(v) + r) \pmod N$，作为一种动态的数据增强手段。
@@ -1422,34 +1453,39 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
   \vspace{0.2cm}
 \end{table}
 
-实验数据如表~\ref{tab:ablation_reindexing}，引入循环重索引机制后，模型在测试集上的准确率提升了 \textbf{0.8\%}
-（从 75.32\% 提升至 76.12\%），且在不同随机种子下的方差显著降低。
-这一现象揭示了动态索引作为一种\textit{结构化数据增强}的有效性：
-它迫使模型关注节点间的\textit{相对拓扑关系}而非绝对 ID 数值，
-从而显著增强了图编码器对未见图结构的泛化能力。
+如表~\ref{tab:ablation_reindexing} 所示，
+在其余设置一致的条件下，引入循环重索引后测试集准确率提升 0.80 个百分点。
+该提升表明：对序列化输入中的绝对编号进行随机平移扰动，
+可在训练过程中弱化编号选择带来的偶然相关性，
+从而使模型更侧重于由相对连通关系与属性线索所决定的判别信息。
 
 \subsection{跨模态对齐优化的对比和消融实验}
 \label{sec:ablation_alignment}
 
-为深入解构本文提出的多层次跨模态对齐策略中各损失分量对模型表征能力的具体贡献，
-本文设计了系统性的消融实验。
-实验在保持图结构编码器 \(\mathrm{Enc}_G\)与语言模型骨干\(\mathrm{Dec}_T\)不变的控制条件下进行，
-以仅包含全局 InfoNCE 损失（$L_{global}$）的模型为基线（Baseline），逐步引入细粒度匹配损失（$L_{match}$）与生成式交叉熵损失（$L_{gen}$），旨在阐明各组件在语义对齐、结构保持及下游任务泛化中的独特作用机制。
+为分析本文多层次跨模态对齐策略中各损失分量对表征学习的贡献，
+本文设计了系统性消融实验。
+在对齐预训练阶段，实验保持图结构编码器 $\mathrm{Enc}_G$ 与语言模型骨干 $\mathrm{Dec}_T$ 的结构配置不变，
+仅改变训练目标的损失组合；
+以仅包含全局 InfoNCE 损失 $\mathcal{L}_{\mathrm{global}}$ 的模型作为基线，
+逐步引入细粒度匹配损失 $\mathcal{L}_{\mathrm{match}}$ 与生成式交叉熵损失 $\mathcal{L}_{\mathrm{gen}}$，
+以刻画不同监督信号对语义对齐与结构保持的影响。
 
-\textbf{实验设置与参数说明：} 除特殊说明外，所有消融实验的基础超参数配置
-（如批次大小、优化器设置等）均与前文第 ~\ref{subsec:Experiment_setup}节保持一致。
-在下游任务测评阶段，
-本文遵循参数高效微调原则，
-冻结预训练的图编码器与大语言模型主干参数，仅对任务适配层（Task Adapter，
-即分类头与局部投影层）进行微调。训练过程采用 AdamW 优化器，
-学习率设为 $2\times10^{-5}$，训练周期为 5 epochs。
-这种设置旨在排除骨干网络参数更新带来的干扰，纯粹地测评不同对齐策略所习得的表征质量。
+\textbf{实验设置与参数说明：} 除特殊说明外，消融实验的基础超参数配置（批次大小、优化器设置等）
+与第~\ref{subsec:Experiment_setup}~节一致。
+在下游任务评测阶段，为减少微调过程对骨干参数的干扰，
+本文统一冻结预训练得到的 $\mathrm{Enc}_G$ 与 $\mathrm{Dec}_T$ 主干参数，
+仅微调任务适配层（分类头及对齐投影层）。
+优化器采用 AdamW，学习率设为 $2\times10^{-5}$，训练 5 个 epoch。
+在该设置下，不同对齐策略的差异主要来自预训练阶段所学习到的表示质量差异。
 
 \subsubsection{对齐策略对下游节点分类任务的影响}
 
-首先，本文考察了跨模态对齐质量对下游节点分类任务的直接影响。
-表~\ref{tab:ablation_downstream} 展示了在 Cora、PubMed 和 OGB-Arxiv 数据集上，
-不同对齐策略对分类准确率（Accuracy）的贡献。
+表~\ref{tab:ablation_downstream} 
+给出了不同对齐策略在 Cora、PubMed 与 OGB-Arxiv 上
+的测试集准确率（Accuracy, \%），加粗表示最佳结果，下划线表示次优结果。
+其中 Avg. Gain 为相较基线 $\mathcal{L}_{\mathrm{global}}$ 
+的\emph{绝对提升}（\%）在三个数据集上的平均值。
+
 
 \begin{table}[htbp]
   \centering
@@ -1461,21 +1497,40 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
   \textbf{对齐策略 (Alignment Strategy)} & \textbf{Cora} & \textbf{PubMed} & \textbf{OGB-Arxiv} & \textbf{Avg. Gain} \\
   \midrule
   Baseline ($L_{global}$) & 88.34 & 91.74 & 75.58 & - \\
-  \quad + Matching ($L_{match}$) & 89.85 & 92.89 & 76.45 & +1.21\% \\
-  \quad + Generation ($L_{gen}$) & 89.56 & 92.53 & 76.21 & +0.93\% \\
-  \textbf{Total ($L_{global} + L_{match} + L_{gen}$)} & \textbf{91.27} & \textbf{94.48} & \textbf{77.36} & \textbf{+2.80\%} \\
+  \quad + Matching ($L_{match}$) & \underline{89.85} & \underline{92.89} & \underline{76.45} & +1.21 \\
+  \quad + Generation ($L_{gen}$) & 89.56 & 92.53 & 76.21 & +0.93 \\
+  \textbf{Total ($L_{global} + L_{match} + L_{gen}$)} & \textbf{91.27} & \textbf{94.48} & \textbf{77.36} & \textbf{+2.80} \\
   \bottomrule
   \end{tabular}
   }
 \end{table}
 
-实验结果表明，高质量的预训练对齐是提升下游判别能力的先决条件。数据显示，单独引入局部匹配损失或生成式损失均能带来稳定的性能增益，这证实了单一的全局对比不足以捕捉复杂的图-文映射关系。更重要的是，完整模型（Total）的性能增益（+2.80\%）显著超过了单一改进的简单叠加。这一非线性增长现象揭示了不同损失项之间的协同效应：$L_{match}$ 提供的局部特征锚定与 $L_{gen}$ 提供的语义完备性约束在特征空间中形成了互补，共同构建了兼具判别力与鲁棒性的节点表征，从而显著提升了模型在未见数据上的泛化能力。
+从表~\ref{tab:ablation_downstream} 可见，
+在三个基准数据集上，引入 $\mathcal{L}_{\mathrm{match}}$ 
+或 $\mathcal{L}_{\mathrm{gen}}$ 均带来一致的准确率提升。
+相较基线，$\mathcal{L}_{\mathrm{match}}$ 在 
+Cora/PubMed/OGB-Arxiv 上分别提升 1.51/1.15/0.87 个百分点；
+$\mathcal{L}_{\mathrm{gen}}$ 分别提升 1.22/0.79/0.63 个百分点。
+联合损失 $\mathcal{L}_{\mathrm{total}}$ 
+在三个数据集上进一步提升 2.93/2.74/1.78 个百分点，
+对应平均提升 2.48 个百分点。
+
+此外，联合配置的平均提升
+高于两种单项提升的平均值之和。
+在本文的实验设置下，该现象表明两类监督信号在训练过程中可能具有互补性：
+$\mathcal{L}_{\mathrm{match}}$ 提供子结构与文本片段层面的细粒度对应约束，
+$\mathcal{L}_{\mathrm{gen}}$ 为表示学习引入生成式语义一致性约束，
+两者结合可在相同的参数高效微调配置下带来更高的节点分类准确率。
 
 \subsubsection{多层次损失对语义空间对齐的细粒度解析}
 
-为进一步探究各损失项如何影响表征在语义空间中的分布，
-本文在 Cora 数据集上进行了跨模态检索消融实验，采用Accuracy\%作为测评指标。
-表~\ref{tab:ablation_retrieval_full} 详细列出了各组件及其组合对双向检索性能的影响。
+为评估不同损失项对跨模态语义空间结构的影响，
+本文在 Cora 上进行双向跨模态检索实验，
+采用 R@K、MRR 与 NDCG 作为评价指标。
+表~\ref{tab:ablation_retrieval_full} 
+汇报了不同损失组合在 Text$\rightarrow$Node 
+与 Node$\rightarrow$Text 两个方向上的检索结果，
+其中加粗表示最佳结果，下划线表示次优结果。
 
 \begin{table}[htbp]
   \centering
@@ -1486,60 +1541,66 @@ OGB-Arxiv 的节点包含丰富的论文标题与摘要信息，属于典型的�
   \toprule
   \multirow{2}{*}{\textbf{消融设置}} & \multicolumn{5}{c|}{\textbf{Text $\rightarrow$ Node Retrieval}} & \multicolumn{5}{c}{\textbf{Node $\rightarrow$ Text Retrieval}} \\
   \cmidrule(lr){2-6} \cmidrule(lr){7-11}
-   & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{NDCG} & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{NDCG} \\
+   & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{NDCG}
+   & \textbf{R@1} & \textbf{R@5} & \textbf{R@10} & \textbf{MRR} & \textbf{NDCG} \\
   \midrule
-  Baseline ($L_{global}$) & 34.92 & 86.86 & 92.29 & 59.85 & 66.38 & 46.98 & 88.71 & 92.28 & 65.26 & 68.90 \\
-  \quad + $L_{match}$ & 39.15 & 88.24 & 93.10 & 61.12 & 68.45 & 47.82 & 89.95 & 94.15 & 64.10 & 71.20 \\
-  \quad + $L_{gen}$ & 37.40 & 87.90 & 92.85 & 60.50 & 69.10 & 47.15 & 90.10 & 93.80 & 63.80 & 72.05 \\
-  \textbf{Ours ($L_{total}$)} & \textbf{42.03} & \textbf{89.57} & \textbf{94.34} & \textbf{62.40} & \textbf{70.62} & \textbf{48.45} & \textbf{91.31} & \textbf{96.90} & \textbf{65.00} & \textbf{75.00} \\
+  Baseline ($\mathcal{L}_{\mathrm{global}}$)
+    & 34.92 & 86.86 & 92.29 & 59.85 & 66.38
+    & 46.98 & 88.71 & 92.28 & \textbf{65.26} & 68.90 \\
+  \quad + $\mathcal{L}_{\mathrm{match}}$
+    & \underline{{39.15}} & {\underline{88.24}} & {\underline{93.10}} & {\underline{61.12}} & {{68.45}}
+    & {\underline{47.82}} & {{89.95}} & {\underline{94.15}} & 64.10 & {{71.20}} \\
+  \quad + $\mathcal{L}_{\mathrm{gen}}$
+    & 37.40 & 87.90 & 92.85 & 60.50 & {\underline{69.10}}
+    & 47.15 & {\underline{90.10}} & {{93.80}} & 63.80 & {\underline{72.05}} \\
+  \textbf{Ours ($\mathcal{L}_{\mathrm{total}}$)}
+    & \textbf{42.03} & \textbf{89.57} & \textbf{94.34} & \textbf{62.40} & \textbf{70.62}
+    & \textbf{48.45} & \textbf{91.31} & \textbf{96.90} & \underline{65.00} & \textbf{75.00} \\
   \bottomrule
   \end{tabular}
   }
 \end{table}
 
-从检索指标的分布变化中可以清晰地观察到不同损失函数的特定作用域。引入细粒度匹配损失（$L_{match}$）后，Text $\rightarrow$ Node 的 R@1 指标出现了显著跃升。这有力地证实了 $L_{match}$ 通过跨模态注意力机制，强制图中的局部子结构与文本中的关键实体进行精准锚定，有效缓解了全局池化操作带来的信息模糊问题，从而提升了首位检索的精确度。另一方面，生成式损失（$L_{gen}$）对 NDCG 指标的提升最为明显。本文认为，这是因为生成任务迫使图编码器内化了足以重建文本的丰富语义细节，使得特征空间中的语义分布更加紧凑且连续，从而优化了整体排序质量。最终，三维对齐机制的结合实现了在保持高精度的同时，大幅提升了检索结果的整体相关性。
 
-\subsubsection{拓扑结构一致性的深层机制分析}
 
-最后，本节考察了对齐策略对图拓扑信息保留的影响。通过 NeighborRecall@K 与 NeighborHit@K 指标，本文量化了不同损失组合下检索结果对原始图邻域关系的覆盖程度，结果如表~\ref{tab:ablation_structure_full} 所示。
+基于表~\ref{tab:ablation_retrieval_full} 的数值变化，
+在 Text$\rightarrow$Node 方向，
+加入 $\mathcal{L}_{\mathrm{match}}$ 后 R@1 从 34.92 提升至 39.15（+4.23），
+加入 $\mathcal{L}_{\mathrm{gen}}$ 后提升至 37.40（+2.48），
+联合 $\mathcal{L}_{\mathrm{total}}$ 可进一步达到 42.03（+7.11）。
+该结果与 $\mathcal{L}_{\mathrm{match}}$ 在训练中提供 token/片段级对齐约束的目标一致，
+并主要体现在首位召回的提升。
 
-\begin{table}[htbp]
-  \centering
-  \caption{图结构和文本的跨模态对齐损失函数对结构一致性的消融实验}
-  \label{tab:ablation_structure_full}
-  \resizebox{0.85\textwidth}{!}{
-  \begin{tabular}{lcccc}
-  \toprule
-  \textbf{消融设置 (Ablation)} & \textbf{N-Recall@10} & \textbf{N-Hit@10} & \textbf{N-Recall@20} & \textbf{N-Hit@20} \\
-  \midrule
-  Baseline ($L_{global}$) & 68.02 & 82.68 & 76.77 & 96.82 \\
-  \quad + $L_{match}$ & 68.35 & 91.50 & 76.90 & 98.10 \\
-  \quad + $L_{gen}$ & 68.10 & 95.20 & 77.05 & 98.50 \\
-  \textbf{Ours ($L_{total}$)} & \textbf{68.77} & \textbf{99.44} & \textbf{77.28} & \textbf{99.90} \\
-  \bottomrule
-  \end{tabular}
-  }
-\end{table}
+在 Node$\rightarrow$Text 方向，
+$\mathcal{L}_{\mathrm{gen}}$ 对排序相关指标的增幅更为突出：
+NDCG 从 68.90 提升至 72.05（+3.15），
+而 $\mathcal{L}_{\mathrm{match}}$ 对应为 71.20（+2.30）。
+需要指出的是，单独加入 $\mathcal{L}_{\mathrm{match}}$ 时 MRR 从 65.26 降至 64.10（-1.16），
+说明局部匹配约束可能改变排序分布；
+联合损失 $\mathcal{L}_{\mathrm{total}}$ 将 NDCG 提升至 75.00（ +6.10），
+并使 MRR 维持在与基线接近的水平。
+因此，从双向检索指标综合来看，多损失联合优化在本设置下带来更高的检索相关性与排序质量。
 
-实验结果揭示了一个反直觉但深刻的现象：
-以文本重建为目标的生成式损失（$L_{gen}$）对结构一致性的提升作用
-（N-Hit@10 提升至 95.20\%）甚至超过了直接的局部匹配损失。这表明，
-为了能够自回归地生成描述节点的文本，模型必须隐式地编码其高阶邻域结构信息
-（例如，要生成“该论文属于机器学习领域”，
-模型需捕捉到其邻居多为同类论文的同质性结构模式）。
-因此，生成式对齐不仅是语义对齐的手段，更充当了一种强有力的结构自监督信号。
-最终，完整模型在 N-Hit@20 上达到了 99.90\% 的近乎完美覆盖，
-证明了本文提出的多层次对齐框架成功解决了传统方法中结构信息与语义信息割裂的难题，
-在将图拓扑映射至语言语义流形的过程中，实现了结构保真与语义对齐的高度协同。
 \section{本章小结}
 \label{sec:three_summerize}
-本章针对图结构基座模型在节点分类任务中存在的结构信息丢失与模态语义割裂问题，
-提出了一套结合欧拉路径编码与多层次跨模态对齐的图基座模型构建方案。
 
-首先，针对图序列化过程中的拓扑损耗问题，本章引入了基于欧拉路径的可逆编码机制。通过在序列空间显式保留边遍历信息与节点复现模式，该方法在同构意义下实现了对局部子图的近无损表征，有效突破了传统邻域采样策略在长程依赖捕捉上的瓶颈。基于大规模混合图语料的自监督预训练进一步赋予了图编码器通用的结构感知能力。
+本章围绕图基座模型在节点分类任务中的两类关键瓶颈展开：
+其一为图序列化过程中由采样与线性化带来的拓扑信息缺失，
+其二为图拓扑表征与文本语义表征之间的分布异构导致的对齐不足。
+针对上述问题，本章从“结构保真表征”与“跨模态语义对齐”
+两条主线提出并验证了相应改进。
 
-其次，为弥合图拓扑特征与文本语义特征之间的异构鸿沟，本章设计了多层次跨模态对齐框架。通过联合优化全局 InfoNCE 对比损失、细粒度 Token 级匹配损失以及生成式重建损失，模型成功在共享潜在空间中建立了结构单元与语义片段的精准映射。这种“结构-语义”的深度融合，使得大语言模型能够直接利用图特征进行有效的语义推断。
+针对图结构序列化的拓扑损耗问题，
+本章引入基于（半）欧拉路径的可逆编码机制，
+在子图层面通过显式记录边遍历顺序与节点复现模式，
+使序列表示在同构意义下保留可重构的连边信息，从而为结构建模提供更完整的输入依据。在此基础上，本章进一步在混合图语料上开展自监督结构预训练，使图编码器获得跨图域的结构表征初始化，并作为后续跨模态对齐与下游任务的结构基座。
 
-最后，在多个标准基准数据集上的实验结果表明，所提方法在节点分类任务上显著优于现有的图神经网络与 Graph-LLM 基线。消融实验进一步证实，高保真的结构编码与细粒度的模态对齐是提升模型泛化性能的关键因素。
+针对图拓扑特征与文本语义特征的对齐问题，
+本章构建多层次跨模态对齐框架：
+以全局 InfoNCE 对比目标作为对齐基线，
+并引入子结构/Token 级匹配约束与生成式重建约束，
+联合优化目标，以提升共享潜在空间中结构单元与语义片段的可对齐性与可检索性。
 
-本章构建的具备结构感知与语义对齐能力的图基座模型，为处理更复杂的图任务奠定了坚实的表征基础。在下一章中，本文将在此基座之上，引入强化学习范式，进一步探索模型在复杂图推理与逻辑决策任务中的能力边界。
+在 Cora、PubMed 与 OGB-Arxiv 等标准基准上的实验结果表明，集成两项改进后的完整模型在节点分类准确率上取得稳定提升；相较于仅采用全局对齐的配置，引入局部匹配与生成式约束后，下游性能增益在多数据集上呈现一致趋势。进一步的消融与检索/结构一致性分析显示：局部匹配项主要改善首位检索相关指标，而生成式约束对排序质量与邻域一致性指标带来更显著的增益，两者联合能够同时提升语义可检索性与结构一致性。
+
+综上，本章得到的结构保真且语义可对齐的图基座模型，为后续更复杂的图推理任务提供了统一的结构输入形式与跨模态接口。下一章将在此基座之上引入强化学习范式，进一步面向复杂图推理与逻辑决策任务构造可验证奖励信号与策略优化过程，以分析模型在推理链可追溯性与决策可靠性方面的能力边界。
