@@ -70,19 +70,32 @@
 \section{基于欧拉路径的图结构表征方式改进}
 \label{sec:graph_encoder_enhanced}
 
-在传统图基座模型框架中，图结构常通过启发式邻域展开或模板化文本描述进行线性化。
-该类方法虽然便于接入语言模型，但难以同时保证拓扑信息完整性与序列语法一致性，
-从而易产生结构冗余或关键信息缺失。
-为缓解上述问题，本文在 GraphGPT~\cite{Zhao2023GraphGPTGP} 的序列化思路基础上，
+本文在 GraphGPT~\cite{Zhao2023GraphGPTGP} 的序列化思路基础上，
 设计一种基于（半）欧拉路径解析的结构化图序列表示。
 该方法以子图内可逆为设计准则：在固定采样子图范围内，
 通过可标记的连通化与欧拉化预处理将图转化为满足语法约束的 token 序列；
 由于合成边与复制边均携带显式类型标记，解码端可在重建增广多重图后将其过滤，
-从而在同构意义下恢复原子图拓扑。整体架构如\autoref{fig:Euler_encoder_architecture} 所示。
+从而在同构意义下恢复原子图拓扑。
+
+基于欧拉路径的图结构表征整体架构
+如\autoref{fig:Euler_encoder_architecture} 所示。
+包含三个步骤：
+（1）基于欧拉路径的图结构序列化：针对输入图结构数据，
+通过连通性增强和欧拉化预处理，使其图结构满足欧拉图条件；
+并执行节点重索引与欧拉路径采样，
+最终生成保留节点与边属性信息的全属性图 token 序列。
+（2）图欧拉 Transformer 编码表征：
+基于双向 Transformer 架构构建图结构编码器，
+对上述图 token 序列进行上下文建模与结构编码，
+输出图结构表征。
+（3）自监督表征预训练：
+进一步在大规模混合图语料上开展自监督预训练，
+通过跨图类型与跨数据域的联合学习提升编码器的通用结构建模能力与泛化性能。
+
 \begin{figure}[htbp]
     \centering
     \includegraphics[width=1\textwidth]{3_chapter/Euler_encoder_architecture.pdf}
-    \caption{基于欧拉路径的图结构表征方式改进架构示意图}   
+    \caption{基于欧拉路径的图结构表征改进架构示意图}   
     \label{fig:Euler_encoder_architecture}
 \end{figure}
 
@@ -532,7 +545,7 @@ $\tilde{s}_n$。
 
 尽管图结构编码器 $\mathrm{Enc}_G$ 与文本特征编码器 $\mathrm{Enc}_T$
 分别能够学习有效的结构表征与语义表征，
-两种模态在表示空间的几何结构与分布形态上仍存在显著偏移。
+两种模态在表示空间的几何结构与分布形态上仍存在偏移。
 在此情况下，若仅通过浅层线性投影将图向量接入预训练语言模型，
 模型往往只能获得弱相关的跨模态耦合，难以稳定建立
 结构信息到文本语义的可追溯对应关系。
@@ -947,7 +960,7 @@ H_{i,k} = \mathrm{Enc}_G(s_{i,k}) \in \mathbb{R}^{L_{i,k}\times d_g}
 确保图结构向量与对应节点文本在嵌入空间中的一致性；
 (ii) $\mathcal{L}_{\mathrm{local}}$ 通过子结构--短语级对齐进一步细化约束，
 避免仅依赖全局池化导致的语义过度平滑，使关键子图模式与文本短语之间建立更精细的对应关系；
-(iii) $\mathcal{L}_{\mathrm{CE}}$ 则从生成建模角度反向检验图表示的语义完备性，
+(iii) $\mathcal{L}_{\mathrm{CE}}$ 则从生成建模角度反向检验图表示的语义完整性，
 要求图编码在被送入解码器时能够恢复出高质量的节点描述文本。
 三者在式~(\ref{eq:joint_align_loss}) 中协同作用，使得最终得到的图结构表征既适合下游节点分类任务，
 又具备良好的跨模态语义对齐与生成能力。
@@ -1055,7 +1068,7 @@ OGB-arxiv\cite{Hu2020OpenGB}、Amazon-* \cite{Wan2018ItemRO} 等{单一大图}�
 \begin{table}[htbp]
   \centering
   \small
-  \caption{结合欧拉路径图表征与跨模态对齐的多阶段数据集配置概览}
+  \caption{结合欧拉路径图表征与跨模态对齐的多阶段数据集配置}
   \label{tab:dataset_overview}
   \setlength{\tabcolsep}{4pt}
   \renewcommand{\arraystretch}{1.15}
@@ -1087,7 +1100,7 @@ OGB-arxiv\cite{Hu2020OpenGB}、Amazon-* \cite{Wan2018ItemRO} 等{单一大图}�
 
 \begin{table}[htbp]
 \centering
-\caption{节点分类基准图数据集的结构特性对比}
+\caption{节点分类数据集的图结构特性对比}
 \label{tab:dataset_characteristics}
 \resizebox{\textwidth}{!}{
 \begin{tabular}{lccccccc}
@@ -1208,7 +1221,7 @@ LLM 侧最大输入长度为 2048 token。全局 batch size 为 16。
 \begin{table}[htbp]
   \centering
   \small
-  \caption{结合欧拉路径图表征与跨模态对齐的节点分类性能测评}
+  \caption{结合图表征改进与跨模态对齐的图基座模型的节点分类性能测评}
   \label{tab:node_cls_results}
   \setlength{\tabcolsep}{10pt}
   \renewcommand{\arraystretch}{1.2}
@@ -1319,7 +1332,7 @@ OGB-Arxiv 上的测试集准确率（Accuracy, \%），
 \begin{table}[htbp]
   \centering
   \small
-  \caption{不同图结构编码范式的消融实验结果对比（Accuracy, \%）}
+  \caption{欧拉路径图表征机制关于不同序列表征机制的消融实验}
   \label{tab:ablation_encoding}
   \setlength{\tabcolsep}{8pt}
   \renewcommand{\arraystretch}{1.2}
@@ -1601,6 +1614,12 @@ NDCG 从 68.90 提升至 72.05（+3.15），
 并引入子结构/Token 级匹配约束与生成式重建约束，
 联合优化目标，以提升共享潜在空间中结构单元与语义片段的可对齐性与可检索性。
 
-在 Cora、PubMed 与 OGB-Arxiv 等标准基准上的实验结果表明，集成两项改进后的完整模型在节点分类准确率上取得稳定提升；相较于仅采用全局对齐的配置，引入局部匹配与生成式约束后，下游性能增益在多数据集上呈现一致趋势。进一步的消融与检索/结构一致性分析显示：局部匹配项主要改善首位检索相关指标，而生成式约束对排序质量与邻域一致性指标带来更显著的增益，两者联合能够同时提升语义可检索性与结构一致性。
+在 Cora、PubMed 与 OGB-Arxiv 等标准基准上的实验结果表明，
+集成两项改进后的完整模型在节点分类准确率上取得稳定提升；
+相较于仅采用全局对齐的配置，引入局部匹配与生成式约束后，
+下游性能增益在多数据集上呈现一致趋势。
+进一步的消融与检索/结构一致性分析显示：
+局部匹配项主要改善首位检索相关指标，
+而生成式约束对排序质量与邻域一致性指标带来增益，两者联合能够同时提升语义可检索性与结构一致性。
 
 综上，本章得到的结构保真且语义可对齐的图基座模型，为后续更复杂的图推理任务提供了统一的结构输入形式与跨模态接口。下一章将在此基座之上引入强化学习范式，进一步面向复杂图推理与逻辑决策任务构造可验证奖励信号与策略优化过程，以分析模型在推理链可追溯性与决策可靠性方面的能力边界。
