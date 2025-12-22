@@ -864,7 +864,7 @@ $d(\ell,[L_{\min},L_{\max}])=\max(0,L_{\min}-\ell,\ell-L_{\max})$ 表示长度�
 在 GRPO 目标之上，本文采用组内多轨迹采样与可验证奖励进行强化学习训练。
 每次迭代从强化学习任务池 $\mathcal{D}_{\mathrm{RL}}$ 采样一个批次
 $\{(G_i,q_i)\}_{i=1}^{B}$，批次大小 $B=64$，
-其中 Erd\H{o}s 风格合成图任务与真实文本属性图任务按 $4{:}1$ 混合采样。
+其中 Erd\H{o}s\cite{Guo2025G1TL}  风格合成图任务与真实文本属性图任务按 $4{:}1$ 混合采样。
 对每个样本构造条件输入 $x_i$，其定义与式~\ref{eq:cot_input_seq}\ 一致，
 并保持系统提示与任务模板固定。
 
@@ -982,12 +982,12 @@ $\{y_i^{(m)}\}_{m=1}^{M}$，采样配置为温度 $T=1.0$ 与 top-$p=0.9$，
 数据组成见表~\ref{tab:cot_dataset_config}。
 
 {强化学习阶段数据。}
-强化学习阶段采用公开图推理基准 Erd\H{o}s、
-以及用于零样本评测的 GraphWiz 与 GraphArena。
+强化学习阶段采用公开图推理基准 Erd\H{o}s\cite{Guo2025G1TL} 、
+以及用于零样本评测的 GraphWiz \cite{Chen2024GraphWizAI}与 GraphArena\cite{Tang2024GraphArenaBL}。
 三者的规模配置见表~\ref{tab:rl_data_config}，
-其中 GraphWiz 与 GraphArena 仅用于测试集评测，
+其中 GraphWiz\cite{Chen2024GraphWizAI}与 GraphArena\cite{Tang2024GraphArenaBL} 仅用于测试集评测，
 用于检验模型在未见任务分布上的零样本迁移能力。
-Erd\H{o}s 的任务分层与难度分布见表~\ref{tab:rl_task_distribution}。
+Erd\H{o}s \cite{Guo2025G1TL} 的任务分层与难度分布见表~\ref{tab:rl_task_distribution}。
 
 \begin{table}[htbp]
   \centering
@@ -1201,10 +1201,10 @@ Average 为四个难度分层结果的汇总统计。
 \end{table}
 
 为检验在不同计算复杂度与更高难度问题上的迁移能力，
-除 Erd\H{o}s 外，本文进一步在 GraphWiz\cite{Chen2024GraphWizAI} 
+除 Erd\H{o}s \cite{Guo2025G1TL} 外，本文进一步在 GraphWiz\cite{Chen2024GraphWizAI} 
 与 GraphArena\cite{Tang2024GraphArenaBL} 上进行分布外评测。
-GraphWiz 侧重考察图算法的复杂度泛化，
-GraphArena 聚焦极限难度的组合优化类问题。
+GraphWiz\cite{Chen2024GraphWizAI} 侧重考察图算法的复杂度泛化，
+GraphArena\cite{Tang2024GraphArenaBL} 聚焦极限难度的组合优化类问题。
 对应结果分别见表~\ref{tab:graphwiz_result} 与表~\ref{tab:grapharena_result}，
 其中加粗与下划线的标示规则与表~\ref{tab:main_erdos_result} 一致。
 
@@ -1278,7 +1278,7 @@ GraphArena 聚焦极限难度的组合优化类问题。
 
 \textbf{2)\ 通用图基座的表征优势。}
 本文方案5与 G1-7B 采用一致的强化学习范式和奖励评测规则，
-但在 Erd\H{o}s 主基准上本文方案具有1.21 个百分点的准确率提升，
+但在 Erd\H{o}s\cite{Guo2025G1TL}  主基准上本文方案具有1.21 个百分点的准确率提升，
 该差异更可能与输入侧结构表征与预训练初始化的不同有关。
 一方面，本文采用欧拉遍历式的结构序列化，并配合第3章图编码器预训练，
 使输入序列中显式保留边遍历证据与节点复现模式，从而在进入强化学习阶段前提供更确定的连通性线索；
@@ -1396,7 +1396,8 @@ CoT 轨迹清晰地记录了邻居遍历到距离累加到路径优选的决策�
 见章节~\ref{subsec:node_classification_analysis}）进行对照，
 在未额外微调的条件下，对 Cora 与 PubMed 两个经典文献引用图的数据集
 开展零样本节点分类评测，
-评价指标为 (Accuracy \%)。同时引入通用开源指令模型、推理增强模型作为参照，
+评价指标为 (Accuracy \%)，其中加粗与下划线分别标示最优与次优方法。
+同时引入通用开源指令模型、推理增强模型作为参照，
 以观察图表征改进和强化学习对真实图任务泛化能力的综合影响。
 
 \begin{table}[htbp]
@@ -1414,7 +1415,7 @@ CoT 轨迹清晰地记录了邻居遍历到距离累加到路径优选的决策�
       G1-7B\cite{Guo2025G1TL}        & 79.20 & 86.20 & 82.70 \\
       \midrule
       方案3    & \textbf{91.27} & \textbf{94.48} & \textbf{92.88} \\
-      方案5 & {81.45} & {86.67} & {83.38} \\
+      方案5 & \underline{81.45} & \underline{86.67} & \underline{83.38} \\
       \bottomrule
     \end{tabular}
   }
@@ -1514,8 +1515,9 @@ G1 采用简单边列表线性化，部分打乱了局部拓扑与全局连通�
  \textbf{Hard Acc.} & \textbf{Avg. Acc.} & \textbf{CoT有效率} \\
 \midrule
 Baseline ($R_{ans}$ Only) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
-\textit{w/o Topology ($R_{ans} + R_{fmt}$)} & \checkmark & & \checkmark & 44.32 & 55.67 & 88.4\% \\
-\textit{w/o Format ($R_{ans} + R_{topo}$)} & \checkmark & \checkmark & & 49.15 & 60.23 & 75.8\% \\
+\textit{w/o Topology ($R_{ans} + R_{fmt}$)} & \checkmark & & \checkmark & 44.32 & 55.67 & \underline{88.4\%} \\
+\textit{w/o Format ($R_{ans} + R_{topo}$)} & \checkmark & \checkmark & & 
+\underline{49.15} & \underline{60.23} & {75.8\%} \\
 {Full Reward($R_{ans} + R_{topo}+ R_{fmt}$)} & \checkmark & \checkmark & \checkmark & \textbf{51.21} & \textbf{67.37} & \textbf{99.8\%} \\
 \bottomrule
 \end{tabular}
@@ -1547,7 +1549,7 @@ Baseline ($R_{ans}$ Only) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
 (2)RL-Zero：跳过监督微调阶段，直接使用预训练基座模型进行 GRPO 强化学习，旨在探究模型是否能完全依靠奖励信号从零学习推理。
 (3){仅高难样本 RL (Train on Hard Only)}：在强化学习阶段仅采样 Hard 和 Challenging 难度的任务进行训练，旨在测试模型在极端难度导向下的泛化边界。
 (4)本文方案：即方案5，采用 SFT 冷启动并结合全难度均衡采样的标准训练流程。
-以上实验均采用(Accuracy \%)作为评价指标。
+以上实验均采用(Accuracy \%)作为评价指标，其中加粗与下划线分别标示最优与次优方法。
 
 \begin{table}[htbp]
 \centering
@@ -1565,9 +1567,9 @@ Baseline ($R_{ans}$ Only) & \checkmark & & & 38.45 & 48.12 & 62.5\% \\
 & \textbf{Easy} & \textbf{Medium} & \textbf{Hard} & \textbf{Challenging} & \\
 \midrule
 SFT Baseline & 73.74 & 75.98 & 40.83 & 12.23 & 53.47 \\
-\textit{RL-Zero} (No Warmup) & 88.15 & 79.45 & 43.56 & 12.89 & 55.82 \\
-\textit{Train on Hard Only} & 83.12 & 81.34 & \textbf{53.45} & \textbf{26.12} & 60.55 \\
-方案5\textit{(SFT+RL)} & \textbf{96.23} & \textbf{90.37} & 51.21 & 23.42 & \textbf{67.37} \\
+\textit{RL-Zero} (No Warmup) & \underline{88.15} & 79.45 & 43.56 & 12.89 & 55.82 \\
+\textit{Train on Hard Only} & 83.12 & \underline{81.34} & \textbf{53.45} & \textbf{26.12} & \underline{60.55} \\
+方案5\textit{(SFT+RL)} & \textbf{96.23} & \textbf{90.37} & \underline{ 51.21} & \underline{23.42} & \textbf{67.37} \\
 \bottomrule
 \end{tabular}
 % }
@@ -1623,8 +1625,8 @@ $\bigl(\lambda_{ans}=1.0,\,\lambda_{topo}=0.5,\,\lambda_{fmt}=0.1,\,\beta=10^{-3
 \textbf{Default (方案5)}    & 1.0 & 0.5 & 0.1 & $10^{-3}$         & \textbf{51.21} & \textbf{67.37} & \textbf{99.8\%} \\
 \textit{High-Topo}         & 1.0 & 1.0 & 0.1 & $10^{-3}$         & 50.12 & 66.05 & 98.5\% \\
 \midrule
-\textit{Weak-KL}           & 1.0 & 0.5 & 0.1 & $3\times 10^{-4}$ & 50.45 & 66.12 & 98.1\% \\
-\textit{Strong-KL}         & 1.0 & 0.5 & 0.1 & $3\times 10^{-3}$ & 48.90 & 64.78 & 99.2\% \\
+\textit{Weak-KL}           & 1.0 & 0.5 & 0.1 & $3\times 10^{-4}$ & \underline{50.45} &\underline{ 66.12} & 98.1\% \\
+\textit{Strong-KL}         & 1.0 & 0.5 & 0.1 & $3\times 10^{-3}$ & 48.90 & 64.78 & \underline{99.2\%} \\
 \bottomrule
 \end{tabular}
 \end{table}
