@@ -39,7 +39,8 @@ F_{\theta} : (G,q) \rightarrow (c,a),
 
 \textbf{1）结构保真表征学习问题：}
 给定文本属性图 $G$，对目标节点 $v$ 采样得到局部子图 $S(v)\subseteq G$，并通过序列化算子得到图序列 $z_v=\pi(S(v))$。
-学习图编码器参数 $\theta_G$，其优化目标如公式~\ref{eq:prob1_repr_simple}\ 所示：
+定义 $\text{Enc}_G(\cdot; \theta_G)$ 为待学习的图编码器，其参数为 $\theta_G$，
+其优化目标如公式~\ref{eq:prob1_repr_simple}\ 所示：
 \begin{equation}
 \theta_G^{\ast}
 =
@@ -49,10 +50,15 @@ F_{\theta} : (G,q) \rightarrow (c,a),
 \label{eq:prob1_repr_simple}
 \end{equation}
 
+其中，$\mathcal{D}$ 表示预训练图数据集的联合分布，$\mathcal{L}{\mathrm{repr}}$ 为结构重建损失函数，用于衡量编码输出与原始子图拓扑特征之间的一致性。
+
+
 \textbf{2）结构--语义跨模态对齐问题：}
-令 $h_v=\mathrm{Pool}(\mathrm{Enc}_G(z_v;\theta_G))$ 为图结构表征，$s_v=\mathrm{Pool}(\phi_{\mathrm{text}}(t_v))$ 为文本语义表征，
+为了实现图结构与自然语言语义的融合，需要将图编码器的输出空间映射至大型语言模型（LLM）的可理解空间。
+令 $h_v = \text{Pool}(\text{Enc}_G(z_v; \theta_G))$ 为提取出的图结构嵌入向量，其中 $\text{Pool}(\cdot)$ 表示池化操作。
+令 $s_v = \text{Pool}(\phi_{\text{text}}(t_v))$ 为利用预训练文本编码器 $\phi_{\text{text}}$提取的节点语义嵌入向量，
 学习映射层参数 $\theta_{\mathrm{proj}}$ 得到 $\tilde h_v=f_{\mathrm{proj}}(h_v;\theta_{\mathrm{proj}})$，
-并最小化跨模态对齐损失，其目标函数如公式~\ref{eq:prob2_align_simple}\ 所示：
+并最小化跨模态对齐损失，其目标函数如公式~\ref{eq:prob2_align_simple}\ 所示：  
 \begin{equation}
 (\theta_G^{\ast},\theta_{\mathrm{proj}}^{\ast})
 =
@@ -62,6 +68,8 @@ F_{\theta} : (G,q) \rightarrow (c,a),
 \qquad \theta_{\mathrm{LLM}}\ \text{frozen}.
 \label{eq:prob2_align_simple}
 \end{equation}
+
+其中，$\mathcal{L}_{\mathrm{align}}$ 通常采用对比学习损失，旨在缩小子图拓扑表征与节点文本语义表征在特征空间中的距离。
 
 \textbf{3）图推理监督调优问题：}
 给定推理数据集 $\mathcal{D}_{\mathrm{CoT}}=\{(G,q,y)\}$，其中 $y=(c,a)$，
@@ -586,14 +594,14 @@ Hits@k 在结构一致性测评中
 \textbf{数据集} & \textbf{任务} & \textbf{节点数} & \textbf{边数} &
 \textbf{特征维度} & \textbf{文本属性} & \textbf{标签数} & \textbf{划分} \\
 \midrule
-\multicolumn{8}{c}{\textbf{学术引文网络（Citation TAG）}}\\
+\multicolumn{8}{c}{{学术引文网络（Citation TAG）}}\\
 \midrule
 Cora      & 节点分类 & 2,708   & 10,556    & 1,433 & 标题+摘要 & 7  & 3:1:1 \\
 Citeseer  & 节点分类 & 3,186   & 8,450     & 1,433 & 标题+摘要 & 6  & 3:1:1 \\
 PubMed    & 节点分类 & 19,717  & 88,648    & 500   & 论文描述  & 3  & 3:1:1 \\
 OGB-arxiv & 节点分类 & 169,343 & 2,315,598 & 128   & 标题+摘要 & 40 & 6:2:2 \\
 \midrule
-\multicolumn{8}{c}{\textbf{电商共购网络（E-commerce TAG）}}\\
+\multicolumn{8}{c}{{电商共购网络（E-commerce TAG）}}\\
 \midrule
 Amazon-Computers & 节点分类 & 87,229  & 1,256,548 & 768  & 商品描述 & 10 & 6:2:2 \\
 Amazon-Sports    & 节点分类 & 173,055 & 3,020,134 & 512  & 商品标题 & 13 & 6:2:2 \\

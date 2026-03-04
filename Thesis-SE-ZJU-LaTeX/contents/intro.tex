@@ -35,9 +35,9 @@
 其在处理长程依赖时的过平滑\cite{Rusch2023ASO}与
 过压缩\cite{Alon2020OnTB}等现象导致其无法胜任复杂的逻辑推理任务。
 为缓解上述限制，研究者开始探索将
-大语言模型（Large Language Models, LLMs）引入图任务的新方法，
+大语言模型（Large Language Model, LLM）引入图任务的新方法，
 例如 BERT\cite{BERT}、T5\cite{T5} 与 LLaMA\cite{Llama} 等。
-该方向旨在利用 LLMs 的语义建模能力，将图结构与节点文本属性映射到统一的序列空间，
+该方向旨在利用 LLM 的语义建模能力，将图结构与节点文本属性映射到统一的序列空间，
 从而支持跨节点、跨关系的全局推理。
 在此背景下，图基座模型（Graph Foundation Models, GFMs）成为连接结构归纳与语义建模的重要方向。
 
@@ -200,7 +200,7 @@ Liu等人\cite{Liu2023GraphPromptUP} 通过在输入特征层或隐藏层注入�
 近年来，一类以大语言模型作为主干、
 通过图–语言协同训练获得统一图表征的图基座模型逐渐形成。
 Lin等人\cite{Lin2024LangGFMAL}开创性地提出自监督对齐策略，
-通过拓扑自编码与特征掩码自编码两大预训练目标，使LLMs习得图结构语义。
+通过拓扑自编码与特征掩码自编码两大预训练目标，使LLM习得图结构语义。
 Yu等人\cite{Yang2024GraphAgentAG}引入层次化上下文编码机制，
 通过多跳邻居信息的递归整合增强结构感知能力；
 Zhang等人\cite{Zhang2023GraphToolFormerTE}采用API增强的推理方法，
